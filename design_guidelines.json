@@ -1,0 +1,92 @@
+{
+  "theme": "dark",
+  "archetype": "Archetype 2 (Performance Pro)",
+  "emotional_tone": "Precision, elite performance, high energy, data-rich but clear",
+  "typography": {
+    "headings": {
+      "font_family": "Barlow Condensed, sans-serif",
+      "weights": ["600", "700", "900"],
+      "tracking": "tracking-tight",
+      "scale": {
+        "h1": "text-4xl sm:text-5xl lg:text-6xl uppercase",
+        "h2": "text-2xl sm:text-3xl lg:text-4xl uppercase",
+        "h3": "text-xl sm:text-2xl uppercase",
+        "h4": "text-lg sm:text-xl uppercase"
+      }
+    },
+    "body": {
+      "font_family": "IBM Plex Sans, sans-serif",
+      "weights": ["400", "500", "600"],
+      "scale": {
+        "base": "text-base",
+        "small": "text-sm",
+        "tiny": "text-xs uppercase tracking-[0.2em]"
+      }
+    }
+  },
+  "colors": {
+    "background": "#0A0A0A",
+    "surface": "#141414",
+    "border": "rgba(255, 255, 255, 0.1)",
+    "text_primary": "#FFFFFF",
+    "text_secondary": "#9CA3AF",
+    "primary": "#007AFF",
+    "primary_hover": "#3B82F6",
+    "accent_live": "#FF3B30",
+    "accent_positive": "#10B981",
+    "accent_negative": "#EF4444"
+  },
+  "spacing_and_layout": {
+    "dashboard_grid": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4",
+    "marketing_grid": "grid-cols-1 md:grid-cols-8 lg:grid-cols-12 gap-8",
+    "container_padding": "p-6 md:p-8"
+  },
+  "components": {
+    "cards": {
+      "background": "bg-[#141414]",
+      "border": "border border-white/10",
+      "border_radius": "rounded-[8px]",
+      "shadow": "shadow-none",
+      "hover": "hover:-translate-y-1 hover:border-white/20 transition-all duration-200"
+    },
+    "buttons": {
+      "primary": "bg-[#007AFF] text-white font-bold rounded-[4px] px-6 py-2 hover:bg-[#3B82F6] transition-colors",
+      "secondary": "bg-transparent text-white border border-white/20 font-bold rounded-[4px] px-6 py-2 hover:bg-white/5 transition-colors",
+      "live": "bg-[#FF3B30] text-white font-bold rounded-[4px] px-4 py-1 animate-pulse"
+    },
+    "glassmorphism": {
+      "background": "bg-black/60",
+      "blur": "backdrop-blur-xl",
+      "border": "border-b border-white/10"
+    },
+    "data_tables": {
+      "header_row": "border-b border-white/20 text-xs text-gray-400 uppercase tracking-wider",
+      "row": "border-b border-white/5 hover:bg-white/5 transition-colors"
+    }
+  },
+  "images": {
+    "hero_background": {
+      "url": "https://images.unsplash.com/photo-1706675780107-7c43cc487928?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2ODl8MHwxfHNlYXJjaHwzfHxzcG9ydHMlMjBzdGFkaXVtJTIwbGlnaHRzJTIwbmlnaHR8ZW58MHx8fHwxNzgyMzg2MDY3fDA&ixlib=rb-4.1.0&q=85",
+      "description": "Stadium lights at night, used for landing page hero section with black/50 overlay."
+    },
+    "tactical_grid": {
+      "url": "https://images.unsplash.com/photo-1700316740839-f5afe22536e4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA4Mzl8MHwxfHNlYXJjaHwyfHx0YWN0aWNhbCUyMGRhcmslMjBncmlkJTIwYmFja2dyb3VuZHxlbnwwfHx8fDE3ODIzODYwNjd8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Dark tactical hex grid, to be used as a subtle background pattern (low opacity) in dashboard or pricing sections."
+    },
+    "data_graph": {
+      "url": "https://images.unsplash.com/photo-1644088379091-d574269d422f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDJ8MHwxfHNlYXJjaHwxfHxhYnN0cmFjdCUyMGRhcmslMjBkYXRhJTIwZ3JhcGh8ZW58MHx8fHwxNzgyMzg2MDY3fDA&ixlib=rb-4.1.0&q=85",
+      "description": "Abstract data graph, used for feature highlights related to match tracking charts."
+    }
+  },
+  "instructions_to_main_agent": [
+    "Install and use @phosphor-icons/react for dense dashboard icons.",
+    "Implement the 'Control Room Grid' (gap-4, dense usage) for the Match Chart tracking view.",
+    "The Pricing page must feature a 2-column layout (Monthly vs Annual). Highlight the Annual plan strongly with a 'Save €25+/year' and 'Best Value' badge.",
+    "Use Recharts for the live match charts, ensuring lines use high-contrast neon accents (e.g., #007AFF) over the dark background.",
+    "Provide a clear Trial Banner displaying the 7-day FREE TRIAL countdown, utilizing the #007AFF or #FF3B30 colors for urgency.",
+    "Teams tab should organize data hierarchically: Leagues -> Teams -> Player Rosters. Use Shadcn Tabs or Tabs with internal scrolling.",
+    "Apply 'data-testid' to ALL interactive elements (buttons, inputs, tabs, chart toggles) using kebab-case role-based names (e.g., 'upgrade-annual-btn', 'add-match-chart').",
+    "Enforce dark mode permanently. Background is #0A0A0A and surfaces #141414. Do NOT use transparent headers; use Glassmorphism.",
+    "Use pure HTML+Tailwind for the marketing layout, avoiding rigid Shadcn layouts, but use Shadcn for components like Forms, Inputs, Tabs, Dialogs."
+  ]
+}
