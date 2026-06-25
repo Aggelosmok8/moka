@@ -1,6 +1,12 @@
 import axios from "axios";
 
 const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || "").replace(/\/$/, "");
+if (!BACKEND_URL && import.meta.env.PROD) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    "[Moka] VITE_BACKEND_URL is not set — API calls fall back to a relative '/api' path and will fail in production. Set VITE_BACKEND_URL in your Vercel project environment variables."
+  );
+}
 export const API = `${BACKEND_URL}/api`;
 
 const TOKEN_KEY = "moka_session_token";
