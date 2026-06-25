@@ -1,0 +1,39 @@
+{
+  "summary": "Full E2E backend + frontend testing for StatLine. 19/19 pytest cases pass (auth, subscription, sports, match chart, free-user access control). Playwright smoke covers landing, register->dashboard, Matches tab with track/odds, Match Chart with recharts, Teams tab with roster dialog, and Account tab with Upgrade dialog. All critical flows functional.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/auth/login", "issue": "Pydantic EmailStr blocks reserved TLDs like .test/.example - acceptable but worth noting for test data."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Account tab + UpgradeDialog", "issues": ["Duplicate data-testid: PricingCards in the Account page AND inside UpgradeDialog both render `select-plan-yearly-btn`/`confirm-payment-btn`. Playwright strict mode errors on multi-match. Suggest scoping testids inside the dialog (e.g. dialog-confirm-payment-btn) or conditionally rendering only one."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "(Optional) Disambiguate duplicate data-testids when the same PricingCards component is shown twice (Account page + Upgrade dialog). Either scope by parent or add a prefix variant in the dialog."
+  ],
+  "critical_code_review_comments": [
+    "Auth: bcrypt + JWT properly used; password_hash and _id stripped from responses (good).",
+    "Subscription idempotency: activate_subscription correctly short-circuits when status=active + same plan.",
+    "Trial expiry: refresh_and_get_status downgrades expired trials in DB lazily; logic verified by manually setting subscription_status=expired in Mongo (free users get 403 on /api/sports/odds and locked non-FREE leagues).",
+    "Odds API integration is real and returning live EPL fixtures; player rosters correctly fall back to source='sample' as documented.",
+    "Minor: chart_routes uses datetime field commence_time as nullable string - works but could be typed more strictly.",
+    "Minor: pytest.ini hardcodes -n 2 --dist loadscope which collided with -p no:xdist; agents need to use -n 0 for serial runs (documented inline already)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py (new)",
+    "/app/backend/tests/__init__.py (new)"
+  ],
+  "success_rate": {"backend": "100% (19/19)", "frontend": "~95% (all flows pass; one selector strict-mode issue due to duplicate testid)"},
+  "test_credentials": "Tests register fresh users (test.<uuid>@statlinetest.com / Passw0rd!). Free-user simulation done by directly setting subscription_status='expired' in Mongo (DB=statline_db).",
+  "seed_data_creation": "No seed data; all test users auto-cleaned via cleanup fixture (regex on email domain).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run tests with: REACT_APP_BACKEND_URL=https://teams-hub-1.preview.emergentagent.com python -m pytest /app/backend/tests/backend_test.py -v -n 0. pytest.ini enforces xdist; use -n 0 (NOT -p no:xdist). Pydantic EmailStr rejects .test TLD. Free-user 403 path is verified by Mongo-side downgrade. Odds API is live and may rate-limit if abused; cache TTL is 600s for matches and 300s for odds.",
+  "rca of the issue": "N/A - no critical issues. The Playwright strict-mode failure at the end of UI test is caused by PricingCards component being rendered in two places (Account page and UpgradeDialog) sharing identical data-testids. Workaround: use locator.first or scope to dialog; long-term fix: namespace testids inside the dialog."
+}
