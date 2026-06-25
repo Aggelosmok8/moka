@@ -26,7 +26,7 @@ const PLANS = [
   },
 ];
 
-export default function PricingCards({ onSelectPlan, currentPlan }) {
+export default function PricingCards({ onSelectPlan, currentPlan, idPrefix = "" }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto w-full">
       {PLANS.map((p) => {
@@ -34,7 +34,7 @@ export default function PricingCards({ onSelectPlan, currentPlan }) {
         return (
           <div
             key={p.id}
-            data-testid={`plan-card-${p.id}`}
+            data-testid={`${idPrefix}plan-card-${p.id}`}
             className={`relative card-surface p-7 flex flex-col transition-all duration-200 hover:-translate-y-1 ${
               p.recommended ? "border-[#007AFF] shadow-[0_0_40px_-12px_rgba(0,122,255,0.5)]" : "hover:border-white/20"
             }`}
@@ -65,7 +65,7 @@ export default function PricingCards({ onSelectPlan, currentPlan }) {
               ))}
             </ul>
             <button
-              data-testid={`select-plan-${p.id}-btn`}
+              data-testid={`${idPrefix}select-plan-${p.id}-btn`}
               onClick={() => onSelectPlan(p.id)}
               disabled={active}
               className={`mt-7 w-full py-3 font-bold rounded-[4px] transition-all ${

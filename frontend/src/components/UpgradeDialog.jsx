@@ -49,7 +49,7 @@ export default function UpgradeDialog({ open, onClose }) {
         </p>
 
         <div className="mt-8">
-          <PricingCards onSelectPlan={handleSelect} currentPlan={subscription?.plan} />
+          <PricingCards onSelectPlan={handleSelect} currentPlan={subscription?.plan} idPrefix="dialog-" />
         </div>
 
         {selected && (
