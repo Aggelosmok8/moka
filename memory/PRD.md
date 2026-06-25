@@ -1,35 +1,32 @@
-# StatLine — PRD
+# Moka — PRD / Working Notes
 
-## Problem statement
-Sports match-tracking + odds SaaS. Subscriptions (Monthly €8.99 / Annual €79, annual = Best Value, "Save €25+/year"), 7-day free trial (no card, full Pro access), trial lifecycle emails (Resend), Stripe payment-link activation, Supabase as intended primary DB, external sports APIs (Odds API, API-Football, API-Basketball), Match Chart tracking, Teams tab (leagues→teams→players), Free/Pro access control. Goal: maximize conversion, push annual, low infra cost.
+## Context
+Moka (a.k.a. XtraStats branding in header) = AI sports value-betting app. Imported from GitHub `Aggelosmok8/moka` into this Emergent workspace and run full-stack here.
+- Backend: FastAPI + SQLite (aiosqlite, Mongo-like wrapper in `database.py`, file `moka.db`). Modules: auth (Emergent Google OAuth), billing (Stripe via Emergent proxy), core/* (entitlements, roles, cache, subscriptions, predictions, ai_summary), football_service_layer, the_odds_api, api_football, retention, analytics.
+- Frontend: Vite + React 18, react-router 7. Pages: Home, Value, Leagues, Odds, MatchAnalysis, Account, Pricing, PricingSuccess, Team, Match.
+- Runs under Emergent supervisor: backend `uvicorn server:app :8001`, frontend `yarn start` (vite, port 3000). vite.config.js patched: host 0.0.0.0, allowedHosts true, hmr clientPort 443.
 
-## User choices
-- Existing scaffold refactored in-place; build StatLine.
-- Resend for emails. Supabase Auth/REST intended (anon key injected later via env). Stripe = payment link + success redirect only (no webhook yet).
+## Why the original Vercel link was broken (diagnosed)
+- That Vercel deploy was serving the OLD StatLine demo (wrong app) AND had no `REACT_APP_BACKEND_URL` → calls went to `undefined/api/...` (405). Also Moka's Google OAuth only works on an Emergent domain. Resolution: run + deploy via Emergent (chosen path).
 
-## Architecture
-- Backend FastAPI (modular): routes/{auth,subscription,sports,chart}, services/{subscription,sports,email,supabase}, auth_utils (JWT bearer), db (Mongo + cache-aside layer).
-- Data store: MongoDB now (statline_db); `services/supabase_service.py` is a ready REST adapter that activates when SUPABASE_ANON_KEY is set (clean abstraction, no route changes needed).
-- Frontend React: AuthContext + axios bearer; pages Landing/Auth/Dashboard; tabs Matches/MatchChart/Teams/Account; PricingCards, UpgradeDialog, TrialBanner. Dark "Performance Pro" theme (Barlow Condensed + IBM Plex Sans, #007AFF).
-- Caching: api_cache collection, TTL matches=600s, odds=300s, scores=60s, sports=24h. Minimizes external calls.
+## Implemented in this session (2026-06-25) — Phase 1 monetization
+- Imported Moka, got it running in Emergent preview (login works on Emergent domain).
+- **Pricing model**: Monthly €8.99, Annual €79 (`billing.PACKAGES`, EUR). PricingPage redesigned: Free / Monthly / Annual; Annual badged "Best Value" + "Save €29+/year"; ≈€6.58/mo note.
+- **7-day no-card trial**: new users auto-provisioned `subscription_status="trialing"`, `trial_start_date/trial_end_date`, `pro_until=+7d` → full Pro (role pro, all 12 leagues) via existing FeatureGate. Auto-expires → role free (7 leagues); `_is_pro_now` respects `pro_until`; `/auth/me` lazily downgrades elapsed trials to `expired`. New User fields: subscription_status, plan, trial_end_date, trial_days_left.
+- **TrialBanner** (site-wide via Header): guest CTA "Start free trial", trialing "N days left", expired "Trial ended — upgrade". Account page shows plan + trial end.
+- **Resend email lifecycle** (`email_service.py`): welcome(day0 on signup), reminder(day5), urgency(day6), expired(day7); idempotent via users.emails_sent; lazy eval in /auth/me. Graceful NO-OP without RESEND_API_KEY.
+- **Plan persistence**: billing /status and webhook store `plan` = monthly|yearly on activation.
+- DB schema migrated (idempotent ALTER) to add trial columns.
+- Verified via seeded sessions: trial→pro(12 leagues), expired→free(7 leagues). Pricing/banner verified via screenshots.
 
-## Implemented (2026-06-25)
-- JWT email/password auth + 7-day trial provisioning on register.
-- Subscription: plans, lazy status refresh with auto-expiry/downgrade, idempotent activate (prevents double sub), Stripe payment-link + confirm flow.
-- Email lifecycle (welcome/reminder/urgency/expired) evaluated lazily, idempotent; graceful no-op without RESEND_API_KEY.
-- Sports via The Odds API (REAL/live): leagues, matches, scores (live/finished), event odds (Pro). Teams derived from events. Players = sample roster fallback (API-Football/Basketball keys suspended).
-- Free/Pro access control: free = FREE_LEAGUE_KEYS only + first 3 players + no odds; trial/active = full.
-- Match Chart: track/untrack (persisted), live-enriched, recharts bar chart, 30s polling.
-- Tested: 19/19 backend pytest pass; frontend flows verified.
+## NOT done / deferred
+- **Match Chart feature (track matches → live chart)**: NET-NEW, not yet built. Main remaining feature.
+- **Teams tab leagues→teams→players**: Moka already has Leagues + TeamPage; verify/extend rosters if needed.
+- **Real sports data**: currently MOCK (Moka data layer needs ODDS_API_KEY/API_FOOTBALL keys in /app/backend/.env; provided football/basketball keys were SUSPENDED, Odds API key works).
+- **Supabase injectable layer (option a)**: not yet added.
+- **Resend**: needs RESEND_API_KEY to actually send emails.
+- Stripe is real (Emergent test proxy, card 4242…); recurring subscription mode.
 
-## Known / mocked
-- RESEND_API_KEY empty → emails are NO-OP (disabled, not mocked). Add key to enable.
-- SUPABASE_ANON_KEY empty → using MongoDB store (Supabase adapter ready to switch).
-- API-Football / API-Basketball keys SUSPENDED → player rosters are sample data (source="sample").
-
-## Backlog / Next
-- P1: Inject Supabase anon key + migrate store to Supabase REST; provision tables (users, subscriptions, matches, teams, players, user_preferences).
-- P1: Add Resend API key to enable lifecycle emails; verify sender domain.
-- P2: Stripe webhook for real activation (replace confirm-button flow); store subscriptions table.
-- P2: Reactivate / replace football & basketball stats provider for real rosters + player stats.
-- P3: Live score history (line chart over time), match detail page, more markets (spreads/totals).
+## Next
+1. Deploy full-stack via Emergent; sign in with Google to confirm trial provisioning live.
+2. Build Match Chart. 3. Wire real Odds data. 4. Add RESEND_API_KEY. 5. Optional Supabase adapter.

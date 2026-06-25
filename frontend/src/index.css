@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800;900&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800;900&family=Manrope:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -6,108 +7,135 @@
 @layer base {
   :root {
     --background: 0 0% 4%;
-    --foreground: 0 0% 100%;
-    --card: 0 0% 8%;
-    --card-foreground: 0 0% 100%;
-    --popover: 0 0% 8%;
-    --popover-foreground: 0 0% 100%;
-    --primary: 211 100% 50%;
-    --primary-foreground: 0 0% 100%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 7%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 105 100% 54%;
+    --primary-foreground: 0 0% 4%;
     --secondary: 0 0% 12%;
-    --secondary-foreground: 0 0% 100%;
+    --secondary-foreground: 0 0% 98%;
     --muted: 0 0% 12%;
-    --muted-foreground: 0 0% 62%;
+    --muted-foreground: 240 4% 65%;
     --accent: 0 0% 12%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 4 90% 58%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 100% / 0.1;
-    --input: 0 0% 16%;
-    --ring: 211 100% 50%;
-    --radius: 0.5rem;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 100% / 0.08;
+    --input: 0 0% 12%;
+    --ring: 105 100% 54%;
+    --radius: 0.75rem;
   }
 }
 
-* {
-  border-color: rgba(255, 255, 255, 0.1);
-}
-
-html {
-  scroll-behavior: smooth;
+html, body, #root {
+  background-color: #050807;
+  color: #FFFFFF;
 }
 
 body {
   margin: 0;
-  background-color: #0A0A0A;
-  color: #ffffff;
-  font-family: 'IBM Plex Sans', sans-serif;
+  font-family: 'Manrope', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
+  background-color: #050807;
+  /* Layered football-themed background: deep ink with subtle radial pitch glow */
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(57,255,20,0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 100% 50%, rgba(20, 80, 60, 0.05) 0%, transparent 60%),
+    linear-gradient(180deg, #050807 0%, #0A0C0B 100%);
+  background-attachment: fixed;
 }
 
-h1, h2, h3, h4, .font-display {
-  font-family: 'Barlow Condensed', sans-serif;
+.font-display {
+  font-family: 'Barlow Condensed', 'Manrope', sans-serif;
   letter-spacing: -0.01em;
 }
 
-.heading {
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase;
-  font-weight: 800;
-  letter-spacing: -0.01em;
+.font-mono-num { font-variant-numeric: tabular-nums; }
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #050807; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(57,255,20,0.3); }
+
+/* Premium card surface */
+.surface {
+  background: linear-gradient(180deg, rgba(255,255,255,0.025) 0%, rgba(255,255,255,0.005) 100%), #0E1110;
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 12px 28px -16px rgba(0,0,0,0.6);
+}
+.surface-hover { transition: border-color .25s ease, transform .25s ease, box-shadow .25s ease; }
+.surface-hover:hover { border-color: rgba(255,255,255,0.14); box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset, 0 18px 40px -18px rgba(57,255,20,0.15); }
+
+/* Neon utilities */
+.neon-border { box-shadow: 0 0 0 1px rgba(57,255,20,0.25), 0 0 32px -10px rgba(57,255,20,0.5); }
+.neon-text { color: #39FF14; }
+.neon-bg { background-color: #39FF14; color: #0A0A0A; }
+.neon-glow { box-shadow: 0 0 48px -12px rgba(57,255,20,0.35); }
+
+/* Subtle pitch lines pattern (used on hero overlays) */
+.pitch-lines {
+  background-image:
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 80px),
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0 1px, transparent 1px 80px);
 }
 
-.eyebrow {
-  text-transform: uppercase;
-  letter-spacing: 0.22em;
-  font-size: 0.7rem;
-  font-weight: 600;
+/* Live pulsing dot */
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(1.18); }
 }
+.live-dot { animation: live-pulse 1.4s ease-in-out infinite; }
 
-.card-surface {
-  background-color: #141414;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
+/* Ticker */
+@keyframes ticker-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
 }
+.ticker-track { animation: ticker-scroll 55s linear infinite; }
+.ticker-track:hover { animation-play-state: paused; }
 
-.glass {
-  background: rgba(10, 10, 10, 0.7);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.btn-primary {
-  background: #007AFF;
-  color: #fff;
-  font-weight: 700;
-  border-radius: 4px;
-  transition: background-color 0.2s ease, transform 0.15s ease;
-}
-.btn-primary:hover { background: #3B82F6; transform: translateY(-1px); }
-
-.live-dot {
-  display: inline-block;
-  width: 8px; height: 8px;
-  border-radius: 9999px;
-  background: #FF3B30;
-  box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.6);
-  animation: livepulse 1.6s infinite;
-}
-@keyframes livepulse {
-  0% { box-shadow: 0 0 0 0 rgba(255,59,48,0.6); }
-  70% { box-shadow: 0 0 0 8px rgba(255,59,48,0); }
-  100% { box-shadow: 0 0 0 0 rgba(255,59,48,0); }
-}
-
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(16px); }
+/* Fade-up entrance with stagger via inline animation-delay */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.fade-up { animation: fadeUp 0.5s ease both; }
+.fade-up { animation: fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
-::selection { background: #007AFF; color: #fff; }
+/* Slide-in from sides */
+@keyframes slide-in-left {
+  from { opacity: 0; transform: translateX(-14px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(14px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.slide-in-left { animation: slide-in-left 0.6s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.slide-in-right { animation: slide-in-right 0.6s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: #0A0A0A; }
-::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 8px; }
-::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
+/* Bar grow keyframe for progress bars */
+@keyframes bar-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.bar-grow { transform-origin: left; animation: bar-grow 0.9s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Hover lift for cards */
+.lift { transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease; }
+.lift:hover { transform: translateY(-2px); }
+
+/* Shimmering text accent for AI card */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.shimmer-text {
+  background: linear-gradient(90deg, #fff 0%, #39FF14 25%, #fff 50%, #39FF14 75%, #fff 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 4s linear infinite;
+}
+
+@layer base { * { border-color: rgba(255,255,255,0.06); } }
