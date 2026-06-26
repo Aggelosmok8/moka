@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Activity, Flame, Trophy, BarChart3, Search, Tag, User } from "lucide-react";
+import { Activity, Flame, Trophy, BarChart3, Search, Tag, User, LineChart, Users } from "lucide-react";
 import LiveStatusPill from "./LiveStatusPill";
 import SearchPalette from "./SearchPalette";
 import UserMenu from "./UserMenu";
@@ -58,6 +58,8 @@ export const Header = () => {
           <NavLink to="/value" label="Value" icon={Flame} active={loc.pathname.startsWith("/value") || loc.pathname.startsWith("/analysis")} testId="nav-value" />
           <NavLink to="/leagues" label="Leagues" icon={Trophy} active={loc.pathname.startsWith("/leagues")} testId="nav-leagues" />
           <NavLink to="/odds" label="Odds" icon={BarChart3} active={loc.pathname.startsWith("/odds")} testId="nav-odds" />
+          <NavLink to="/charts" label="Charts" icon={LineChart} active={loc.pathname.startsWith("/charts")} testId="nav-charts" />
+          <NavLink to="/teams" label="Teams" icon={Users} active={loc.pathname.startsWith("/teams")} testId="nav-teams" />
           <NavLink to="/pricing" label="Pricing" icon={Tag} active={loc.pathname.startsWith("/pricing")} testId="nav-pricing" />
           <NavLink to="/account" label="Account" icon={User} active={loc.pathname.startsWith("/account")} testId="nav-account" />
         </nav>

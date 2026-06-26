@@ -98,6 +98,56 @@ async def team_detail(team_id: str):
     raise HTTPException(status_code=404, detail="Team not found")
 
 
+_POS = ["GK", "RB", "CB", "CB", "LB", "CDM", "CM", "CAM", "RW", "ST", "LW", "GK", "CB", "CM", "SUB", "SUB"]
+_NAT = ["England", "Spain", "France", "Brazil", "Germany", "Italy", "Portugal", "Argentina", "Netherlands", "Belgium"]
+
+
+@api_router.get("/teams/{team_id}/players")
+async def team_players(team_id: str):
+    """Squad roster for a team. NOTE: returns a structured sample roster
+    (source="sample") because the live stats provider (API-Football) key is
+    currently suspended. Wire the key to return real player data here."""
+    team = None
+    try:
+        for t in await fsl_get_teams():
+            if t.get("id") == team_id:
+                team = t
+                break
+    except Exception:
+        pass
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+    import hashlib
+    base = int(hashlib.md5(team_id.encode()).hexdigest(), 16)
+    short = team.get("short", "PL")
+    players = []
+    for i, pos in enumerate(_POS):
+        h = (base >> (i % 12)) % 1000 + i * 7
+        apps = 8 + h % 22
+        attacking = pos in ("ST", "RW", "LW", "CAM")
+        players.append({
+            "id": f"{team_id}_p{i + 1}",
+            "name": f"{short} Player {i + 1}",
+            "number": i + 1,
+            "position": pos,
+            "age": 19 + h % 17,
+            "nationality": _NAT[h % len(_NAT)],
+            "appearances": apps,
+            "minutes": apps * (40 + h % 50),
+            "goals": (h % 12) if attacking else h % 3,
+            "assists": h % 7,
+            "shots": h % 45,
+            "passes": 200 + h % 1400,
+            "tackles": h % 70,
+            "yellow": h % 6,
+            "red": 1 if h % 23 == 0 else 0,
+            "rating": round(6.2 + (h % 18) / 10, 1),
+            "injured": h % 17 == 0,
+            "photo": None,
+        })
+    return {"team_id": team_id, "team": team.get("name"), "source": "sample", "players": players}
+
+
 @api_router.get("/matches/trending")
 async def trending_matches():
     try:

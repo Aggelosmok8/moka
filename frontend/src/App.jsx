@@ -2,6 +2,7 @@ import React from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider } from "./contexts/AuthContext";
+import { ChartProvider } from "./contexts/ChartContext";
 import HomePage from "./pages/HomePage";
 import TeamPage from "./pages/TeamPage";
 import MatchPage from "./pages/MatchPage";
@@ -13,6 +14,8 @@ import LeaguesPage from "./pages/LeaguesPage";
 import OddsComparisonPage from "./pages/OddsComparisonPage";
 import MatchAnalysisPage from "./pages/MatchAnalysisPage";
 import AccountPage from "./pages/AccountPage";
+import ChartsPage from "./pages/ChartsPage";
+import TeamsPage from "./pages/TeamsPage";
 import "@/index.css";
 
 function AppRouter() {
@@ -28,6 +31,8 @@ function AppRouter() {
       <Route path="/value" element={<ValueMatchesPage />} />
       <Route path="/leagues" element={<LeaguesPage />} />
       <Route path="/odds" element={<OddsComparisonPage />} />
+      <Route path="/charts" element={<ChartsPage />} />
+      <Route path="/teams" element={<TeamsPage />} />
       <Route path="/analysis/:id" element={<MatchAnalysisPage />} />
       <Route path="/account" element={<AccountPage />} />
       <Route path="/team/:id" element={<TeamPage />} />
@@ -43,8 +48,10 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Toaster position="top-right" theme="dark" />
-        <AppRouter />
+        <ChartProvider>
+          <Toaster position="top-right" theme="dark" />
+          <AppRouter />
+        </ChartProvider>
       </AuthProvider>
     </BrowserRouter>
   );

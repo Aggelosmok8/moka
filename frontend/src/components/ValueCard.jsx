@@ -3,11 +3,15 @@ import { Link } from "react-router-dom";
 import { Lock } from "lucide-react";
 import { aiExplanation } from "../lib/valueEngine";
 import { UpgradeButton } from "./Gating";
+import AddToChartButton from "./AddToChartButton";
+import InfoTip from "./InfoTip";
 
-function Metric({ label, v, accent }) {
+function Metric({ label, v, accent, tip }) {
   return (
     <div className="bg-[#0d1117] border border-[#30363d] rounded-lg py-2">
-      <div className="text-[10px] text-zinc-500 uppercase tracking-wider">{label}</div>
+      <div className="text-[10px] text-zinc-500 uppercase tracking-wider flex items-center justify-center">
+        {tip ? <InfoTip label={label} text={tip} /> : label}
+      </div>
       <div className="font-display font-black text-lg" style={{ color: accent || "#fff" }}>
         {v}
       </div>
@@ -56,9 +60,9 @@ export default function ValueCard({ entry }) {
         {match.home && match.home.name} <span className="text-zinc-600 text-sm">vs</span> {match.away && match.away.name}
       </div>
       <div className="grid grid-cols-3 gap-2 text-center mb-3">
-        <Metric label="Value" v={value.valueScore} accent="#39FF14" />
-        <Metric label="EV" v={`${value.ev > 0 ? "+" : ""}${value.ev}%`} accent="#58a6ff" />
-        <Metric label="Conf" v={`${value.confidence}%`} accent="#FF9500" />
+        <Metric label="Value" v={value.valueScore} accent="#39FF14" tip="Overall strength of this betting opportunity (0-100)." />
+        <Metric label="Potential" v={`${value.ev > 0 ? "+" : ""}${value.ev}%`} accent="#58a6ff" tip="Potential Value — your expected return on this pick (formerly 'EV'). Higher is better." />
+        <Metric label="Conf" v={`${value.confidence}%`} accent="#FF9500" tip="Confidence — how sure the Moka model is about this pick." />
       </div>
       <div className="flex items-center justify-between text-xs border-t border-white/5 pt-2">
         <span className="text-zinc-500">Best odds</span>
@@ -67,11 +71,14 @@ export default function ValueCard({ entry }) {
         </span>
       </div>
       <div className="flex items-center justify-between text-[11px] mt-2 text-zinc-400 gap-2">
-        <span>Moka <b className="text-[#39FF14]">{Math.round(value.mokaProb * 100)}%</b></span>
-        <span>Market <b className="text-zinc-200">{Math.round(value.bookProb * 100)}%</b></span>
+        <span>Moka Estimate <b className="text-[#39FF14]">{Math.round(value.mokaProb * 100)}%</b></span>
+        <span>Market Estimate <b className="text-zinc-200">{Math.round(value.bookProb * 100)}%</b></span>
         <span className="truncate">Pick <b className="text-white">{value.pickName}</b></span>
       </div>
       <p className="text-[11px] text-zinc-500 mt-2">{aiExplanation(match, value)}</p>
+      <div className="mt-3">
+        <AddToChartButton entry={entry} className="w-full justify-center" />
+      </div>
     </Link>
   );
 }

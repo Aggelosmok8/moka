@@ -27,6 +27,18 @@ Moka (a.k.a. XtraStats branding in header) = AI sports value-betting app. Import
 - **Resend**: needs RESEND_API_KEY to actually send emails.
 - Stripe is real (Emergent test proxy, card 4242…); recurring subscription mode.
 
-## Next
-1. Deploy full-stack via Emergent; sign in with Google to confirm trial provisioning live.
-2. Build Match Chart. 3. Wire real Odds data. 4. Add RESEND_API_KEY. 5. Optional Supabase adapter.
+## Phase 2 (2026-06-26) — Charts tab + Teams tab merge
+Added two features into the existing Moka codebase (no re-import, backend reused):
+- **Charts tab** (`/charts`): client-side `ChartContext` (localStorage, max 6, no duplicates). `AddToChartButton` on every ValueCard. `ChartsPage` compares selected matches via recharts: Potential Value, Confidence, Moka vs Market Estimate, Best Odds, Recent Form. Remove chips + Clear all. Mobile responsive.
+- **Teams tab** (`/teams`): leagues (grouped, Free/Pro locked) → teams (`/api/teams?league=`) → team detail (stats grid, graceful "—") → full squad table via NEW backend endpoint `GET /api/teams/{id}/players` (sample roster, source="sample"; real data needs API-Football key).
+- **Beginner UX**: friendly labels + InfoTip tooltips — EV→"Potential Value", Moka→"Moka Estimate", Market→"Market Estimate", Edge→"Market Difference" (on ValueCard + Charts). 
+- All existing features preserved & verified (Value Engine, Probability, Odds, Leagues, Pricing, Account, Stripe €8.99/€79, 7-day trial). `vite build` passes; no console errors.
+
+## NOT done / remaining (Phase 2)
+- Homepage headline "Today's Best Betting Opportunities" + "Show Advanced Analysis" collapsible — NOT done (light follow-up).
+- Real sports data still MOCK: set `ODDS_API_KEY` (works) / `API_FOOTBALL_KEY` (suspended) in backend env.
+- "Add to Chart" added to ValueCard (primary value card); other card variants (MatchCard/CatalogMatchCard) not yet wired.
+
+## Deployment (unchanged model)
+- Frontend → Vercel (Root Dir `frontend`, build `npm run build`, output `build`, install `npm install --legacy-peer-deps`, env `VITE_BACKEND_URL`).
+- Backend → Render (FastAPI + SQLite). Env: STRIPE_API_KEY, STRIPE_WEBHOOK_SECRET, EMERGENT_LLM_KEY, RESEND_API_KEY, SENDER_EMAIL, APP_URL, ODDS_API_KEY, API_FOOTBALL_KEY, FOOTBALL_DATA_KEY (placeholders in backend/.env).
