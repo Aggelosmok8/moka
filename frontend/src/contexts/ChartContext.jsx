@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useCallback, useState } from "react";
+import React, { createContext, useContext, useCallback, useEffect, useState } from "react";
+import { useAuth } from "./AuthContext";
 
 const KEY = "moka_chart_matches";
 const MAX = 6;
@@ -44,6 +45,19 @@ export function ChartProvider({ children }) {
 
   const clear = useCallback(() => save([]), []);
   const has = useCallback((id) => items.some((e) => e.match.id === id), [items]);
+
+  // --- Backend sync readiness ---------------------------------------------
+  // Guests use localStorage (above). When a logged-in user is present, this is
+  // the single extension point to persist the watchlist server-side. The backend
+  // endpoint is intentionally not added yet (no backend changes in this task);
+  // wiring it later only requires filling in these two calls — no UI changes.
+  const { user } = useAuth() || {};
+  useEffect(() => {
+    if (!user) return;
+    // TODO(sync): GET /api/me/watchlist -> merge with local, then on each
+    // add/remove POST/DELETE /api/me/watchlist. Until then localStorage is the
+    // source of truth so the feature works identically for guests and users.
+  }, [user]);
 
   return (
     <Ctx.Provider value={{ items, add, remove, clear, has, max: MAX, count: items.length }}>

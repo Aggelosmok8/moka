@@ -39,6 +39,14 @@ Added two features into the existing Moka codebase (no re-import, backend reused
 - Real sports data still MOCK: set `ODDS_API_KEY` (works) / `API_FOOTBALL_KEY` (suspended) in backend env.
 - "Add to Chart" added to ValueCard (primary value card); other card variants (MatchCard/CatalogMatchCard) not yet wired.
 
+## Phase 2.1 (2026-06-26) — Charts watchlist UX + beginner-friendly polish
+- Charts = personal **Watchlist**: nav **badge** shows saved count; localStorage for guests; `ChartContext` has a documented backend-sync extension point (uses `useAuth`) for later server sync — no backend change.
+- Charts page: purpose subtitle, **watchlist table** (Match, League, Kickoff, Potential Value, Moka/Market Estimate, Confidence, Best Odds, Value Rating, Quick AI summary), **sorting** (Potential Value / Confidence / Kickoff / League), per-row Remove + Clear All, **Compare Selected** (row checkboxes drive the comparison charts subset).
+- Beginner-friendly everywhere: EV→Potential Value, CONF→Confidence, Edge→Market Difference; InfoTip tooltips on all metrics.
+- Homepage: headline → "Today's Best Betting Opportunities" + subtitle.
+- **"Show Advanced Analysis"** collapsible on every ValueCard (Home + Value): simple info (pick, best odds, rating) by default; advanced metrics + probability breakdown hidden until expanded.
+- Kickoff shows "—" until real match-time data is wired (mock data has no kickoff field). Build passes, no console errors. No backend/architecture/deployment changes.
+
 ## Deployment (unchanged model)
 - Frontend → Vercel (Root Dir `frontend`, build `npm run build`, output `build`, install `npm install --legacy-peer-deps`, env `VITE_BACKEND_URL`).
 - Backend → Render (FastAPI + SQLite). Env: STRIPE_API_KEY, STRIPE_WEBHOOK_SECRET, EMERGENT_LLM_KEY, RESEND_API_KEY, SENDER_EMAIL, APP_URL, ODDS_API_KEY, API_FOOTBALL_KEY, FOOTBALL_DATA_KEY (placeholders in backend/.env).

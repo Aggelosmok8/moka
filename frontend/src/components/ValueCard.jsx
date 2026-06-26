@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { Lock } from "lucide-react";
+import { Lock, ChevronDown, ChevronUp } from "lucide-react";
 import { aiExplanation } from "../lib/valueEngine";
 import { UpgradeButton } from "./Gating";
 import AddToChartButton from "./AddToChartButton";
@@ -15,6 +15,18 @@ function Metric({ label, v, accent, tip }) {
       <div className="font-display font-black text-lg" style={{ color: accent || "#fff" }}>
         {v}
       </div>
+    </div>
+  );
+}
+
+function ProbBar({ label, pct, color }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-10 text-[10px] text-zinc-500 uppercase">{label}</span>
+      <div className="flex-1 h-1.5 rounded-full bg-white/5 overflow-hidden">
+        <div className="h-full rounded-full" style={{ width: `${Math.max(0, Math.min(100, pct))}%`, background: color }} />
+      </div>
+      <span className="w-8 text-right text-[11px] font-bold text-zinc-300">{Math.round(pct)}%</span>
     </div>
   );
 }
@@ -44,6 +56,14 @@ export function LockedValueCard() {
 
 export default function ValueCard({ entry }) {
   const { match, value } = entry;
+  const [adv, setAdv] = useState(false);
+  const probs = value.probabilities || {};
+  const toggle = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setAdv((v) => !v);
+  };
+
   return (
     <Link
       to={`/analysis/${match.id}`}
@@ -59,23 +79,56 @@ export default function ValueCard({ entry }) {
       <div className="font-display font-bold text-white text-lg leading-tight mb-3">
         {match.home && match.home.name} <span className="text-zinc-600 text-sm">vs</span> {match.away && match.away.name}
       </div>
-      <div className="grid grid-cols-3 gap-2 text-center mb-3">
-        <Metric label="Value" v={value.valueScore} accent="#39FF14" tip="Overall strength of this betting opportunity (0-100)." />
-        <Metric label="Potential" v={`${value.ev > 0 ? "+" : ""}${value.ev}%`} accent="#58a6ff" tip="Potential Value — your expected return on this pick (formerly 'EV'). Higher is better." />
-        <Metric label="Conf" v={`${value.confidence}%`} accent="#FF9500" tip="Confidence — how sure the Moka model is about this pick." />
-      </div>
+
+      {/* Simple info — always visible */}
       <div className="flex items-center justify-between text-xs border-t border-white/5 pt-2">
         <span className="text-zinc-500">Best odds</span>
         <span className="text-white font-bold font-mono-num">
           {value.bestOdds} <span className="text-zinc-500 font-normal">@ {value.bookmaker}</span>
         </span>
       </div>
-      <div className="flex items-center justify-between text-[11px] mt-2 text-zinc-400 gap-2">
-        <span>Moka Estimate <b className="text-[#39FF14]">{Math.round(value.mokaProb * 100)}%</b></span>
-        <span>Market Estimate <b className="text-zinc-200">{Math.round(value.bookProb * 100)}%</b></span>
-        <span className="truncate">Pick <b className="text-white">{value.pickName}</b></span>
+      <div className="flex items-center justify-between text-xs mt-1.5">
+        <span className="text-zinc-500">Recommended pick</span>
+        <span className="text-white font-bold truncate ml-2">{value.pickName}</span>
       </div>
-      <p className="text-[11px] text-zinc-500 mt-2">{aiExplanation(match, value)}</p>
+
+      {/* Advanced analysis — hidden by default */}
+      <button
+        type="button"
+        onClick={toggle}
+        data-testid={`toggle-advanced-${match.id}`}
+        className="mt-3 w-full flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-400 hover:text-[#39FF14] border border-white/10 rounded-md py-1.5 transition-colors"
+      >
+        {adv ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+        {adv ? "Hide Advanced Analysis" : "Show Advanced Analysis"}
+      </button>
+
+      {adv && (
+        <div className="mt-3 space-y-3" data-testid={`advanced-${match.id}`}>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <Metric label="Value" v={value.valueScore} accent="#39FF14" tip="Overall strength of this betting opportunity (0-100)." />
+            <Metric label="Potential Value" v={`${value.ev > 0 ? "+" : ""}${value.ev}%`} accent="#58a6ff" tip="Potential Value — expected return on this pick (formerly 'EV'). Higher is better." />
+            <Metric label="Confidence" v={`${value.confidence}%`} accent="#FF9500" tip="How sure the Moka model is about this pick." />
+          </div>
+          <div className="flex items-center justify-between text-[11px] text-zinc-400 gap-2">
+            <span><InfoTip label="Moka Estimate" text="Our model's win chance for the pick." /> <b className="text-[#39FF14]">{Math.round(value.mokaProb * 100)}%</b></span>
+            <span><InfoTip label="Market Estimate" text="Win chance implied by bookmaker odds." /> <b className="text-zinc-200">{Math.round(value.bookProb * 100)}%</b></span>
+            <span><InfoTip label="Market Difference" text="Gap between Moka Estimate and Market Estimate (formerly 'Edge')." /> <b className="text-white">{value.edge > 0 ? "+" : ""}{value.edge}</b></span>
+          </div>
+          {(probs.home != null || probs.away != null) && (
+            <div className="space-y-1.5 pt-1">
+              <div className="text-[10px] text-zinc-500 uppercase tracking-wider">
+                <InfoTip label="Probability breakdown" text="Moka's estimated chance of each outcome." />
+              </div>
+              <ProbBar label="Home" pct={probs.home || 0} color="#39FF14" />
+              {probs.draw != null && <ProbBar label="Draw" pct={probs.draw || 0} color="#71717A" />}
+              <ProbBar label="Away" pct={probs.away || 0} color="#58a6ff" />
+            </div>
+          )}
+          <p className="text-[11px] text-zinc-500">{aiExplanation(match, value)}</p>
+        </div>
+      )}
+
       <div className="mt-3">
         <AddToChartButton entry={entry} className="w-full justify-center" />
       </div>
