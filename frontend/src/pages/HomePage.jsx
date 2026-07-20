@@ -62,11 +62,11 @@ export default function HomePage() {
             <span className="text-xs font-bold uppercase tracking-[0.22em] text-[#39FF14]">Value Terminal · Football and Basketball</span>
           </div>
           <h1 className="font-display font-black uppercase tracking-tight text-4xl sm:text-5xl lg:text-6xl text-white leading-tight">
-            Find Matches the<br />
-            <span className="shimmer-text">Market Undervalues.</span>
+            Today's Best<br />
+            <span className="shimmer-text">Betting Opportunities.</span>
           </h1>
           <p className="mt-4 text-sm sm:text-base text-zinc-400 max-w-xl">
-            The Moka model prices every fixture and surfaces where bookmaker odds disagree — your edge, ranked by value.
+            Our model compares bookmaker odds with statistical probabilities to find potential value opportunities.
           </p>
         </div>
       </section>
@@ -74,10 +74,10 @@ export default function HomePage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center gap-2 mb-1">
           <Flame className="w-5 h-5 text-[#39FF14]" />
-          <h2 className="font-display font-black uppercase tracking-tight text-2xl text-white">Top Undervalued Matches Today</h2>
+          <h2 className="font-display font-black uppercase tracking-tight text-2xl text-white">Today's Best Betting Opportunities</h2>
         </div>
         <p className="text-zinc-500 text-sm mb-5">
-          Ranked by expected value and model confidence.{!isPro && " Free plan shows the top 3."}
+          Our model compares bookmaker odds with statistical probabilities to find potential value.{!isPro && " Free plan shows the top 3."}
         </p>
 
         {busy ? (
@@ -129,7 +129,7 @@ export default function HomePage() {
                   <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full whitespace-nowrap ${value.level.cls}`}>
                     {value.level.emoji} {value.level.label}
                   </span>
-                  <span className="text-xs text-[#58a6ff] font-bold font-mono-num w-16 text-right">{value.ev > 0 ? "+" : ""}{value.ev}% EV</span>
+                  <span className="text-xs text-[#58a6ff] font-bold font-mono-num w-20 text-right">{value.ev > 0 ? "+" : ""}{value.ev}% Value</span>
                   <span className="text-xs text-white font-bold font-mono-num w-12 text-right">{value.bestOdds}</span>
                 </Link>
               ))}

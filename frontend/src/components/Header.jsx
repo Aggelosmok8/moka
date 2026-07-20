@@ -1,16 +1,17 @@
 import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Activity, Flame, Trophy, BarChart3, Search, Tag, User } from "lucide-react";
+import { Activity, Flame, Trophy, BarChart3, Search, Tag, User, LineChart, Users } from "lucide-react";
 import LiveStatusPill from "./LiveStatusPill";
 import SearchPalette from "./SearchPalette";
 import UserMenu from "./UserMenu";
 import TrialBanner from "./TrialBanner";
+import { useChart } from "../contexts/ChartContext";
 
-const NavLink = ({ to, label, icon: Icon, active, testId }) => (
+const NavLink = ({ to, label, icon: Icon, active, testId, badge }) => (
   <Link
     to={to}
     data-testid={testId}
-    className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-semibold transition-colors duration-200 ${
+    className={`relative flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-semibold transition-colors duration-200 ${
       active
         ? "text-[#39FF14] bg-[#39FF14]/10"
         : "text-zinc-400 hover:text-white hover:bg-white/5"
@@ -18,12 +19,18 @@ const NavLink = ({ to, label, icon: Icon, active, testId }) => (
   >
     <Icon className="w-4 h-4" />
     <span className="hidden sm:inline">{label}</span>
+    {badge > 0 && (
+      <span data-testid="charts-nav-badge" className="ml-0.5 min-w-[16px] h-4 px-1 rounded-full bg-[#39FF14] text-black text-[10px] font-black flex items-center justify-center">
+        {badge}
+      </span>
+    )}
   </Link>
 );
 
 export const Header = () => {
   const loc = useLocation();
   const [searchOpen, setSearchOpen] = useState(false);
+  const { count: chartCount } = useChart();
 
   useEffect(() => {
     const onKey = (e) => {
@@ -58,6 +65,8 @@ export const Header = () => {
           <NavLink to="/value" label="Value" icon={Flame} active={loc.pathname.startsWith("/value") || loc.pathname.startsWith("/analysis")} testId="nav-value" />
           <NavLink to="/leagues" label="Leagues" icon={Trophy} active={loc.pathname.startsWith("/leagues")} testId="nav-leagues" />
           <NavLink to="/odds" label="Odds" icon={BarChart3} active={loc.pathname.startsWith("/odds")} testId="nav-odds" />
+          <NavLink to="/charts" label="Charts" icon={LineChart} active={loc.pathname.startsWith("/charts")} testId="nav-charts" badge={chartCount} />
+          <NavLink to="/teams" label="Teams" icon={Users} active={loc.pathname.startsWith("/teams")} testId="nav-teams" />
           <NavLink to="/pricing" label="Pricing" icon={Tag} active={loc.pathname.startsWith("/pricing")} testId="nav-pricing" />
           <NavLink to="/account" label="Account" icon={User} active={loc.pathname.startsWith("/account")} testId="nav-account" />
         </nav>
