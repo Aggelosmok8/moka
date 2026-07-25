@@ -1,0 +1,16 @@
+{
+  "summary": "Re-verified Moka backend fix for POST /api/billing/checkout schema drift (iteration_2 HIGH bug). All 10 regression tests pass 100%. Checkout now returns 200 with a hosted Stripe checkout URL for both pro_yearly and pro_monthly using the TRIAL bearer; no 500 and payment_transactions row persists without schema errors. Regressions (health, billing packages, value engine, teams/players sample, TRIAL and EXPIRED entitlements) all green.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_moka_regression.py", "/app/test_reports/pytest/moka_regression.xml"],
+  "action_items": [],
+  "critical_code_review_comments": ["Idempotent ALTER TABLE migration for payment_transactions in database.py is correct pattern; consider adding similar guard for future schema evolutions."],
+  "updated_files": ["/app/backend/tests/test_moka_regression.py (added test_billing_checkout_monthly)"],
+  "success_rate": {"backend": "100%", "frontend": "N/A (skipped per request)"},
+  "test_credentials": "TRIAL: tok_trial_b8dbf3199912416db7d4bdd8c243a614; EXPIRED: tok_exp_3dad7d70946446c3aa5df133f694c83c",
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Regression suite at /app/backend/tests/test_moka_regression.py covers health, billing packages+checkout (monthly+yearly), value engine, teams, and TRIAL/EXPIRED entitlements. Sports data is intentionally sample/mock.",
+  "rca of the issue": "iteration_2 500 on /api/billing/checkout was due to payment_transactions table missing columns (email, package_id, metadata, payment_status, mode, updated_at). Main agent added them to CREATE TABLE and added idempotent ALTER TABLE migration in init_db. Verified via successful checkout + persistence."
+}

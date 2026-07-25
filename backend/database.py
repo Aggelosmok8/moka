@@ -60,10 +60,16 @@ async def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 session_id TEXT UNIQUE NOT NULL,
                 user_id TEXT NOT NULL,
+                email TEXT,
+                package_id TEXT,
                 amount REAL,
                 currency TEXT,
+                metadata TEXT,
                 status TEXT,
-                created_at TEXT
+                payment_status TEXT,
+                mode TEXT,
+                created_at TEXT,
+                updated_at TEXT
             );
 
             CREATE TABLE IF NOT EXISTS goal_alert_subs (
@@ -121,6 +127,13 @@ async def init_db():
         for col in ("trial_start_date", "trial_end_date", "plan", "emails_sent"):
             try:
                 await conn.execute(f"ALTER TABLE users ADD COLUMN {col} TEXT")
+                await conn.commit()
+            except Exception:
+                pass
+        # payment_transactions columns added over time
+        for col in ("email", "package_id", "metadata", "payment_status", "mode", "updated_at"):
+            try:
+                await conn.execute(f"ALTER TABLE payment_transactions ADD COLUMN {col} TEXT")
                 await conn.commit()
             except Exception:
                 pass

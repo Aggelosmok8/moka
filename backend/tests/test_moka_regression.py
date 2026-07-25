@@ -146,3 +146,15 @@ def test_billing_checkout(s):
     data = r.json()
     url = data.get("url") or data.get("checkout_url") or data.get("session_url")
     assert url and url.startswith("http")
+
+
+def test_billing_checkout_monthly(s):
+    r = s.post(
+        f"{BASE_URL}/api/billing/checkout",
+        headers={"Authorization": f"Bearer {TRIAL_TOKEN}"},
+        json={"package_id": "pro_monthly", "origin_url": "https://example.com"},
+    )
+    assert r.status_code in (200, 201), r.text
+    data = r.json()
+    url = data.get("url") or data.get("checkout_url") or data.get("session_url")
+    assert url and url.startswith("http")
