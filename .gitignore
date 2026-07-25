@@ -86,3 +86,8 @@ android-sdk/
 credentials.json
 *.key
 .credentials
+
+# SQLite database (created at runtime by init_db; never commit data)
+*.db
+moka.db
+backend/moka.db
