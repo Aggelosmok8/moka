@@ -1,0 +1,38 @@
+{
+  "summary": "Regression-tested Moka backend after Render deploy packaging fix (added resend to requirements.txt + render.yaml + .env.example). 8/9 backend tests pass. Health, billing/packages (pro_monthly 8.99 EUR, pro_yearly 79.0 EUR), value-matches, teams list/detail/players (source=sample, 16 players with all fields), /auth/me for TRIAL (is_pro=true, subscription_status=trial, trial_days_left in range) and EXPIRED (is_pro=false, subscription_status=expired), and /me/entitlements for TRIAL (role=pro, 12 leagues) and EXPIRED (role=free, 7 leagues) all pass. POST /api/billing/checkout returns 500 due to a SQLite schema mismatch (payment_transactions table missing `email`, `package_id`, `metadata` columns) — the Stripe session IS created successfully at the Emergent proxy, but the follow-up DB insert crashes, leaving orphaned Stripe sessions. This is a pre-existing bug unrelated to the packaging change.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/billing/checkout",
+        "issue": "500 Internal Server Error. Stripe checkout session is created successfully via Emergent proxy (200 OK), but the subsequent `db.payment_transactions.insert_one({...email, package_id, metadata...})` at backend/billing.py line 204 raises `sqlite3.OperationalError: table payment_transactions has no column named email`. Schema in backend/database.py lines 59-67 only defines (id, session_id, user_id, amount, currency, status, created_at) but billing.py inserts extra columns (email, package_id, metadata). Consequence: user sees error, but a real Stripe session was still created (orphaned).",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_moka_regression.py",
+    "/app/test_reports/pytest/moka_regression.xml"
+  ],
+  "action_items": [
+    "Fix payment_transactions schema in backend/database.py: add columns `email TEXT`, `package_id TEXT`, `metadata TEXT` (JSON) to match what billing.py inserts. Alternatively, filter the insert payload in billing.py to only known columns. Consider a lightweight migration for existing moka.db files (ALTER TABLE ADD COLUMN if not exists).",
+    "Packaging fixes (resend dep, render.yaml, backend/.env.example) do not break any tested endpoint — safe to ship."
+  ],
+  "critical_code_review_comments": [
+    "backend/database.py:59-67 payment_transactions schema is out of sync with backend/billing.py:204 insert payload — will always 500 on real checkout.",
+    "backend/billing.py:198-202 catches only stripe.error.StripeError; the DB insert exception below propagates as 500 AFTER a Stripe session was created, leaving orphaned Stripe sessions. Wrap DB insert in its own try/except or move it before the Stripe call (or accept eventual consistency via webhook).",
+    "server.py CORS allow_origins=['*'] is fine for a public read API but should be tightened once auth cookies are involved.",
+    "SQLite for a Render deploy (backend/database.py DB_PATH) will lose data on ephemeral disk unless a persistent disk is attached — call out in render.yaml."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_moka_regression.py (new)"
+  ],
+  "success_rate": {"backend": "89% (8/9)", "frontend": "not tested"},
+  "test_credentials": "Pre-seeded bearer tokens from review request: TRIAL=tok_trial_b8dbf3199912416db7d4bdd8c243a614, EXPIRED=tok_exp_3dad7d70946446c3aa5df133f694c83c. /app/memory/test_credentials.md not consulted (Emergent OAuth flow bypassed via preseeded tokens).",
+  "seed_data_creation": "None; used pre-seeded users user_trial_cf16c0 and user_exp_fc1c8b via provided bearer tokens.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Rerun /app/backend/tests/test_moka_regression.py after main agent fixes payment_transactions schema. All other Moka endpoints (health, packages, value-matches, teams, teams/{id}/players, auth/me trial+expired, me/entitlements trial+expired) are green. Note entitlements response nests role/leagues under `entitlements` key. Sample teams use ids like `mock_ht_0`.",
+  "rca of the issue": "RCA — /api/billing/checkout 500: (1) Reproduction: `curl -X POST $BASE/api/billing/checkout -H 'Authorization: Bearer tok_trial_...' -H 'Content-Type: application/json' -d '{\"package_id\":\"pro_yearly\",\"origin_url\":\"https://example.com\"}'` → 500. (2) Root cause: schema drift — CREATE TABLE payment_transactions (backend/database.py:59) lacks the `email`, `package_id`, `metadata` columns that billing.py:204 tries to insert. aiosqlite raises OperationalError, FastAPI returns 500. Stripe session is already created before the DB write, so retry will create duplicate sessions. (3) Mitigation: ALTER TABLE payment_transactions ADD COLUMN email TEXT; ADD COLUMN package_id TEXT; ADD COLUMN metadata TEXT; and update CREATE TABLE definition. Wrap the insert in try/except so a DB failure doesn't lose the just-created Stripe session_id (log/queue for reconciliation)."
+}

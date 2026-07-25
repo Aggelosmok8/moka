@@ -1,0 +1,45 @@
+# Render Blueprint for the Moka backend (FastAPI + SQLite).
+# Frontend stays on Vercel (Root Directory: frontend). Point the Vercel env var
+# VITE_BACKEND_URL to this service's URL, e.g. https://moka-backend.onrender.com
+services:
+  - type: web
+    name: moka-backend
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn server:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /api/
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      # Secrets & config — set these in the Render dashboard (sync:false = not stored in git).
+      - key: APP_URL            # public backend URL, used for email links + OAuth redirect base
+        sync: false
+      - key: STRIPE_API_KEY     # sk_test_emergent (Emergent test proxy) or your live Stripe key
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: EMERGENT_LLM_KEY   # optional (AI match analysis)
+        sync: false
+      - key: RESEND_API_KEY     # optional (trial lifecycle emails)
+        sync: false
+      - key: SENDER_EMAIL
+        sync: false
+      - key: ODDS_API_KEY       # enables real odds data (empty = mock)
+        sync: false
+      - key: API_FOOTBALL_KEY   # enables real football stats (empty = mock/sample)
+        sync: false
+      - key: FOOTBALL_DATA_KEY
+        sync: false
+      # --- Persistence (IMPORTANT) --------------------------------------------
+      # The free plan has an EPHEMERAL filesystem: the SQLite DB (users,
+      # subscriptions, trials) RESETS on every redeploy/restart. For real
+      # persistence, upgrade the plan, then uncomment the disk below and set
+      # DB_PATH to the mounted path.
+      # - key: DB_PATH
+      #   value: /var/data/moka.db
+    # disk:
+    #   name: moka-data
+    #   mountPath: /var/data
+    #   sizeGB: 1
