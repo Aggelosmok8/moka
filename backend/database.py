@@ -1,176 +1,282 @@
 import os
 """
-SQLite async database layer.
-Provides a MongoDB-like interface so the rest of the code changes minimally.
-Uses aiosqlite for async SQLite access.
+Async database layer with a MongoDB-like interface.
+
+Backend is chosen at runtime:
+  * DATABASE_URL starts with "postgres" -> PostgreSQL (asyncpg pool). Use this on
+    Render/Supabase for persistent storage.
+  * otherwise -> SQLite (aiosqlite, file at DB_PATH). Local/dev default.
+
+The rest of the codebase only touches `db.<collection>.find_one/find/insert_one/
+update_one/delete_one/delete_many`, so switching backends changes nothing else.
 """
 import json
-import uuid
 import logging
 import aiosqlite
 from pathlib import Path
-from datetime import datetime, timezone
-from typing import Optional, Any
+from datetime import datetime
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+USE_PG = DATABASE_URL.startswith("postgres")
+
 DB_PATH = Path(os.environ.get("DB_PATH", str(Path(__file__).parent / "moka.db")))
 
+# asyncpg pool (Postgres only) — created once in init_db().
+_pg_pool = None
 
-async def get_connection():
-    conn = await aiosqlite.connect(DB_PATH)
-    conn.row_factory = aiosqlite.Row
-    await conn.execute("PRAGMA journal_mode=WAL")
-    await conn.execute("PRAGMA foreign_keys=ON")
-    return conn
+
+# ── DDL ─────────────────────────────────────────────────────────────────────
+
+_SQLITE_SCHEMA = """
+    CREATE TABLE IF NOT EXISTS users (
+        user_id TEXT PRIMARY KEY,
+        email TEXT UNIQUE NOT NULL,
+        name TEXT DEFAULT '',
+        picture TEXT,
+        pro_until TEXT,
+        subscription_status TEXT,
+        stripe_subscription_id TEXT,
+        stripe_customer_id TEXT,
+        subscription_cancel_at_period_end INTEGER DEFAULT 0,
+        subscription_updated_at TEXT,
+        created_at TEXT,
+        last_login_at TEXT,
+        trial_start_date TEXT,
+        trial_end_date TEXT,
+        plan TEXT,
+        emails_sent TEXT
+    );
+    CREATE TABLE IF NOT EXISTS user_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        session_token TEXT UNIQUE NOT NULL,
+        expires_at TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS payment_transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT UNIQUE NOT NULL,
+        user_id TEXT NOT NULL,
+        email TEXT,
+        package_id TEXT,
+        amount REAL,
+        currency TEXT,
+        metadata TEXT,
+        status TEXT,
+        payment_status TEXT,
+        mode TEXT,
+        created_at TEXT,
+        updated_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS goal_alert_subs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        team_id TEXT NOT NULL,
+        created_at TEXT,
+        UNIQUE(user_id, team_id)
+    );
+    CREATE TABLE IF NOT EXISTS match_analyses (
+        match_id TEXT PRIMARY KEY,
+        analysis TEXT,
+        structured TEXT,
+        created_at TEXT,
+        updated_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS analysis_usage (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        match_id TEXT NOT NULL,
+        day TEXT NOT NULL,
+        count INTEGER DEFAULT 0,
+        created_at TEXT,
+        UNIQUE(user_id, match_id, day)
+    );
+    CREATE TABLE IF NOT EXISTS events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        properties TEXT DEFAULT '{}',
+        user_id TEXT,
+        is_pro INTEGER DEFAULT 0,
+        ua TEXT DEFAULT '',
+        ip TEXT,
+        ts TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS digest_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        day TEXT NOT NULL,
+        data TEXT,
+        UNIQUE(user_id, day)
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_sessions_token ON user_sessions(session_token);
+    CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_events_user_ts ON events(user_id, ts);
+    CREATE INDEX IF NOT EXISTS idx_analysis_usage ON analysis_usage(user_id, match_id, day);
+"""
+
+_PG_SCHEMA = """
+    CREATE TABLE IF NOT EXISTS users (
+        user_id TEXT PRIMARY KEY,
+        email TEXT UNIQUE NOT NULL,
+        name TEXT DEFAULT '',
+        picture TEXT,
+        pro_until TEXT,
+        subscription_status TEXT,
+        stripe_subscription_id TEXT,
+        stripe_customer_id TEXT,
+        subscription_cancel_at_period_end INTEGER DEFAULT 0,
+        subscription_updated_at TEXT,
+        created_at TEXT,
+        last_login_at TEXT,
+        trial_start_date TEXT,
+        trial_end_date TEXT,
+        plan TEXT,
+        emails_sent TEXT
+    );
+    CREATE TABLE IF NOT EXISTS user_sessions (
+        id BIGSERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        session_token TEXT UNIQUE NOT NULL,
+        expires_at TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS payment_transactions (
+        id BIGSERIAL PRIMARY KEY,
+        session_id TEXT UNIQUE NOT NULL,
+        user_id TEXT NOT NULL,
+        email TEXT,
+        package_id TEXT,
+        amount DOUBLE PRECISION,
+        currency TEXT,
+        metadata TEXT,
+        status TEXT,
+        payment_status TEXT,
+        mode TEXT,
+        created_at TEXT,
+        updated_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS goal_alert_subs (
+        id BIGSERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        team_id TEXT NOT NULL,
+        created_at TEXT,
+        UNIQUE(user_id, team_id)
+    );
+    CREATE TABLE IF NOT EXISTS match_analyses (
+        match_id TEXT PRIMARY KEY,
+        analysis TEXT,
+        structured TEXT,
+        created_at TEXT,
+        updated_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS analysis_usage (
+        id BIGSERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        match_id TEXT NOT NULL,
+        day TEXT NOT NULL,
+        count INTEGER DEFAULT 0,
+        created_at TEXT,
+        UNIQUE(user_id, match_id, day)
+    );
+    CREATE TABLE IF NOT EXISTS events (
+        id BIGSERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        properties TEXT DEFAULT '{}',
+        user_id TEXT,
+        is_pro INTEGER DEFAULT 0,
+        ua TEXT DEFAULT '',
+        ip TEXT,
+        ts TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS digest_log (
+        id BIGSERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        day TEXT NOT NULL,
+        data TEXT,
+        UNIQUE(user_id, day)
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_sessions_token ON user_sessions(session_token);
+    CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_events_user_ts ON events(user_id, ts);
+    CREATE INDEX IF NOT EXISTS idx_analysis_usage ON analysis_usage(user_id, match_id, day);
+"""
+
+
+async def _pg_get_pool():
+    global _pg_pool
+    if _pg_pool is None:
+        import asyncpg
+        host_is_local = "localhost" in DATABASE_URL or "127.0.0.1" in DATABASE_URL
+        _pg_pool = await asyncpg.create_pool(
+            dsn=DATABASE_URL,
+            ssl=(False if host_is_local else True),
+            min_size=1,
+            max_size=5,
+            command_timeout=30,
+        )
+    return _pg_pool
 
 
 async def init_db():
     """Create all tables on startup."""
-    async with aiosqlite.connect(DB_PATH) as conn:
-        await conn.executescript("""
-            CREATE TABLE IF NOT EXISTS users (
-                user_id TEXT PRIMARY KEY,
-                email TEXT UNIQUE NOT NULL,
-                name TEXT DEFAULT '',
-                picture TEXT,
-                pro_until TEXT,
-                subscription_status TEXT,
-                stripe_subscription_id TEXT,
-                stripe_customer_id TEXT,
-                subscription_cancel_at_period_end INTEGER DEFAULT 0,
-                subscription_updated_at TEXT,
-                created_at TEXT,
-                last_login_at TEXT,
-                trial_start_date TEXT,
-                trial_end_date TEXT,
-                plan TEXT,
-                emails_sent TEXT
-            );
+    if USE_PG:
+        pool = await _pg_get_pool()
+        async with pool.acquire() as conn:
+            await conn.execute(_PG_SCHEMA)
+        logger.info("Postgres DB initialized (Supabase/Render).")
+    else:
+        async with aiosqlite.connect(DB_PATH) as conn:
+            await conn.executescript(_SQLITE_SCHEMA)
+            await conn.commit()
+            for col in ("trial_start_date", "trial_end_date", "plan", "emails_sent"):
+                try:
+                    await conn.execute(f"ALTER TABLE users ADD COLUMN {col} TEXT")
+                    await conn.commit()
+                except Exception:
+                    pass
+            for col in ("email", "package_id", "metadata", "payment_status", "mode", "updated_at"):
+                try:
+                    await conn.execute(f"ALTER TABLE payment_transactions ADD COLUMN {col} TEXT")
+                    await conn.commit()
+                except Exception:
+                    pass
+        logger.info("SQLite DB initialized at %s", DB_PATH)
 
-            CREATE TABLE IF NOT EXISTS user_sessions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT NOT NULL,
-                session_token TEXT UNIQUE NOT NULL,
-                expires_at TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            );
 
-            CREATE TABLE IF NOT EXISTS payment_transactions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT UNIQUE NOT NULL,
-                user_id TEXT NOT NULL,
-                email TEXT,
-                package_id TEXT,
-                amount REAL,
-                currency TEXT,
-                metadata TEXT,
-                status TEXT,
-                payment_status TEXT,
-                mode TEXT,
-                created_at TEXT,
-                updated_at TEXT
-            );
-
-            CREATE TABLE IF NOT EXISTS goal_alert_subs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT NOT NULL,
-                team_id TEXT NOT NULL,
-                created_at TEXT,
-                UNIQUE(user_id, team_id)
-            );
-
-            CREATE TABLE IF NOT EXISTS match_analyses (
-                match_id TEXT PRIMARY KEY,
-                analysis TEXT,
-                structured TEXT,
-                created_at TEXT,
-                updated_at TEXT
-            );
-
-            CREATE TABLE IF NOT EXISTS analysis_usage (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT NOT NULL,
-                match_id TEXT NOT NULL,
-                day TEXT NOT NULL,
-                count INTEGER DEFAULT 0,
-                created_at TEXT,
-                UNIQUE(user_id, match_id, day)
-            );
-
-            CREATE TABLE IF NOT EXISTS events (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                properties TEXT DEFAULT '{}',
-                user_id TEXT,
-                is_pro INTEGER DEFAULT 0,
-                ua TEXT DEFAULT '',
-                ip TEXT,
-                ts TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS digest_log (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT NOT NULL,
-                day TEXT NOT NULL,
-                data TEXT,
-                UNIQUE(user_id, day)
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_user_sessions_token ON user_sessions(session_token);
-            CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id);
-            CREATE INDEX IF NOT EXISTS idx_events_user_ts ON events(user_id, ts);
-            CREATE INDEX IF NOT EXISTS idx_analysis_usage ON analysis_usage(user_id, match_id, day);
-        """)
-        await conn.commit()
-        # Idempotent migration for pre-existing DBs (adds trial columns if missing)
-        for col in ("trial_start_date", "trial_end_date", "plan", "emails_sent"):
-            try:
-                await conn.execute(f"ALTER TABLE users ADD COLUMN {col} TEXT")
-                await conn.commit()
-            except Exception:
-                pass
-        # payment_transactions columns added over time
-        for col in ("email", "package_id", "metadata", "payment_status", "mode", "updated_at"):
-            try:
-                await conn.execute(f"ALTER TABLE payment_transactions ADD COLUMN {col} TEXT")
-                await conn.commit()
-            except Exception:
-                pass
-    logger.info("SQLite DB initialized at %s", DB_PATH)
-
+# ── Collection interface ──────────────────────────────────────────────────────
 
 class Collection:
-    """MongoDB-like async collection backed by a SQLite table."""
+    """MongoDB-like async collection backed by SQLite or Postgres."""
 
     def __init__(self, table: str):
         self.table = table
 
+    # -- reads -------------------------------------------------------------
     async def find_one(self, query: dict, projection: dict = None) -> Optional[dict]:
         where, params = _build_where(query)
         sql = f"SELECT * FROM {self.table}"
         if where:
             sql += f" WHERE {where}"
         sql += " LIMIT 1"
-        async with aiosqlite.connect(DB_PATH) as conn:
-            conn.row_factory = aiosqlite.Row
-            async with conn.execute(sql, params) as cur:
-                row = await cur.fetchone()
-                if row is None:
-                    return None
-                return _deserialize(dict(row), self.table)
+        row = await _fetchrow(sql, params)
+        return _deserialize(row, self.table) if row else None
 
     async def find(self, query: dict = None, projection: dict = None):
         return AsyncCursor(self.table, query or {})
 
+    # -- writes ------------------------------------------------------------
     async def insert_one(self, doc: dict):
         row = _serialize(doc, self.table)
         cols = ", ".join(row.keys())
-        placeholders = ", ".join("?" * len(row))
-        sql = f"INSERT OR IGNORE INTO {self.table} ({cols}) VALUES ({placeholders})"
-        async with aiosqlite.connect(DB_PATH) as conn:
-            await conn.execute(sql, list(row.values()))
-            await conn.commit()
+        placeholders = ", ".join(_ph(i + 1) for i in range(len(row)))
+        if USE_PG:
+            sql = f"INSERT INTO {self.table} ({cols}) VALUES ({placeholders}) ON CONFLICT DO NOTHING"
+        else:
+            sql = f"INSERT OR IGNORE INTO {self.table} ({cols}) VALUES ({placeholders})"
+        await _execute(sql, list(row.values()))
 
     async def update_one(self, query: dict, update: dict, upsert: bool = False):
         set_data = update.get("$set", {})
@@ -192,41 +298,46 @@ class Collection:
 
         if set_data:
             row = _serialize(set_data, self.table)
-            sets = ", ".join(f"{k} = ?" for k in row.keys())
-            where, params = _build_where(query)
-            sql = f"UPDATE {self.table} SET {sets} WHERE {where}"
-            async with aiosqlite.connect(DB_PATH) as conn:
-                await conn.execute(sql, list(row.values()) + params)
-                await conn.commit()
+            sets = ", ".join(f"{k} = {_ph(i + 1)}" for i, k in enumerate(row.keys()))
+            where, params = _build_where(query, start=len(row) + 1)
+            sql = f"UPDATE {self.table} SET {sets}"
+            if where:
+                sql += f" WHERE {where}"
+            await _execute(sql, list(row.values()) + params)
 
         if inc_data:
             for field, val in inc_data.items():
                 await self._increment(query, field, val)
 
     async def _increment(self, query: dict, field: str, val: int):
-        where, params = _build_where(query)
-        sql = f"UPDATE {self.table} SET {field} = COALESCE({field}, 0) + ? WHERE {where}"
-        async with aiosqlite.connect(DB_PATH) as conn:
-            await conn.execute(sql, [val] + params)
-            await conn.commit()
+        where, params = _build_where(query, start=2)
+        sql = f"UPDATE {self.table} SET {field} = COALESCE({field}, 0) + {_ph(1)}"
+        if where:
+            sql += f" WHERE {where}"
+        await _execute(sql, [val] + params)
 
     async def delete_one(self, query: dict):
         where, params = _build_where(query)
-        sql = f"DELETE FROM {self.table} WHERE {where} LIMIT 1"
-        async with aiosqlite.connect(DB_PATH) as conn:
-            await conn.execute(sql, params)
-            await conn.commit()
+        if USE_PG:
+            inner = f"SELECT ctid FROM {self.table}"
+            if where:
+                inner += f" WHERE {where}"
+            inner += " LIMIT 1"
+            sql = f"DELETE FROM {self.table} WHERE ctid IN ({inner})"
+        else:
+            sql = f"DELETE FROM {self.table}"
+            if where:
+                sql += f" WHERE {where}"
+            sql += " LIMIT 1"
+        await _execute(sql, params)
 
     async def delete_many(self, query: dict):
         where, params = _build_where(query)
+        sql = f"DELETE FROM {self.table}"
         if where:
-            sql = f"DELETE FROM {self.table} WHERE {where}"
-        else:
-            sql = f"DELETE FROM {self.table}"
-        async with aiosqlite.connect(DB_PATH) as conn:
-            cur = await conn.execute(sql, params)
-            await conn.commit()
-            return type("Result", (), {"deleted_count": cur.rowcount})()
+            sql += f" WHERE {where}"
+        count = await _execute(sql, params)
+        return type("Result", (), {"deleted_count": count})()
 
 
 class AsyncCursor:
@@ -238,7 +349,6 @@ class AsyncCursor:
         self._limit_val = None
 
     def sort(self, field: str, direction: int):
-        self.table = self.table
         self._sort_field = field
         self._sort_dir = "DESC" if direction == -1 else "ASC"
         return self
@@ -258,16 +368,14 @@ class AsyncCursor:
         if self._sort_field:
             sql += f" ORDER BY {self._sort_field} {self._sort_dir}"
         if self._limit_val:
-            sql += f" LIMIT {self._limit_val}"
-        async with aiosqlite.connect(DB_PATH) as conn:
-            conn.row_factory = aiosqlite.Row
-            async with conn.execute(sql, params) as cur:
-                async for row in cur:
-                    yield _deserialize(dict(row), self.table)
+            sql += f" LIMIT {int(self._limit_val)}"
+        rows = await _fetchall(sql, params)
+        for row in rows:
+            yield _deserialize(row, self.table)
 
 
 class Database:
-    """MongoDB-like db object. Access collections as attributes: db.users, db.events, etc."""
+    """Access collections as attributes: db.users, db.events, etc."""
 
     def __getattr__(self, name: str) -> Collection:
         return Collection(name)
@@ -276,10 +384,59 @@ class Database:
         return Collection(name)
 
 
+# ── Backend-agnostic execution helpers ────────────────────────────────────────
+
+def _ph(i: int) -> str:
+    """Placeholder for parameter index i (1-based). '?' for SQLite, '$i' for PG."""
+    return f"${i}" if USE_PG else "?"
+
+
+async def _fetchrow(sql: str, params: list) -> Optional[dict]:
+    if USE_PG:
+        pool = await _pg_get_pool()
+        async with pool.acquire() as conn:
+            rec = await conn.fetchrow(sql, *params)
+            return dict(rec) if rec is not None else None
+    async with aiosqlite.connect(DB_PATH) as conn:
+        conn.row_factory = aiosqlite.Row
+        async with conn.execute(sql, params) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row is not None else None
+
+
+async def _fetchall(sql: str, params: list) -> list:
+    if USE_PG:
+        pool = await _pg_get_pool()
+        async with pool.acquire() as conn:
+            recs = await conn.fetch(sql, *params)
+            return [dict(r) for r in recs]
+    async with aiosqlite.connect(DB_PATH) as conn:
+        conn.row_factory = aiosqlite.Row
+        async with conn.execute(sql, params) as cur:
+            rows = await cur.fetchall()
+            return [dict(r) for r in rows]
+
+
+async def _execute(sql: str, params: list) -> int:
+    """Run a write. Returns affected row count."""
+    if USE_PG:
+        pool = await _pg_get_pool()
+        async with pool.acquire() as conn:
+            status = await conn.execute(sql, *params)
+            # status is like "UPDATE 3" / "DELETE 1" / "INSERT 0 1"
+            try:
+                return int(status.split()[-1])
+            except (ValueError, IndexError, AttributeError):
+                return 0
+    async with aiosqlite.connect(DB_PATH) as conn:
+        cur = await conn.execute(sql, params)
+        await conn.commit()
+        return cur.rowcount
+
+
 # ── Serialization helpers ──────────────────────────────────────────────────────
 
 def _serialize(doc: dict, table: str) -> dict:
-    """Convert Python dict to SQLite-compatible row."""
     row = {}
     for k, v in doc.items():
         if k == "_id":
@@ -296,13 +453,11 @@ def _serialize(doc: dict, table: str) -> dict:
 
 
 def _deserialize(row: dict, table: str) -> dict:
-    """Convert SQLite row back to Python dict with proper types."""
     result = {}
     for k, v in row.items():
         if v is None:
             result[k] = v
         elif isinstance(v, str):
-            # Try to parse JSON fields
             if v.startswith(("{", "[")):
                 try:
                     result[k] = json.loads(v)
@@ -317,36 +472,43 @@ def _deserialize(row: dict, table: str) -> dict:
     return result
 
 
-def _build_where(query: dict):
-    """Build a WHERE clause from a simple MongoDB-like query dict."""
+def _build_where(query: dict, start: int = 1):
+    """Build a WHERE clause from a simple MongoDB-like query dict.
+
+    `start` is the 1-based index of the first placeholder (so UPDATE can put SET
+    params first). Returns (where_sql, params).
+    """
     parts = []
     params = []
+    i = start
     for key, value in query.items():
         if key == "_id":
             continue
         if isinstance(value, dict):
-            # Handle operators like {"$regex": "^standings:"}
             for op, operand in value.items():
                 if op == "$regex":
-                    # Convert ^ anchored regex to LIKE
                     if operand.startswith("^"):
-                        parts.append(f"{key} LIKE ?")
-                        params.append(operand[1:].replace(".*", "%").replace(".*", "%") + "%")
+                        like = operand[1:].replace(".*", "%") + "%"
                     else:
-                        parts.append(f"{key} LIKE ?")
-                        params.append(f"%{operand}%")
+                        like = f"%{operand}%"
+                    parts.append(f"{key} LIKE {_ph(i)}")
+                    params.append(like)
+                    i += 1
                 elif op == "$in":
-                    placeholders = ",".join("?" * len(operand))
-                    parts.append(f"{key} IN ({placeholders})")
+                    phs = ",".join(_ph(i + j) for j in range(len(operand)))
+                    parts.append(f"{key} IN ({phs})")
                     params.extend(operand)
+                    i += len(operand)
                 elif op == "$gt":
-                    parts.append(f"{key} > ?")
+                    parts.append(f"{key} > {_ph(i)}")
                     params.append(operand)
+                    i += 1
                 elif op == "$gte":
-                    parts.append(f"{key} >= ?")
+                    parts.append(f"{key} >= {_ph(i)}")
                     params.append(operand)
+                    i += 1
         else:
-            parts.append(f"{key} = ?")
+            parts.append(f"{key} = {_ph(i)}")
             params.append(value)
-    where = " AND ".join(parts)
-    return where, params
+            i += 1
+    return " AND ".join(parts), params

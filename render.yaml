@@ -33,10 +33,15 @@ services:
       - key: FOOTBALL_DATA_KEY
         sync: false
       # --- Persistence (IMPORTANT) --------------------------------------------
-      # The free plan has an EPHEMERAL filesystem: the SQLite DB (users,
-      # subscriptions, trials) RESETS on every redeploy/restart. For real
-      # persistence, upgrade the plan, then uncomment the disk below and set
-      # DB_PATH to the mounted path.
+      # RECOMMENDED: set DATABASE_URL to your Supabase/Postgres connection string
+      # (Supabase -> Connect -> Session pooler URI). When present, the app stores
+      # ALL users/subscriptions/trials in Postgres, so data SURVIVES redeploys.
+      # Format: postgresql://postgres.<ref>:<PASSWORD>@aws-0-<region>.pooler.supabase.com:5432/postgres
+      - key: DATABASE_URL
+        sync: false
+      # If DATABASE_URL is empty the app falls back to SQLite. On the free plan the
+      # filesystem is EPHEMERAL, so the SQLite DB RESETS on every redeploy. For SQLite
+      # persistence instead, upgrade the plan and uncomment DB_PATH + disk below.
       # - key: DB_PATH
       #   value: /var/data/moka.db
     # disk:

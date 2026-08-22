@@ -1,0 +1,3 @@
+cron=3.0pl1-162
+postgresql=15+248+deb12u1
+postgresql-contrib=15+248+deb12u1

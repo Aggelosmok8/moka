@@ -49,4 +49,18 @@ Added two features into the existing Moka codebase (no re-import, backend reused
 
 ## Deployment (unchanged model)
 - Frontend → Vercel (Root Dir `frontend`, build `npm run build`, output `build`, install `npm install --legacy-peer-deps`, env `VITE_BACKEND_URL`).
-- Backend → Render (FastAPI + SQLite). Env: STRIPE_API_KEY, STRIPE_WEBHOOK_SECRET, EMERGENT_LLM_KEY, RESEND_API_KEY, SENDER_EMAIL, APP_URL, ODDS_API_KEY, API_FOOTBALL_KEY, FOOTBALL_DATA_KEY (placeholders in backend/.env).
+- Backend → Render (FastAPI). Env: STRIPE_API_KEY, STRIPE_WEBHOOK_SECRET, EMERGENT_LLM_KEY, RESEND_API_KEY, SENDER_EMAIL, APP_URL, ODDS_API_KEY, API_FOOTBALL_KEY, FOOTBALL_DATA_KEY, **DATABASE_URL** (placeholders in backend/.env).
+
+## Phase 3 (2026-06-27) — Final deployment prep (Supabase-ready DB + live keys)
+- **DB persistence solved (Supabase-ready)**: `backend/database.py` rewritten to be **dual-mode** behind the same Mongo-like `Collection` API — uses **Postgres/asyncpg** when `DATABASE_URL` starts with `postgres`, else falls back to SQLite (local/dev). No other file changed (whole app talks only to `db.<coll>.find_one/insert_one/update_one/...`). Verified against a real local Postgres: insert/find, ON CONFLICT, $set, upsert, $inc/$setOnInsert, $in/$gt/$regex, cursor sort/limit, delete_one/delete_many — all pass. On Render set `DATABASE_URL` to the Supabase Session-pooler URI → users/subscriptions/trials survive redeploys.
+  - `requirements.txt`: added `asyncpg==0.31.0`. `render.yaml`: added `DATABASE_URL` env (documented as recommended persistence path).
+  - `cache.py` (TTL API cache) intentionally left on SQLite (regenerable/ephemeral OK). `db/` (SQLAlchemy) is alembic-only, unused at runtime.
+- **Sports keys**: `ODDS_API_KEY=6b92...` set & VERIFIED live (HTTP 200, The Odds API). `API_FOOTBALL_KEY=0a55...` set but the api-football account is **SUSPENDED** → fixtures/teams/players stay mock (home feed shows "MOCK") until user reactivates at dashboard.api-football.com.
+- **Stripe webhooks**: ALREADY fully implemented in `billing.py::make_webhook_router` (`/api/webhook/stripe` handles checkout.session.completed + customer.subscription.created/updated/deleted). Running in TEST mode via Emergent proxy (`sk_test_emergent`). Go-live needs user's own `sk_live_...` + `STRIPE_WEBHOOK_SECRET`. NOTE: provided `prod_...` IDs are Stripe Product IDs and are NOT used (checkout uses inline price_data).
+- **Deployment readiness**: deployment_agent flagged two "blockers" that are Emergent-platform-specific (managed MongoDB + committed frontend .env) and DO NOT apply to the Render+Vercel+Supabase target. For that target: CORS wildcard OK, $PORT binding via render.yaml OK, compilation OK, config env-only, secrets gitignored. Auth uses dynamic `window.location.origin` redirect + server-to-server Emergent session exchange → works off-Emergent (verify login after first Vercel deploy).
+
+## Remaining / user actions for TRUE live
+- Set `DATABASE_URL` (Supabase Session-pooler URI incl. password) in Render env for persistence.
+- Reactivate api-football account (or provide a working key) for real fixtures/teams/players.
+- For real payments: add live Stripe secret key + webhook secret; configure webhook endpoint in Stripe Dashboard → `/api/webhook/stripe`.
+- Vercel: set Root Directory = `frontend` and `VITE_BACKEND_URL` = Render backend URL.
