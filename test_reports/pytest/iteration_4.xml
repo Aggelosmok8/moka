@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="3" skipped="0" tests="14" time="10.883" timestamp="2026-08-23T17:34:06.900787+00:00" hostname="agent-env-727555b6-fee6-4da5-9297-af2ce257f227"><testcase classname="tests.test_moka_regression" name="test_health" time="0.186" /><testcase classname="tests.test_moka_regression" name="test_billing_packages" time="0.044" /><testcase classname="tests.test_moka_regression" name="test_leagues" time="0.044" /><testcase classname="tests.test_moka_regression" name="test_teams" time="0.043" /><testcase classname="tests.test_moka_regression" name="test_value_matches" time="0.053" /><testcase classname="tests.test_moka_regression" name="test_trending_matches" time="0.049"><failure message="AssertionError: {&quot;detail&quot;:&quot;Match not found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code">tests/test_moka_regression.py:86: in test_trending_matches
+    assert r.status_code == 200, r.text[:300]
+E   AssertionError: {"detail":"Match not found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase><testcase classname="tests.test_moka_regression" name="test_auth_me" time="1.616" /><testcase classname="tests.test_moka_regression" name="test_auth_me_unauthorized" time="0.045" /><testcase classname="tests.test_moka_regression" name="test_billing_me" time="0.959" /><testcase classname="tests.test_moka_regression" name="test_billing_subscription" time="0.948" /><testcase classname="tests.test_moka_regression" name="test_billing_checkout[pro_monthly]" time="3.330"><failure message="AssertionError: Internal Server Error&#10;assert 500 == 200&#10; +  where 500 = &lt;Response [500]&gt;.status_code">tests/test_moka_regression.py:139: in test_billing_checkout
+    assert st.status_code == 200, st.text[:300]
+E   AssertionError: Internal Server Error
+E   assert 500 == 200
+E    +  where 500 = &lt;Response [500]&gt;.status_code</failure></testcase><testcase classname="tests.test_moka_regression" name="test_billing_checkout[pro_yearly]" time="2.867"><failure message="AssertionError: Internal Server Error&#10;assert 500 == 200&#10; +  where 500 = &lt;Response [500]&gt;.status_code">tests/test_moka_regression.py:139: in test_billing_checkout
+    assert st.status_code == 200, st.text[:300]
+E   AssertionError: Internal Server Error
+E   assert 500 == 200
+E    +  where 500 = &lt;Response [500]&gt;.status_code</failure></testcase><testcase classname="tests.test_moka_regression" name="test_billing_checkout_invalid_package" time="0.531" /><testcase classname="tests.test_moka_regression" name="test_billing_checkout_requires_auth" time="0.052" /></testsuite></testsuites>

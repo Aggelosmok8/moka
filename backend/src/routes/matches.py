@@ -19,6 +19,24 @@ async def list_matches():
     return {"count": len(items), "matches": items}
 
 
+@router.get("/matches/trending")
+async def trending_matches():
+    """Live/trending feed for the global search palette.
+
+    Declared before /matches/{match_id} so the literal 'trending' path is not
+    captured as a match_id (this router is mounted before the FSL api_router).
+    """
+    from football_service_layer import fsl_get_matches, _mock_matches
+    try:
+        r = await fsl_get_matches()
+        return {"matches": r["matches"], "source": r["source"], "meta": {
+            "liveCount": r["liveCount"], "totalCount": r["totalCount"],
+            "highValue": r["highValue"], "fetchedAt": r["fetchedAt"],
+        }}
+    except Exception:
+        return {"matches": _mock_matches(), "source": "mock", "meta": {}}
+
+
 @router.get("/matches/{match_id}")
 async def get_match(match_id: str):
     m = MATCH_INDEX.get(match_id)

@@ -66,3 +66,9 @@ Added two features into the existing Moka codebase (no re-import, backend reused
 - Vercel: set Root Directory = `frontend` and `VITE_BACKEND_URL` = Render backend URL.
 - On Render set env: DATABASE_URL, STRIPE_API_KEY, ODDS_API_KEY, API_FOOTBALL_KEY (all sync:false in render.yaml).
 - Resend emails & data-status badge: explicitly DEFERRED by user for now.
+
+## Phase 3.1 (2026-06-27) — QA pass before GitHub push (iteration_4)
+Ran focused frontend+backend test (testing_agent, iteration_4.json). Frontend ~95% OK (nav, charts/watchlist, pricing, trial banner, Pro locks). Fixed 2 real backend bugs found:
+- **CRITICAL — Supabase payment_transactions missing `stripe_subscription_id`**: `_PG_SCHEMA` lacked the column (SQLite added it via ALTER; PG branch only did CREATE IF NOT EXISTS). Broke `GET /api/billing/status/{id}` (500) and the Stripe webhook subscription persistence. Fix: added `stripe_subscription_id TEXT` to `_PG_SCHEMA` + an idempotent `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` migration loop for the Postgres branch in `init_db()`. Verified: billing/status now 200.
+- **HIGH — `/api/matches/trending` 404 (route shadowing)**: `make_value_router()` is mounted before `api_router`, so value_router's `/api/matches/{match_id}` captured `trending` → broke the global Search palette. Fix: added an explicit `/matches/trending` route in `src/routes/matches.py` (before `{match_id}`) delegating to `fsl_get_matches`. Verified: trending now 200.
+Both verified via curl. QA seed data cleaned from Supabase.

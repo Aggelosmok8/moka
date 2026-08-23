@@ -160,6 +160,7 @@ _PG_SCHEMA = """
         status TEXT,
         payment_status TEXT,
         mode TEXT,
+        stripe_subscription_id TEXT,
         created_at TEXT,
         updated_at TEXT
     );
@@ -246,6 +247,13 @@ async def init_db():
         pool = await _pg_get_pool()
         async with pool.acquire() as conn:
             await conn.execute(_PG_SCHEMA)
+            # Idempotent additive migrations for pre-existing Supabase tables
+            # (CREATE TABLE IF NOT EXISTS won't add columns to an existing table).
+            for col in ("trial_start_date", "trial_end_date", "plan", "emails_sent"):
+                await conn.execute(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col} TEXT")
+            for col in ("email", "package_id", "metadata", "payment_status", "mode",
+                        "updated_at", "stripe_subscription_id"):
+                await conn.execute(f"ALTER TABLE payment_transactions ADD COLUMN IF NOT EXISTS {col} TEXT")
         logger.info("Postgres DB initialized (Supabase/Render).")
     else:
         async with aiosqlite.connect(DB_PATH) as conn:

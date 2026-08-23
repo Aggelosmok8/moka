@@ -1,0 +1,37 @@
+{
+  "summary": "Focused smoke/regression of Moka (XtraStats) after Supabase Postgres migration + user's own Stripe TEST key. Backend: 11/14 pytest checks pass (health, billing packages 8.99/79 EUR, leagues, teams, /value-matches, auth/me from Supabase with trial+7 days, billing/me, billing/subscription, auth guards, invalid-package 400). Stripe checkout DOES return a real https://checkout.stripe.com/... cs_test_ URL for both packages (Supabase payment_transactions write OK). TWO REAL BUGS FOUND: (1) GET /api/matches/trending returns 404 due to route shadowing by the value_router's /api/matches/{match_id} (included before api_router) — breaks the global Search palette in the UI ('No results.' for Arsenal). (2) GET /api/billing/status/{session_id} returns 500: Postgres payment_transactions table has no stripe_subscription_id column (PG DDL missing it; SQLite era had ALTER migrations) — this also breaks the Stripe webhook checkout.session.completed path, so a real paid subscription would never be persisted. Frontend: home, nav (Home/Value/Leagues/Odds/Charts/Teams/Pricing), advanced-analysis expand, Add-to-Chart -> Charts badge -> Charts table -> Clear All, pricing tiers with BEST VALUE badge, trial banner, Pro upgrade locks for anonymous — all working, zero JS console errors apart from the 404 above.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/matches/trending", "issue": "Returns 404 {'detail':'Match not found'}. server.py includes make_value_router() BEFORE api_router; src/routes/matches.py defines /api/matches/{match_id}, which shadows the literal /api/matches/trending path. Frontend SearchPalette does Promise.all([fetchTeams(), fetchTrendingMatches()]) -> rejects -> global search shows 'No results.' for every query. Fix: register api_router before value_router, or declare /matches/trending inside the value router above the {match_id} route.", "priority": "HIGH"},
+      {"endpoint": "GET /api/billing/status/{session_id}", "issue": "500 Internal Server Error. asyncpg UndefinedColumnError: column \"stripe_subscription_id\" of relation \"payment_transactions\" does not exist. _PG_SCHEMA in database.py omits stripe_subscription_id (and the SQLite-only ALTER TABLE migration block in init_db() is skipped when USE_PG). Same write happens in the Stripe webhook handler (checkout.session.completed) -> after a real payment the subscription state would NOT persist and the user would not get Pro. Fix: add stripe_subscription_id TEXT to _PG_SCHEMA and run an idempotent ALTER TABLE ... ADD COLUMN IF NOT EXISTS for Postgres in init_db().", "priority": "CRITICAL"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Global Search palette (press '/' or click Search)", "issue": "Always renders 'No results.' — the underlying /api/matches/trending call 404s and rejects the Promise.all, so the entire search index (teams + matches) is empty. Recommend Promise.allSettled + per-source fallback in addition to the backend route fix.", "affected_selectors": ["text=Search", "text=No results."]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_moka_regression.py", "/app/test_reports/pytest/iteration_4.xml"],
+  "action_items": [
+    "Add stripe_subscription_id column to Postgres payment_transactions (schema + idempotent ALTER) — currently blocks /api/billing/status and the Stripe webhook subscription persistence.",
+    "Fix /api/matches/trending route shadowing (include api_router before value_router or reorder the value router's match routes).",
+    "Optional: harden SearchPalette with Promise.allSettled so one failing feed doesn't blank the whole search index.",
+    "Note: /app/frontend/.env does not exist, so VITE_BACKEND_URL is unset; app works in preview via relative /api but Vercel builds will need the env var set."
+  ],
+  "critical_code_review_comments": [
+    "database.py: init_db() applies additive column migrations only in the SQLite branch; the Postgres branch runs CREATE TABLE IF NOT EXISTS only, so any schema evolution silently breaks existing Supabase tables (exactly what happened with payment_transactions.stripe_subscription_id). Add an ADD COLUMN IF NOT EXISTS migration loop for PG.",
+    "server.py: router include order is significance-bearing (value_router first) — literal paths like /matches/trending must be registered before parameterised /matches/{match_id} routes.",
+    "database.py line 1: `import os` sits above the module docstring, so the docstring is a no-op string expression."
+  ],
+  "updated_files": ["/app/backend/tests/test_moka_regression.py"],
+  "success_rate": {"backend": "79% (11/14 pytest checks)", "frontend": "~95% (all nav/flows OK; only global search broken by the backend 404)"},
+  "seed_data_creation": "2 payment_transactions rows created in Supabase via real Stripe test checkout sessions (expected).",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "test_credentials": "QA bearer token: tok_qa_dcfd52cfd2b949188a5a552d4e55610f (user qa_8833bcdf@moka.test, trial, 7 days left). Frontend: localStorage.setItem('moka_session_token', <token>).",
+  "context_for_next_testing_agent": "Suite: /app/backend/tests/test_moka_regression.py (14 checks, run with `python -m pytest tests/test_moka_regression.py -v` from /app/backend). Known failures are the 2 real bugs above: test_trending_matches (404 route shadowing) and test_billing_checkout[both] (fails only at the follow-up /api/billing/status assertion — checkout itself returns a valid cs_test_ Stripe URL). Frontend flows verified: home hero, trial banner, advanced-analysis expand, Add to Chart -> nav badge -> Charts table -> Clear All, leagues/teams/odds/pricing pages, pricing €8.99/€79 with BEST VALUE badge, anonymous Pro locks. Mock data on home/value/teams is expected, do not report.",
+  "rca_of_the_issue": "Bug 1: FastAPI matches routes in first-registered order; make_value_router() (with /api/matches/{match_id}) is included before api_router, so GET /api/matches/trending is captured as match_id='trending' and 404s. Bug 2: The Supabase Postgres DDL (_PG_SCHEMA) for payment_transactions lacks stripe_subscription_id while billing.checkout_status and the Stripe webhook both UPDATE that column; the additive-migration loop in init_db() only runs on the SQLite branch, so asyncpg raises UndefinedColumnError -> 500."
+}
