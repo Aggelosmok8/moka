@@ -60,7 +60,9 @@ Added two features into the existing Moka codebase (no re-import, backend reused
 - **Deployment readiness**: deployment_agent flagged two "blockers" that are Emergent-platform-specific (managed MongoDB + committed frontend .env) and DO NOT apply to the Render+Vercel+Supabase target. For that target: CORS wildcard OK, $PORT binding via render.yaml OK, compilation OK, config env-only, secrets gitignored. Auth uses dynamic `window.location.origin` redirect + server-to-server Emergent session exchange → works off-Emergent (verify login after first Vercel deploy).
 
 ## Remaining / user actions for TRUE live
-- Set `DATABASE_URL` (Supabase Session-pooler URI incl. password) in Render env for persistence.
+- ~~Set `DATABASE_URL` (Supabase)~~ **DONE (2026-06-27)**: Supabase Postgres CONNECTED & verified end-to-end (auth/me reads user + trial from Supabase; billing/checkout writes payment_transactions to Supabase and returns a real Stripe Checkout URL). `DATABASE_URL` set in backend/.env (gitignored); also set it in Render env. Fixed a load_dotenv timing bug: `database.py` now loads its own `.env` so `DATABASE_URL` is read before `USE_PG` is computed.
+- ~~Stripe key~~ **DONE (2026-06-27)**: switched `STRIPE_API_KEY` to the user's own test secret key (`sk_test_51Tm8i…`) — checkout now hits real Stripe (not the Emergent proxy), verified (cs_test_… URL). For go-live: add `STRIPE_WEBHOOK_SECRET` + configure a Stripe Dashboard webhook → `/api/webhook/stripe`. NOTE: provided `prod_…` IDs are Product IDs, unused (inline price_data).
 - Reactivate api-football account (or provide a working key) for real fixtures/teams/players.
-- For real payments: add live Stripe secret key + webhook secret; configure webhook endpoint in Stripe Dashboard → `/api/webhook/stripe`.
 - Vercel: set Root Directory = `frontend` and `VITE_BACKEND_URL` = Render backend URL.
+- On Render set env: DATABASE_URL, STRIPE_API_KEY, ODDS_API_KEY, API_FOOTBALL_KEY (all sync:false in render.yaml).
+- Resend emails & data-status badge: explicitly DEFERRED by user for now.

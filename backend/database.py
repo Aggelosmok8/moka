@@ -19,6 +19,11 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+# Load .env here too — this module is imported before server.py calls load_dotenv(),
+# so DATABASE_URL must be read after we ensure the .env is loaded.
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).parent / ".env")
+
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 USE_PG = DATABASE_URL.startswith("postgres")
 
@@ -208,11 +213,26 @@ _PG_SCHEMA = """
 async def _pg_get_pool():
     global _pg_pool
     if _pg_pool is None:
+        import ssl as _ssl
         import asyncpg
-        host_is_local = "localhost" in DATABASE_URL or "127.0.0.1" in DATABASE_URL
+        from urllib.parse import urlparse, unquote
+        p = urlparse(DATABASE_URL)
+        host_is_local = p.hostname in ("localhost", "127.0.0.1")
+        if host_is_local:
+            ssl_ctx = False
+        else:
+            # Encrypt the connection but skip strict CA verification — the Supabase
+            # pooler cert chain isn't always in the default bundle.
+            ssl_ctx = _ssl.create_default_context()
+            ssl_ctx.check_hostname = False
+            ssl_ctx.verify_mode = _ssl.CERT_NONE
         _pg_pool = await asyncpg.create_pool(
-            dsn=DATABASE_URL,
-            ssl=(False if host_is_local else True),
+            host=p.hostname,
+            port=p.port or 5432,
+            user=unquote(p.username) if p.username else None,
+            password=unquote(p.password) if p.password else None,
+            database=(p.path.lstrip("/") or "postgres"),
+            ssl=ssl_ctx,
             min_size=1,
             max_size=5,
             command_timeout=30,
