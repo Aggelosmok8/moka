@@ -59,7 +59,23 @@ async def root():
 
 @api_router.get("/status")
 async def status():
-    return {"status": "ok", "fsl_cache": fsl_cache_meta()}
+    live = False
+    last = None
+    try:
+        import live_values
+        matches = await live_values.build_live_matches()
+        live = bool(matches)
+        if live:
+            last = datetime.now(timezone.utc).isoformat()
+    except Exception as e:
+        logger.warning("status live check: %s", e)
+    return {
+        "status": "ok",
+        "fsl_cache": fsl_cache_meta(),
+        "live": live,
+        "api_football_key_configured": live,  # drives the header Live/Mock pill
+        "cache_meta": {"live_values": last} if last else {},
+    }
 
 
 @api_router.get("/leagues")

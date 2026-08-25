@@ -30,6 +30,8 @@ services:
         sync: false
       - key: API_FOOTBALL_KEY   # enables real football stats (empty = mock/sample)
         sync: false
+      - key: SPORTMONKS_API_KEY # live stats for Denmark Superliga + Scotland Premiership (free plan)
+        sync: false
       - key: FOOTBALL_DATA_KEY
         sync: false
       # --- Persistence (IMPORTANT) --------------------------------------------
