@@ -2,6 +2,7 @@ from fastapi import FastAPI, APIRouter, HTTPException, Depends
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 import os
+import asyncio
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -431,6 +432,16 @@ app.add_middleware(
 async def on_startup():
     await init_db()
     get_cache_service().start()  # launch shared, tier-based background refresh workers
+    # Pre-warm live value cache (non-blocking) so the first visitor after a cold
+    # start / Render spin-up doesn't wait on the Odds API + SportMonks build.
+    async def _prewarm():
+        try:
+            import live_values
+            await live_values.build_live_matches()
+            logger.info("Live value cache pre-warmed")
+        except Exception as e:
+            logger.warning("live prewarm failed: %s", e)
+    asyncio.create_task(_prewarm())
     logger.info("Moka Advisory API started")
 
 

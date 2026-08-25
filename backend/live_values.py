@@ -129,7 +129,9 @@ async def build_live_matches() -> list:
                 "dataSource": "odds_api+sportmonks" if (hs or as_) else "odds_api",
             })
 
-    _cache_set("live_matches", matches, MATCHES_TTL)
+    # Cache non-empty results for the full window; if empty (transient API
+    # failure), retry soon so we don't get stuck on mock for 15 minutes.
+    _cache_set("live_matches", matches, MATCHES_TTL if matches else 60)
     return matches
 
 

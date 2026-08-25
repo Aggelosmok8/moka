@@ -82,3 +82,12 @@ User provided a SportMonks Football API key (Free Plan → only Denmark Superlig
 - `SPORTMONKS_API_KEY` added to backend/.env + render.yaml.
 - Verified: `/api/value-matches?source=live` returns real Danish/Scottish fixtures (Aberdeen v Rangers 5.0@Betfred, Celtic form 10.0/gs 3.0/gc 0.5 from SportMonks, FC Copenhagen v SonderjyskE 7.7@Nordic Bet), badge LIVE. Frontend screenshot confirms cards render with real teams/odds/stats.
 - KNOWN: big-5 leagues still need a SportMonks paid plan for stats (odds available via Odds API if wired later). Some Danish team names fall back to default stats when Odds-API vs SportMonks spelling differs (e.g., Copenhagen vs København) — graceful, still produces a value.
+
+## Phase 4.1 (2026-06-27) — Live match detail fix + cold-start hardening
+Bug reported on deployed site: match analysis page showed wrong teams / no league name for LIVE matches. Root cause: `GET /api/matches/{id}` only looked in the mock `MATCH_INDEX`, so live ids (`live_*`) returned 404.
+- `src/routes/matches.py::get_match`: now falls back to `live_values.build_live_matches()` to resolve live match ids. Verified via curl: `/api/matches/live_...` → 200 with correct leagueName + teams + value pick.
+- `live_values.py`: don't cache empty results for 15 min (transient API failure) — cache empty for only 60s so it retries soon.
+- `server.py` startup: added a non-blocking background pre-warm of the live value cache (`asyncio.create_task`) so the first visitor after a Render cold start / spin-up doesn't wait on the Odds API + SportMonks build. (Added `import asyncio`.)
+- Verified: Supabase `payment_transactions.stripe_subscription_id` column present; live pipeline `source:live` with real Danish/Scottish fixtures; home renders live cards (Aberdeen v Rangers 5.3@Smarkets, Celtic v Aberdeen 10.5@Betsson, FC Copenhagen v SonderjyskE 7.7@Nordic Bet).
+- ACTION REQUIRED: user must push to GitHub → Render redeploy for these backend fixes to reach the deployed site.
+- Render env fix noted: deployed env had `THE_ODDS_API_KEY` (wrong name) — code reads `ODDS_API_KEY`. User must set `ODDS_API_KEY`, `SPORTMONKS_API_KEY`, `DATABASE_URL`, `STRIPE_API_KEY` in Render, and `VITE_BACKEND_URL` in Vercel (then redeploy Vercel).

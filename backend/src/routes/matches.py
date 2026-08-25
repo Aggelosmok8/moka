@@ -41,6 +41,14 @@ async def trending_matches():
 async def get_match(match_id: str):
     m = MATCH_INDEX.get(match_id)
     if not m:
+        # live matches (Odds API + SportMonks) are not in the mock index
+        try:
+            import live_values
+            live = await live_values.build_live_matches()
+            m = next((x for x in live if x.get("id") == match_id), None)
+        except Exception:
+            m = None
+    if not m:
         raise HTTPException(status_code=404, detail="Match not found")
     pm = public_match(m)
     pm["value"] = evaluate_match(m)
