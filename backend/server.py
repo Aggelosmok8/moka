@@ -81,13 +81,17 @@ async def status():
 
 @api_router.get("/leagues")
 async def list_leagues():
-    return {"leagues": LEAGUES}
+    return {"leagues": [
+        {"id": "denmark", "name": "Superliga (Denmark)", "country": "Denmark", "short": "DEN"},
+        {"id": "scotland", "name": "Premiership (Scotland)", "country": "Scotland", "short": "SCO"},
+    ]}
 
 
 @api_router.get("/teams")
 async def list_teams(league: Optional[str] = None, limit: Optional[int] = None):
     try:
-        teams = await fsl_get_teams(league)
+        import sportmonks as sm
+        teams = await sm.teams_for_league(league) if league in ("denmark", "scotland") else []
         return {"teams": teams[:limit] if limit else teams}
     except Exception as e:
         logger.warning("list_teams: %s", e)
@@ -97,7 +101,8 @@ async def list_teams(league: Optional[str] = None, limit: Optional[int] = None):
 @api_router.get("/teams/top")
 async def top_teams(limit: int = 10):
     try:
-        teams = await fsl_get_teams()
+        import sportmonks as sm
+        teams = await sm.teams_for_league("denmark") + await sm.teams_for_league("scotland")
         return {"teams": teams[:limit]}
     except Exception as e:
         logger.warning("top_teams: %s", e)
@@ -107,62 +112,28 @@ async def top_teams(limit: int = 10):
 @api_router.get("/teams/{team_id}")
 async def team_detail(team_id: str):
     try:
-        for t in await fsl_get_teams():
-            if t.get("id") == team_id:
-                return t
+        import sportmonks as sm
+        for slug in ("denmark", "scotland"):
+            for t in await sm.teams_for_league(slug):
+                if t.get("id") == team_id:
+                    return t
     except Exception:
         pass
     raise HTTPException(status_code=404, detail="Team not found")
 
 
-_POS = ["GK", "RB", "CB", "CB", "LB", "CDM", "CM", "CAM", "RW", "ST", "LW", "GK", "CB", "CM", "SUB", "SUB"]
-_NAT = ["England", "Spain", "France", "Brazil", "Germany", "Italy", "Portugal", "Argentina", "Netherlands", "Belgium"]
-
-
 @api_router.get("/teams/{team_id}/players")
 async def team_players(team_id: str):
-    """Squad roster for a team. NOTE: returns a structured sample roster
-    (source="sample") because the live stats provider (API-Football) key is
-    currently suspended. Wire the key to return real player data here."""
-    team = None
+    """Real squad roster from SportMonks (Denmark/Scotland free plan)."""
     try:
-        for t in await fsl_get_teams():
-            if t.get("id") == team_id:
-                team = t
-                break
-    except Exception:
-        pass
-    if not team:
-        raise HTTPException(status_code=404, detail="Team not found")
-    import hashlib
-    base = int(hashlib.md5(team_id.encode()).hexdigest(), 16)
-    short = team.get("short", "PL")
-    players = []
-    for i, pos in enumerate(_POS):
-        h = (base >> (i % 12)) % 1000 + i * 7
-        apps = 8 + h % 22
-        attacking = pos in ("ST", "RW", "LW", "CAM")
-        players.append({
-            "id": f"{team_id}_p{i + 1}",
-            "name": f"{short} Player {i + 1}",
-            "number": i + 1,
-            "position": pos,
-            "age": 19 + h % 17,
-            "nationality": _NAT[h % len(_NAT)],
-            "appearances": apps,
-            "minutes": apps * (40 + h % 50),
-            "goals": (h % 12) if attacking else h % 3,
-            "assists": h % 7,
-            "shots": h % 45,
-            "passes": 200 + h % 1400,
-            "tackles": h % 70,
-            "yellow": h % 6,
-            "red": 1 if h % 23 == 0 else 0,
-            "rating": round(6.2 + (h % 18) / 10, 1),
-            "injured": h % 17 == 0,
-            "photo": None,
-        })
-    return {"team_id": team_id, "team": team.get("name"), "source": "sample", "players": players}
+        import sportmonks as sm
+        if team_id.isdigit():
+            players = await sm.players_for_team(team_id)
+            if players:
+                return {"team_id": team_id, "source": "live", "players": players}
+    except Exception as e:
+        logger.warning("team_players: %s", e)
+    raise HTTPException(status_code=404, detail="Team not found")
 
 
 @api_router.get("/matches/trending")

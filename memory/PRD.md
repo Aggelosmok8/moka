@@ -91,3 +91,11 @@ Bug reported on deployed site: match analysis page showed wrong teams / no leagu
 - Verified: Supabase `payment_transactions.stripe_subscription_id` column present; live pipeline `source:live` with real Danish/Scottish fixtures; home renders live cards (Aberdeen v Rangers 5.3@Smarkets, Celtic v Aberdeen 10.5@Betsson, FC Copenhagen v SonderjyskE 7.7@Nordic Bet).
 - ACTION REQUIRED: user must push to GitHub → Render redeploy for these backend fixes to reach the deployed site.
 - Render env fix noted: deployed env had `THE_ODDS_API_KEY` (wrong name) — code reads `ODDS_API_KEY`. User must set `ODDS_API_KEY`, `SPORTMONKS_API_KEY`, `DATABASE_URL`, `STRIPE_API_KEY` in Render, and `VITE_BACKEND_URL` in Vercel (then redeploy Vercel).
+
+## Phase 4.2 (2026-06-27) — Teams & Leagues wired to SportMonks (Denmark + Scotland only)
+User report: Teams tab showed mock English teams (Arsenal/Chelsea) + fake "ARS Player N"; Leagues didn't show. Root cause: Phase 4 only wired the home value feed; Teams/Leagues still used mock/FSL (API-Football suspended). User chose: show ONLY the 2 SportMonks free-plan leagues (Denmark Superliga + Scotland Premiership) with real teams + real players; hide big-5.
+- `sportmonks.py`: added `teams_for_league(slug)` (standings → real teams w/ position, GPG, form, in frontend shape) + `players_for_team(team_id)` (SportMonks `/squads/teams/{id}` → real roster: name, number, position, photo). 6h in-memory cache.
+- `server.py`: `/api/leagues` → denmark+scotland; `/api/teams?league=` → SportMonks teams (only for denmark/scotland); `/api/teams/{id}` + `/teams/top` → SportMonks; `/api/teams/{id}/players` → real squad (`source:"live"`), removed the old hash-based sample roster.
+- `core/entitlements.py` LEAGUE_CATALOG → only denmark + scotland (both FREE). Frontend `lib/sportsCatalog.js` mirror updated (football only, 2 leagues). This drives entitlements/catalog → TeamsPage & LeaguesPage now show only these two.
+- Verified: `/api/teams?league=denmark` → 12 real teams (Brøndby IF #1, Viborg FF...); `/api/teams/293/players` → 30 real players; `/api/catalog/leagues` → denmark+scotland; Teams tab screenshot confirms real Danish teams + LIVE badge.
+- ACTION: push to GitHub → Render redeploy for the deployed site to pick up these changes.
