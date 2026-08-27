@@ -62,11 +62,9 @@ export const Header = () => {
 
         <nav className="flex items-center gap-0.5">
           <NavLink to="/" label="Home" icon={Activity} active={loc.pathname === "/"} testId="nav-home" />
-          <NavLink to="/value" label="Value" icon={Flame} active={loc.pathname.startsWith("/value") || loc.pathname.startsWith("/analysis")} testId="nav-value" />
+          <NavLink to="/matches" label="Matches" icon={Flame} active={loc.pathname.startsWith("/matches") || loc.pathname.startsWith("/analysis") || loc.pathname.startsWith("/value")} testId="nav-matches" />
           <NavLink to="/leagues" label="Leagues" icon={Trophy} active={loc.pathname.startsWith("/leagues")} testId="nav-leagues" />
-          <NavLink to="/odds" label="Odds" icon={BarChart3} active={loc.pathname.startsWith("/odds")} testId="nav-odds" />
-          <NavLink to="/charts" label="Charts" icon={LineChart} active={loc.pathname.startsWith("/charts")} testId="nav-charts" badge={chartCount} />
-          <NavLink to="/teams" label="Teams" icon={Users} active={loc.pathname.startsWith("/teams")} testId="nav-teams" />
+          <NavLink to="/teams" label="Teams" icon={Users} active={loc.pathname.startsWith("/teams") || loc.pathname.startsWith("/team/")} testId="nav-teams" />
           <NavLink to="/pricing" label="Pricing" icon={Tag} active={loc.pathname.startsWith("/pricing")} testId="nav-pricing" />
           <NavLink to="/account" label="Account" icon={User} active={loc.pathname.startsWith("/account")} testId="nav-account" />
         </nav>

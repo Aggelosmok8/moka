@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { Lock, ChevronDown, ChevronUp } from "lucide-react";
-import { aiExplanation } from "../lib/valueEngine";
+import { Lock, ChevronDown, ChevronUp, ArrowRight } from "lucide-react";
+import { aiExplanation, shortExplanation } from "../lib/valueEngine";
 import { UpgradeButton } from "./Gating";
 import AddToChartButton from "./AddToChartButton";
 import InfoTip from "./InfoTip";
@@ -88,8 +88,12 @@ export default function ValueCard({ entry }) {
         </span>
       </div>
       <div className="flex items-center justify-between text-xs mt-1.5">
-        <span className="text-zinc-500">Recommended pick</span>
+        <span className="text-zinc-500">Moka pick</span>
         <span className="text-white font-bold truncate ml-2">{value.pickName}</span>
+      </div>
+      <p className="text-xs text-zinc-400 mt-2 leading-snug">{shortExplanation(match, value)}</p>
+      <div className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-[#39FF14]">
+        See Analysis <ArrowRight className="w-3.5 h-3.5" />
       </div>
 
       {/* Advanced analysis — hidden by default */}

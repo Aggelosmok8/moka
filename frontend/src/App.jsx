@@ -10,6 +10,7 @@ import PricingPage from "./pages/PricingPage";
 import PricingSuccessPage from "./pages/PricingSuccessPage";
 import AuthCallback from "./pages/AuthCallback";
 import ValueMatchesPage from "./pages/ValueMatchesPage";
+import MatchesPage from "./pages/MatchesPage";
 import LeaguesPage from "./pages/LeaguesPage";
 import OddsComparisonPage from "./pages/OddsComparisonPage";
 import MatchAnalysisPage from "./pages/MatchAnalysisPage";
@@ -28,9 +29,10 @@ function AppRouter() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
-      <Route path="/value" element={<ValueMatchesPage />} />
+      <Route path="/matches" element={<MatchesPage />} />
+      <Route path="/value" element={<Navigate to="/matches" replace />} />
       <Route path="/leagues" element={<LeaguesPage />} />
-      <Route path="/odds" element={<OddsComparisonPage />} />
+      <Route path="/odds" element={<Navigate to="/matches" replace />} />
       <Route path="/charts" element={<ChartsPage />} />
       <Route path="/teams" element={<TeamsPage />} />
       <Route path="/analysis/:id" element={<MatchAnalysisPage />} />
