@@ -4,6 +4,7 @@ import { Lock, ChevronDown, ChevronUp, ArrowRight } from "lucide-react";
 import { aiExplanation, shortExplanation } from "../lib/valueEngine";
 import { UpgradeButton } from "./Gating";
 import AddToChartButton from "./AddToChartButton";
+import AddToPortfolioButton from "./AddToPortfolioButton";
 import InfoTip from "./InfoTip";
 
 function Metric({ label, v, accent, tip }) {
@@ -133,8 +134,9 @@ export default function ValueCard({ entry }) {
         </div>
       )}
 
-      <div className="mt-3">
+      <div className="mt-3 grid grid-cols-2 gap-2">
         <AddToChartButton entry={entry} className="w-full justify-center" />
+        <AddToPortfolioButton entry={entry} className="w-full" />
       </div>
     </Link>
   );

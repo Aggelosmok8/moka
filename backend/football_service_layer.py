@@ -233,7 +233,6 @@ def _safe_form(raw: str) -> list[str]:
 
 def _mock_team_stats(name: str, seed_int: int) -> dict:
     """Generate stable mock stats from a team name hash — deterministic."""
-    import hashlib
     h = int(hashlib.md5(name.encode()).hexdigest(), 16)
     gpg  = round(0.8 + (h % 17) * 0.12, 2)
     cpg  = round(0.7 + (h % 13) * 0.11, 2)

@@ -101,9 +101,9 @@ export default function ChartsPage() {
             <BarChart3 className="w-10 h-10 text-zinc-700 mx-auto" />
             <h3 className="font-display font-black uppercase text-xl text-white mt-4">Your watchlist is empty</h3>
             <p className="text-zinc-500 text-sm mt-2 max-w-sm mx-auto">
-              Open <b className="text-white">Home</b> or <b className="text-white">Value</b> and tap <b className="text-white">Add to Chart</b> on any match to start comparing.
+              Open <b className="text-white">Home</b> or <b className="text-white">Matches</b> and tap <b className="text-white">Add to Chart</b> on any match to start comparing.
             </p>
-            <Link to="/value" className="inline-flex items-center gap-2 mt-5 neon-bg text-black font-black uppercase text-sm tracking-wider px-5 py-2.5 rounded-lg hover:bg-[#32E612] transition-colors">
+            <Link to="/matches?view=strong" className="inline-flex items-center gap-2 mt-5 neon-bg text-black font-black uppercase text-sm tracking-wider px-5 py-2.5 rounded-lg hover:bg-[#32E612] transition-colors">
               <Flame className="w-4 h-4" /> Browse matches
             </Link>
           </div>

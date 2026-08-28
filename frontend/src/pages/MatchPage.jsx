@@ -46,7 +46,7 @@ const CompareRow = ({ label, h, a, suffix = "", invert = false }) => {
 export default function MatchPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { isPro } = useAuth();
+  const { isPro, user } = useAuth();
   const [match, setMatch] = useState(null);
   const [loading, setLoading] = useState(true);
   const [analysis, setAnalysis] = useState("");

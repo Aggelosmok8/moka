@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, Check, ChevronDown, ChevronUp, Lock } from "lucide-react";
 import Header from "../components/Header";
 import { UpgradeButton } from "../components/Gating";
+import AddToPortfolioButton from "../components/AddToPortfolioButton";
 import { useEntitlements } from "../hooks/useEntitlements";
 import { fetchMatchById } from "../lib/catalogApi";
 import { adaptValue, aiExplanation, whyMokaReasons } from "../lib/valueEngine";
@@ -103,6 +104,9 @@ export default function MatchAnalysisPage() {
             <div className="text-sm text-zinc-400 mt-0.5">Best odds <b className="text-white font-mono-num">{value.bestOdds}</b> <span className="text-zinc-500">@ {value.bookmaker}</span></div>
           </div>
           <span className={`text-xs font-black uppercase px-3 py-1 rounded-full ${value.level.cls}`}>{value.level.emoji} {value.level.label}</span>
+        </div>
+        <div className="mt-4">
+          <AddToPortfolioButton entry={{ match, value }} size="md" className="w-full" />
         </div>
       </Card>
 
