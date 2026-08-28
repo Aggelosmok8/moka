@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { Wallet, TrendingUp, Target, Percent, Trash2, Check, X, Clock, Flame, CircleSlash, Lock, Layers, Receipt, Plus } from "lucide-react";
 import Header from "../components/Header";
@@ -239,7 +239,8 @@ export default function PortfolioPage() {
   const { role } = useEntitlements();
   const isPro = role === "pro";
   const [filter, setFilter] = useState("all");
-  const [tab, setTab] = useState("bets");
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState(params.get("tab") === "tickets" ? "tickets" : "bets");
 
   // Free users only see (and are scored on) their latest 5 bets.
   const scopedBets = useMemo(() => (isPro ? bets : bets.slice(0, FREE_LIMIT)), [bets, isPro]);

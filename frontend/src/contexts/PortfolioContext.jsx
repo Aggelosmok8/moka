@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useCallback, useMemo, useState } from "react";
+import React, { createContext, useContext, useCallback, useMemo, useState, useEffect, useRef } from "react";
+import { useAuth } from "./AuthContext";
+import { getPortfolioRemote, putPortfolioRemote } from "../lib/api";
 
 const KEY = "moka_portfolio_bets";
 const SLIP_KEY = "moka_bet_slip";
@@ -233,6 +235,39 @@ export function PortfolioProvider({ children }) {
   const pendingCount = useMemo(() => bets.filter((b) => b.status === "pending").length, [bets]);
 
   const stats = useMemo(() => computeStats(bets), [bets]);
+
+  // --- Cloud sync (logged-in users) ------------------------------------------
+  // Guests use localStorage only. When a user logs in, we pull their server copy
+  // (source of truth); if the server is empty we push the local data up. After
+  // that, every change is debounced-saved to Supabase via the backend.
+  const { user } = useAuth() || {};
+  const syncedRef = useRef(false);
+
+  useEffect(() => {
+    if (!user) { syncedRef.current = false; return; }
+    let active = true;
+    getPortfolioRemote()
+      .then((remote) => {
+        if (!active) return;
+        const remoteBets = remote?.bets || [];
+        const remoteTickets = remote?.tickets || [];
+        if (remoteBets.length || remoteTickets.length) {
+          setBets(remoteBets); try { localStorage.setItem(KEY, JSON.stringify(remoteBets)); } catch {}
+          setTickets(remoteTickets); try { localStorage.setItem(TICKETS_KEY, JSON.stringify(remoteTickets)); } catch {}
+        } else if (bets.length || tickets.length) {
+          putPortfolioRemote({ bets, tickets }).catch(() => {});
+        }
+        syncedRef.current = true;
+      })
+      .catch(() => { syncedRef.current = true; });
+    return () => { active = false; };
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!user || !syncedRef.current) return;
+    const t = setTimeout(() => { putPortfolioRemote({ bets, tickets }).catch(() => {}); }, 800);
+    return () => clearTimeout(t);
+  }, [bets, tickets, user]);
 
   return (
     <Ctx.Provider value={{

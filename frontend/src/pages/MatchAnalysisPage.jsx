@@ -4,6 +4,7 @@ import { ArrowLeft, Check, ChevronDown, ChevronUp, Lock } from "lucide-react";
 import Header from "../components/Header";
 import { UpgradeButton } from "../components/Gating";
 import AddToPortfolioButton from "../components/AddToPortfolioButton";
+import AddToSlipButton from "../components/AddToSlipButton";
 import { useEntitlements } from "../hooks/useEntitlements";
 import { fetchMatchById } from "../lib/catalogApi";
 import { adaptValue, aiExplanation, whyMokaReasons } from "../lib/valueEngine";
@@ -105,8 +106,9 @@ export default function MatchAnalysisPage() {
           </div>
           <span className={`text-xs font-black uppercase px-3 py-1 rounded-full ${value.level.cls}`}>{value.level.emoji} {value.level.label}</span>
         </div>
-        <div className="mt-4">
+        <div className="mt-4 grid grid-cols-2 gap-2">
           <AddToPortfolioButton entry={{ match, value }} size="md" className="w-full" />
+          <AddToSlipButton entry={{ match, value }} size="md" className="w-full" />
         </div>
       </Card>
 

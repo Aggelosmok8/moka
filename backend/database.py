@@ -116,6 +116,11 @@ _SQLITE_SCHEMA = """
         data TEXT,
         UNIQUE(user_id, day)
     );
+    CREATE TABLE IF NOT EXISTS user_portfolios (
+        user_id TEXT PRIMARY KEY,
+        data TEXT,
+        updated_at TEXT
+    );
     CREATE INDEX IF NOT EXISTS idx_user_sessions_token ON user_sessions(session_token);
     CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_events_user_ts ON events(user_id, ts);
@@ -203,6 +208,11 @@ _PG_SCHEMA = """
         day TEXT NOT NULL,
         data TEXT,
         UNIQUE(user_id, day)
+    );
+    CREATE TABLE IF NOT EXISTS user_portfolios (
+        user_id TEXT PRIMARY KEY,
+        data TEXT,
+        updated_at TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_user_sessions_token ON user_sessions(session_token);
     CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id);

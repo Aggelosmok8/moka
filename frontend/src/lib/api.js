@@ -32,3 +32,6 @@ export const generateAnalysis     = (id, regenerate = false) => api.post(`/match
 export const fetchOdds            = (id) => api.get(`/matches/${id}/odds`).then(r => r.data);
 export const fetchStatus          = () => api.get("/status").then(r => r.data);
 export const refreshCache         = (scope = "all") => api.post(`/admin/refresh?scope=${scope}`).then(r => r.data);
+export const fetchLeagueDetail    = (slug) => api.get(`/leagues/${slug}`).then(r => r.data);
+export const getPortfolioRemote   = () => api.get("/me/portfolio").then(r => r.data);
+export const putPortfolioRemote   = (data) => api.put("/me/portfolio", data).then(r => r.data);

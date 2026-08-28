@@ -20,6 +20,8 @@ import ChartsPage from "./pages/ChartsPage";
 import TeamsPage from "./pages/TeamsPage";
 import PortfolioPage from "./pages/PortfolioPage";
 import SportsPage from "./pages/SportsPage";
+import LeagueDetailPage from "./pages/LeagueDetailPage";
+import SlipFab from "./components/SlipFab";
 import "@/index.css";
 
 function AppRouter() {
@@ -35,6 +37,7 @@ function AppRouter() {
       <Route path="/matches" element={<MatchesPage />} />
       <Route path="/value" element={<Navigate to="/matches" replace />} />
       <Route path="/leagues" element={<LeaguesPage />} />
+      <Route path="/leagues/:slug" element={<LeagueDetailPage />} />
       <Route path="/odds" element={<Navigate to="/matches" replace />} />
       <Route path="/charts" element={<ChartsPage />} />
       <Route path="/portfolio" element={<PortfolioPage />} />
@@ -59,6 +62,7 @@ function App() {
           <PortfolioProvider>
             <Toaster position="top-right" theme="dark" />
             <AppRouter />
+            <SlipFab />
           </PortfolioProvider>
         </ChartProvider>
       </AuthProvider>

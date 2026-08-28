@@ -87,6 +87,49 @@ async def list_leagues():
     ]}
 
 
+LEAGUE_NAMES = {"denmark": "Superliga (Denmark)", "scotland": "Premiership (Scotland)"}
+
+
+@api_router.get("/leagues/{slug}")
+async def league_detail(slug: str):
+    """Standings + upcoming fixtures + recent results for a free-plan league."""
+    if slug not in ("denmark", "scotland"):
+        raise HTTPException(status_code=404, detail="League not found")
+    standings, fixtures = [], {"upcoming": [], "results": []}
+    try:
+        import sportmonks as sm
+        standings = await sm.teams_for_league(slug)
+        fixtures = await sm.fixtures_for_league(slug)
+    except Exception as e:
+        logger.warning("league_detail(%s): %s", slug, e)
+    return {
+        "slug": slug,
+        "name": LEAGUE_NAMES.get(slug, slug),
+        "standings": standings,
+        "upcoming": fixtures.get("upcoming", []),
+        "results": fixtures.get("results", []),
+    }
+
+
+@api_router.get("/me/portfolio")
+async def get_portfolio(user=Depends(current_user)):
+    doc = await db.user_portfolios.find_one({"user_id": user.user_id})
+    data = (doc or {}).get("data") or {}
+    return {"bets": data.get("bets", []), "tickets": data.get("tickets", [])}
+
+
+@api_router.put("/me/portfolio")
+async def put_portfolio(payload: dict, user=Depends(current_user)):
+    data = {"bets": payload.get("bets", []), "tickets": payload.get("tickets", [])}
+    now = datetime.now(timezone.utc).isoformat()
+    existing = await db.user_portfolios.find_one({"user_id": user.user_id})
+    if existing:
+        await db.user_portfolios.update_one({"user_id": user.user_id}, {"$set": {"data": data, "updated_at": now}})
+    else:
+        await db.user_portfolios.insert_one({"user_id": user.user_id, "data": data, "updated_at": now})
+    return {"ok": True}
+
+
 @api_router.get("/teams")
 async def list_teams(league: Optional[str] = None, limit: Optional[int] = None):
     try:

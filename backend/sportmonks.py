@@ -180,3 +180,64 @@ async def players_for_team(team_id: str) -> list:
     players.sort(key=lambda x: (x["number"] is None, x["number"] or 999))
     _c_set(ck, players)
     return players
+
+
+
+# SportMonks fixture state ids that mean the match is finished.
+_FINISHED_STATES = {5, 7, 8}  # FT, AET, FT_PEN
+
+
+def _fixture_shape(f: dict) -> dict:
+    parts = f.get("participants") or []
+    home = next((p for p in parts if (p.get("meta") or {}).get("location") == "home"), None)
+    away = next((p for p in parts if (p.get("meta") or {}).get("location") == "away"), None)
+    scores = f.get("scores") or []
+    hs = next((s.get("score", {}).get("goals") for s in scores
+               if s.get("description") == "CURRENT" and (s.get("score") or {}).get("participant") == "home"), None)
+    as_ = next((s.get("score", {}).get("goals") for s in scores
+                if s.get("description") == "CURRENT" and (s.get("score") or {}).get("participant") == "away"), None)
+    finished = f.get("state_id") in _FINISHED_STATES
+    return {
+        "id": str(f.get("id")),
+        "home": (home or {}).get("name"),
+        "away": (away or {}).get("name"),
+        "homeImg": (home or {}).get("image_path"),
+        "awayImg": (away or {}).get("image_path"),
+        "kickoff": f.get("starting_at"),
+        "homeScore": hs,
+        "awayScore": as_,
+        "finished": finished,
+        "resultInfo": f.get("result_info"),
+    }
+
+
+async def fixtures_for_league(slug: str) -> dict:
+    """Return {upcoming:[...], results:[...]} for a free-plan league via season schedule."""
+    lid = LEAGUE_IDS.get(slug)
+    if not lid:
+        return {"upcoming": [], "results": []}
+    ck = f"fixtures_{slug}"
+    c = _c_get(ck)
+    if c is not None:
+        return c
+    try:
+        sid = await current_season_id(lid)
+        if not sid:
+            return {"upcoming": [], "results": []}
+        d = await _get(f"/schedules/seasons/{sid}")
+        fixtures = []
+        for stage in d.get("data") or []:
+            for rnd in stage.get("rounds") or []:
+                for f in rnd.get("fixtures") or []:
+                    if not f.get("placeholder"):
+                        fixtures.append(_fixture_shape(f))
+        results = [x for x in fixtures if x["finished"] and x["homeScore"] is not None]
+        upcoming = [x for x in fixtures if not x["finished"]]
+        results.sort(key=lambda x: x["kickoff"] or "", reverse=True)
+        upcoming.sort(key=lambda x: x["kickoff"] or "")
+        out = {"upcoming": upcoming[:20], "results": results[:20]}
+        _c_set(ck, out, ttl=3600)
+        return out
+    except Exception as e:
+        logger.warning("fixtures_for_league(%s) failed: %s", slug, e)
+        return {"upcoming": [], "results": []}

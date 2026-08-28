@@ -57,7 +57,7 @@ export default function LeaguesPage() {
                 return locked ? (
                   <div key={l.id} className="opacity-70" data-testid={`league-locked-${l.id}`}>{inner}</div>
                 ) : (
-                  <Link key={l.id} to={`/value?league=${l.id}`} data-testid={`league-open-${l.id}`}>{inner}</Link>
+                  <Link key={l.id} to={`/leagues/${l.id}`} data-testid={`league-open-${l.id}`}>{inner}</Link>
                 );
               })}
             </div>
