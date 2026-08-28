@@ -2,7 +2,8 @@
 // Used purely for UI rendering of league chips (including PRO-only ones shown
 // as locked). Source of truth for ACCESS remains the backend endpoints.
 export const SPORTS = [
-  { key: "football", label: "Football", icon: "⚽" },
+  { key: "football", label: "Football", icon: "⚽", available: true },
+  { key: "basketball", label: "Basketball", icon: "🏀", available: false },
 ];
 
 export const LEAGUE_CATALOG = [

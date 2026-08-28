@@ -19,6 +19,7 @@ import AccountPage from "./pages/AccountPage";
 import ChartsPage from "./pages/ChartsPage";
 import TeamsPage from "./pages/TeamsPage";
 import PortfolioPage from "./pages/PortfolioPage";
+import SportsPage from "./pages/SportsPage";
 import "@/index.css";
 
 function AppRouter() {
@@ -37,6 +38,7 @@ function AppRouter() {
       <Route path="/odds" element={<Navigate to="/matches" replace />} />
       <Route path="/charts" element={<ChartsPage />} />
       <Route path="/portfolio" element={<PortfolioPage />} />
+      <Route path="/sports" element={<SportsPage />} />
       <Route path="/teams" element={<TeamsPage />} />
       <Route path="/analysis/:id" element={<MatchAnalysisPage />} />
       <Route path="/account" element={<AccountPage />} />

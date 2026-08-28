@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
-import { Wallet, TrendingUp, Target, Percent, Trash2, Check, X, Clock, Flame, CircleSlash, Lock } from "lucide-react";
+import { Wallet, TrendingUp, Target, Percent, Trash2, Check, X, Clock, Flame, CircleSlash, Lock, Layers, Receipt, Plus } from "lucide-react";
 import Header from "../components/Header";
-import { usePortfolio, computeStats } from "../contexts/PortfolioContext";
+import { usePortfolio, computeStats, computeTicket } from "../contexts/PortfolioContext";
 import { useEntitlements } from "../hooks/useEntitlements";
 import { UpgradeButton } from "../components/Gating";
 
@@ -82,11 +82,164 @@ function BetRow({ b, settle, remove }) {
 
 const FREE_LIMIT = 5;
 
+// --- Accumulator slip builder ---
+function BetSlip({ slip, removeFromSlip, clearSlip, placeTicket }) {
+  const [stake, setStake] = useState("10");
+  const totalOdds = slip.reduce((p, l) => p * (Number(l.odds) || 1), 1);
+  const potential = (Number(stake || 0) * totalOdds).toFixed(2);
+
+  const place = () => {
+    const amt = Number(stake);
+    if (!amt || amt <= 0) return;
+    placeTicket(amt);
+    setStake("10");
+  };
+
+  return (
+    <div className="bg-[#161b22] border border-[#39FF14]/30 rounded-2xl p-5 mb-6" data-testid="bet-slip">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2 font-display font-black uppercase tracking-tight text-white">
+          <Layers className="w-5 h-5 text-[#39FF14]" /> Bet Slip <span className="text-zinc-500 text-sm">({slip.length})</span>
+        </div>
+        <button onClick={clearSlip} data-testid="slip-clear" className="text-xs font-bold text-zinc-500 hover:text-[#FF3B30]">Clear</button>
+      </div>
+      <div className="space-y-2 mb-4">
+        {slip.map((l) => (
+          <div key={l.matchId} className="flex items-center justify-between gap-2 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2" data-testid={`slip-leg-${l.matchId}`}>
+            <div className="min-w-0">
+              <div className="text-xs text-white font-semibold truncate">{l.home} <span className="text-zinc-600">vs</span> {l.away}</div>
+              <div className="text-[11px] text-[#39FF14] font-bold truncate">{l.pickName}</div>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <span className="font-mono-num font-bold text-white text-sm">{l.odds}</span>
+              <button onClick={() => removeFromSlip(l.matchId)} data-testid={`slip-remove-${l.matchId}`} className="text-zinc-500 hover:text-[#FF3B30]"><X className="w-4 h-4" /></button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-3 items-end">
+        <div>
+          <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">Stake (€)</label>
+          <input type="number" min="0" step="1" value={stake} onChange={(e) => setStake(e.target.value)} data-testid="slip-stake-input"
+            className="mt-1 w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white font-mono-num focus:outline-none focus:border-[#39FF14]" />
+        </div>
+        <div className="text-right">
+          <div className="text-[10px] text-zinc-500 uppercase">Total odds</div>
+          <div className="font-display font-black text-2xl text-white font-mono-num">{Math.round(totalOdds * 100) / 100}</div>
+        </div>
+      </div>
+      <div className="flex items-center justify-between mt-3 text-sm">
+        <span className="text-zinc-400">Potential return</span>
+        <span className="font-mono-num font-bold text-[#39FF14]">€{potential}</span>
+      </div>
+      <button onClick={place} data-testid="slip-place-ticket"
+        className="mt-4 w-full py-2.5 rounded-lg bg-[#39FF14] text-black font-black uppercase tracking-wider text-sm hover:brightness-110 transition">
+        Place ticket
+      </button>
+    </div>
+  );
+}
+
+function TicketCard({ t, settleLeg, removeTicket }) {
+  const info = computeTicket(t);
+  const st = STATUS[info.status] || STATUS.pending;
+  return (
+    <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-4" data-testid={`ticket-${t.id}`}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+          <Receipt className="w-4 h-4" /> Accumulator · {t.legs.length} legs
+        </div>
+        <span className={`inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${st.cls}`}>
+          <st.icon className="w-3 h-3" /> {st.label}
+        </span>
+      </div>
+
+      <div className="space-y-2 mb-3">
+        {t.legs.map((l) => {
+          const lst = STATUS[l.status] || STATUS.pending;
+          return (
+            <div key={l.id} className="bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2" data-testid={`ticket-leg-${l.id}`}>
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-xs text-white font-semibold truncate">{l.home} <span className="text-zinc-600">vs</span> {l.away}</div>
+                  <div className="text-[11px] text-[#39FF14] font-bold truncate">{l.pickName} · <span className="text-white font-mono-num">{l.odds}</span></div>
+                </div>
+                <span className={`shrink-0 inline-flex items-center gap-1 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full ${lst.cls}`}><lst.icon className="w-2.5 h-2.5" /> {lst.label}</span>
+              </div>
+              <div className="flex items-center gap-1.5 mt-2">
+                <button onClick={() => settleLeg(t.id, l.id, "won")} data-testid={`leg-won-${l.id}`} className="flex-1 py-1 rounded text-[10px] font-bold bg-[#39FF14]/15 text-[#39FF14] border border-[#39FF14]/30 hover:bg-[#39FF14]/25">Won</button>
+                <button onClick={() => settleLeg(t.id, l.id, "lost")} data-testid={`leg-lost-${l.id}`} className="flex-1 py-1 rounded text-[10px] font-bold bg-[#FF3B30]/15 text-[#FF3B30] border border-[#FF3B30]/30 hover:bg-[#FF3B30]/25">Lost</button>
+                <button onClick={() => settleLeg(t.id, l.id, "void")} data-testid={`leg-void-${l.id}`} className="py-1 px-2 rounded text-[10px] font-bold bg-white/5 text-zinc-400 border border-white/10 hover:bg-white/10">Void</button>
+                <button onClick={() => settleLeg(t.id, l.id, "pending")} data-testid={`leg-reset-${l.id}`} className="py-1 px-2 rounded text-[10px] font-bold bg-white/5 text-zinc-400 border border-white/10 hover:bg-white/10" title="Reset"><Clock className="w-3 h-3" /></button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 text-center border-t border-white/5 pt-3">
+        <div><div className="text-[10px] text-zinc-500 uppercase">Total odds</div><div className="text-sm font-bold text-white font-mono-num">{info.totalOdds}</div></div>
+        <div><div className="text-[10px] text-zinc-500 uppercase">Stake</div><div className="text-sm font-bold text-white font-mono-num">€{t.stake.toFixed(2)}</div></div>
+        <div>
+          <div className="text-[10px] text-zinc-500 uppercase">{info.status === "pending" ? "To return" : "Profit"}</div>
+          <div className={`text-sm font-bold font-mono-num ${info.profit == null ? "text-zinc-300" : info.profit >= 0 ? "text-[#39FF14]" : "text-[#FF3B30]"}`}>
+            {info.profit == null ? `€${info.potentialReturn.toFixed(2)}` : `${info.profit >= 0 ? "+" : "-"}€${Math.abs(info.profit).toFixed(2)}`}
+          </div>
+        </div>
+      </div>
+      <button onClick={() => removeTicket(t.id)} data-testid={`ticket-remove-${t.id}`} className="mt-3 w-full py-1.5 rounded-md text-xs font-bold text-zinc-500 hover:text-[#FF3B30] border border-white/10">
+        <Trash2 className="inline w-3.5 h-3.5 mr-1" /> Remove ticket
+      </button>
+    </div>
+  );
+}
+
+function TicketsView({ isPro }) {
+  const { slip, removeFromSlip, clearSlip, placeTicket, tickets, settleLeg, removeTicket } = usePortfolio();
+  const scoped = isPro ? tickets : tickets.slice(0, FREE_LIMIT);
+  const hidden = isPro ? 0 : Math.max(0, tickets.length - FREE_LIMIT);
+
+  return (
+    <div data-testid="portfolio-tickets-view">
+      {slip.length > 0 && (
+        <BetSlip slip={slip} removeFromSlip={removeFromSlip} clearSlip={clearSlip} placeTicket={placeTicket} />
+      )}
+
+      {tickets.length === 0 && slip.length === 0 ? (
+        <div className="text-center py-16" data-testid="tickets-empty">
+          <Receipt className="w-10 h-10 text-zinc-700 mx-auto" />
+          <h3 className="font-display font-black uppercase text-lg text-white mt-4">No tickets yet</h3>
+          <p className="text-zinc-500 text-sm mt-2 max-w-md mx-auto">
+            Open a match, choose <b className="text-white">Add to Portfolio → Accumulator</b> on a few picks, then place them as one ticket here.
+          </p>
+          <Link to="/matches?view=strong" className="inline-flex items-center gap-2 mt-5 bg-[#39FF14] text-black font-black uppercase text-sm tracking-wider px-5 py-2.5 rounded-lg hover:brightness-110 transition">
+            <Flame className="w-4 h-4" /> Build a ticket
+          </Link>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3" data-testid="tickets-grid">
+          {scoped.map((t) => <TicketCard key={t.id} t={t} settleLeg={settleLeg} removeTicket={removeTicket} />)}
+        </div>
+      )}
+
+      {hidden > 0 && (
+        <div className="mt-8 flex flex-col items-center gap-3 text-center bg-[#161b22] border border-[#30363d] rounded-2xl p-6" data-testid="tickets-free-limit">
+          <Lock className="w-6 h-6 text-[#39FF14]" />
+          <div className="font-display font-black uppercase tracking-tight text-white text-lg">Free plan shows your latest 5 tickets</div>
+          <p className="text-zinc-400 text-sm max-w-md">Upgrade to PRO to keep your complete ticket history ({tickets.length} tickets).</p>
+          <UpgradeButton label="Upgrade to Pro" />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PortfolioPage() {
-  const { bets, settle, remove, clear } = usePortfolio();
+  const { bets, settle, remove, clear, slipCount } = usePortfolio();
   const { role } = useEntitlements();
   const isPro = role === "pro";
   const [filter, setFilter] = useState("all");
+  const [tab, setTab] = useState("bets");
 
   // Free users only see (and are scored on) their latest 5 bets.
   const scopedBets = useMemo(() => (isPro ? bets : bets.slice(0, FREE_LIMIT)), [bets, isPro]);
@@ -107,14 +260,28 @@ export default function PortfolioPage() {
             <h1 className="font-display font-black uppercase tracking-tight text-3xl sm:text-4xl text-white">My Portfolio</h1>
             <p className="text-zinc-400 text-sm mt-1">Track the bets you play and see exactly how much you win or lose.</p>
           </div>
-          {bets.length > 0 && (
+          {tab === "bets" && bets.length > 0 && (
             <button onClick={clear} data-testid="portfolio-clear" className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-400 hover:text-[#FF3B30] border border-white/10 rounded-md px-3 py-1.5">
               <Trash2 className="w-3.5 h-3.5" /> Clear All
             </button>
           )}
         </div>
 
-        {bets.length === 0 ? (
+        {/* TOP TABS */}
+        <div className="flex items-center gap-2 mb-6">
+          <button onClick={() => setTab("bets")} data-testid="portfolio-tab-bets"
+            className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${tab === "bets" ? "bg-[#39FF14] text-black" : "bg-white/5 text-zinc-300 hover:bg-white/10"}`}>
+            <Wallet className="w-4 h-4" /> My Bets
+          </button>
+          <button onClick={() => setTab("tickets")} data-testid="portfolio-tab-tickets"
+            className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${tab === "tickets" ? "bg-[#39FF14] text-black" : "bg-white/5 text-zinc-300 hover:bg-white/10"}`}>
+            <Receipt className="w-4 h-4" /> My Tickets {slipCount > 0 && <span className="ml-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#FFD60A] text-black text-[10px] font-black flex items-center justify-center">{slipCount}</span>}
+          </button>
+        </div>
+
+        {tab === "tickets" ? (
+          <TicketsView isPro={isPro} />
+        ) : bets.length === 0 ? (
           <div className="text-center py-20" data-testid="portfolio-empty">
             <Wallet className="w-10 h-10 text-zinc-700 mx-auto" />
             <h3 className="font-display font-black uppercase text-xl text-white mt-4">Your portfolio is empty</h3>

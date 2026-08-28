@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Activity, Flame, Trophy, BarChart3, Search, Tag, User, LineChart, Users, Wallet, Star } from "lucide-react";
+import { Activity, Flame, Trophy, BarChart3, Search, Tag, User, LineChart, Users, Wallet, Star, Dribbble } from "lucide-react";
 import LiveStatusPill from "./LiveStatusPill";
 import SearchPalette from "./SearchPalette";
 import UserMenu from "./UserMenu";
@@ -67,6 +67,7 @@ export const Header = () => {
           <NavLink to="/matches" label="Matches" icon={Flame} active={loc.pathname.startsWith("/matches") || loc.pathname.startsWith("/analysis") || loc.pathname.startsWith("/value")} testId="nav-matches" />
           <NavLink to="/leagues" label="Leagues" icon={Trophy} active={loc.pathname.startsWith("/leagues")} testId="nav-leagues" />
           <NavLink to="/teams" label="Teams" icon={Users} active={loc.pathname.startsWith("/teams") || loc.pathname.startsWith("/team/")} testId="nav-teams" />
+          <NavLink to="/sports" label="Sports" icon={Dribbble} active={loc.pathname.startsWith("/sports")} testId="nav-sports" />
           <NavLink to="/charts" label="Watchlist" icon={Star} active={loc.pathname.startsWith("/charts")} testId="nav-watchlist" badge={chartCount} />
           <NavLink to="/portfolio" label="Portfolio" icon={Wallet} active={loc.pathname.startsWith("/portfolio")} testId="nav-portfolio" badge={pendingCount} />
           <NavLink to="/pricing" label="Pricing" icon={Tag} active={loc.pathname.startsWith("/pricing")} testId="nav-pricing" />

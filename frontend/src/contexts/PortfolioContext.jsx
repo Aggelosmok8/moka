@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useCallback, useMemo, useState } from "react";
 
 const KEY = "moka_portfolio_bets";
+const SLIP_KEY = "moka_bet_slip";
+const TICKETS_KEY = "moka_tickets";
 const Ctx = createContext(null);
 
 const uid = () => {
@@ -10,6 +12,15 @@ const uid = () => {
 function load() {
   try {
     const v = JSON.parse(localStorage.getItem(KEY));
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+
+function loadKey(k) {
+  try {
+    const v = JSON.parse(localStorage.getItem(k));
     return Array.isArray(v) ? v : [];
   } catch {
     return [];
@@ -67,8 +78,30 @@ export function computeStats(bets) {
   };
 }
 
+// Derived numbers for an accumulator ticket.
+export function computeTicket(t) {
+  const active = t.legs.filter((l) => l.status !== "void");
+  const totalOdds = active.reduce((p, l) => p * (Number(l.odds) || 1), 1);
+  const potentialReturn = t.stake * totalOdds;
+  const anyLost = t.legs.some((l) => l.status === "lost");
+  const anyPending = t.legs.some((l) => l.status === "pending");
+  let status = "pending";
+  if (anyLost) status = "lost";
+  else if (!anyPending) status = active.length ? "won" : "void";
+  const profit =
+    status === "won" ? potentialReturn - t.stake : status === "lost" ? -t.stake : status === "void" ? 0 : null;
+  return {
+    totalOdds: Math.round(totalOdds * 100) / 100,
+    potentialReturn: Math.round(potentialReturn * 100) / 100,
+    status,
+    profit: profit == null ? null : Math.round(profit * 100) / 100,
+  };
+}
+
 export function PortfolioProvider({ children }) {
   const [bets, setBets] = useState(load);
+  const [slip, setSlip] = useState(() => loadKey(SLIP_KEY));
+  const [tickets, setTickets] = useState(() => loadKey(TICKETS_KEY));
 
   const persist = (next) => {
     setBets(next);
@@ -127,12 +160,86 @@ export function PortfolioProvider({ children }) {
 
   const clear = useCallback(() => persist([]), []);
 
+  // --- Bet slip (accumulator builder) ---
+  const saveSlip = (next) => { setSlip(next); try { localStorage.setItem(SLIP_KEY, JSON.stringify(next)); } catch {} };
+  const saveTickets = (next) => { setTickets(next); try { localStorage.setItem(TICKETS_KEY, JSON.stringify(next)); } catch {} };
+
+  const addToSlip = useCallback((leg) => {
+    setSlip((prev) => {
+      if (!leg?.matchId) return prev;
+      if (prev.some((l) => l.matchId === leg.matchId)) return prev; // one leg per match
+      const next = [...prev, {
+        matchId: leg.matchId, home: leg.home, away: leg.away, league: leg.league,
+        pick: leg.pick, pickName: leg.pickName, odds: Number(leg.odds) || 0, bookmaker: leg.bookmaker || "",
+      }];
+      try { localStorage.setItem(SLIP_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+
+  const removeFromSlip = useCallback((matchId) => {
+    setSlip((prev) => {
+      const next = prev.filter((l) => l.matchId !== matchId);
+      try { localStorage.setItem(SLIP_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+
+  const clearSlip = useCallback(() => saveSlip([]), []);
+  const slipHas = useCallback((matchId) => slip.some((l) => l.matchId === matchId), [slip]);
+
+  const placeTicket = useCallback((stake) => {
+    let placed = false;
+    setSlip((prevSlip) => {
+      if (!prevSlip.length) return prevSlip;
+      const ticket = {
+        id: uid(),
+        legs: prevSlip.map((l) => ({ ...l, id: uid(), status: "pending" })),
+        stake: Number(stake) || 0,
+        createdAt: new Date().toISOString(),
+      };
+      setTickets((prevT) => {
+        const next = [ticket, ...prevT];
+        try { localStorage.setItem(TICKETS_KEY, JSON.stringify(next)); } catch {}
+        return next;
+      });
+      placed = true;
+      try { localStorage.setItem(SLIP_KEY, JSON.stringify([])); } catch {}
+      return [];
+    });
+    return placed;
+  }, []);
+
+  const settleLeg = useCallback((ticketId, legId, status) => {
+    setTickets((prev) => {
+      const next = prev.map((t) =>
+        t.id === ticketId ? { ...t, legs: t.legs.map((l) => (l.id === legId ? { ...l, status } : l)) } : t
+      );
+      try { localStorage.setItem(TICKETS_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+
+  const removeTicket = useCallback((ticketId) => {
+    setTickets((prev) => {
+      const next = prev.filter((t) => t.id !== ticketId);
+      try { localStorage.setItem(TICKETS_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+
+  const clearTickets = useCallback(() => saveTickets([]), []);
+
   const pendingCount = useMemo(() => bets.filter((b) => b.status === "pending").length, [bets]);
 
   const stats = useMemo(() => computeStats(bets), [bets]);
 
   return (
-    <Ctx.Provider value={{ bets, addBet, settle, updateStake, remove, clear, pendingCount, stats }}>
+    <Ctx.Provider value={{
+      bets, addBet, settle, updateStake, remove, clear, pendingCount, stats,
+      slip, addToSlip, removeFromSlip, clearSlip, slipHas, slipCount: slip.length,
+      tickets, placeTicket, settleLeg, removeTicket, clearTickets,
+    }}>
       {children}
     </Ctx.Provider>
   );

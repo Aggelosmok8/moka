@@ -9,6 +9,17 @@ import { LEAGUE_CATALOG } from "../lib/sportsCatalog";
 
 function Crest({ team, size = 40 }) {
   const short = team.short || (team.name || "?").slice(0, 3).toUpperCase();
+  if (team.image) {
+    return (
+      <img
+        src={team.image}
+        alt={team.name}
+        className="rounded-lg object-contain shrink-0 bg-white/5 p-1"
+        style={{ width: size, height: size }}
+        onError={(e) => { e.currentTarget.style.display = "none"; }}
+      />
+    );
+  }
   return (
     <div className="rounded-lg flex items-center justify-center font-display font-black text-sm shrink-0"
       style={{ width: size, height: size, background: (team.color || "#39FF14") + "22", color: team.color || "#39FF14" }}>
@@ -28,18 +39,56 @@ function Stat({ label, value, tip }) {
   );
 }
 
+const POS_ORDER = ["Goalkeeper", "Defender", "Midfielder", "Attacker"];
+
+function PlayerCard({ p }) {
+  return (
+    <div className="flex items-center gap-3 bg-[#0d1117] border border-[#30363d] rounded-lg p-2.5" data-testid={`player-row-${p.id}`}>
+      {p.photo ? (
+        <img src={p.photo} alt={p.name} className="w-10 h-10 rounded-full object-cover bg-white/5 shrink-0"
+          onError={(e) => { e.currentTarget.style.display = "none"; }} />
+      ) : (
+        <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-zinc-500 text-xs font-bold shrink-0">{p.number ?? "?"}</div>
+      )}
+      <div className="min-w-0">
+        <div className="text-sm text-white font-semibold truncate flex items-center gap-1">
+          {p.name}
+          {p.injured && <ShieldAlert className="w-3.5 h-3.5 text-[#FF3B30]" title="Injured" />}
+        </div>
+        <div className="text-[11px] text-zinc-500">
+          {p.number != null && <span className="font-mono-num">#{p.number}</span>}
+          {p.number != null && p.position && " · "}
+          {p.position}
+          {p.goals ? <span className="text-[#39FF14] ml-1">· {p.goals}⚽</span> : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TeamDetail({ team, onBack }) {
   const [players, setPlayers] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [sample, setSample] = useState(false);
 
   useEffect(() => {
     setLoading(true);
     api.get(`/teams/${team.id}/players`)
-      .then((r) => { setPlayers(r.data.players || []); setSample(r.data.source === "sample"); })
+      .then((r) => setPlayers(r.data.players || []))
       .catch(() => setPlayers([]))
       .finally(() => setLoading(false));
   }, [team.id]);
+
+  const form = Array.isArray(team.form) ? team.form.slice(-5) : [];
+  const wins = form.filter((r) => r === "W").length;
+  const draws = form.filter((r) => r === "D").length;
+  const losses = form.filter((r) => r === "L").length;
+
+  const grouped = useMemo(() => {
+    const g = {};
+    (players || []).forEach((p) => { (g[p.position || "Other"] = g[p.position || "Other"] || []).push(p); });
+    const keys = [...POS_ORDER.filter((k) => g[k]), ...Object.keys(g).filter((k) => !POS_ORDER.includes(k))];
+    return keys.map((k) => [k, g[k]]);
+  }, [players]);
 
   return (
     <div data-testid="team-detail">
@@ -47,78 +96,58 @@ function TeamDetail({ team, onBack }) {
         <ChevronLeft className="w-4 h-4" /> Back to teams
       </button>
 
-      <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-5 flex items-center gap-4">
-        <Crest team={team} size={56} />
-        <div className="min-w-0">
-          <h2 className="font-display font-black uppercase text-2xl text-white leading-none truncate">{team.name}</h2>
+      {/* Hero */}
+      <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+        <Crest team={team} size={72} />
+        <div className="min-w-0 flex-1">
+          <h2 className="font-display font-black uppercase text-2xl sm:text-3xl text-white leading-none truncate">{team.name}</h2>
           <div className="text-zinc-500 text-sm mt-1">{team.leagueName || "—"}</div>
-          <div className="flex gap-1 mt-2">
-            {(Array.isArray(team.form) ? team.form.slice(-5) : []).map((r, i) => (
+          <div className="flex items-center gap-2 mt-3">
+            <span className="text-[10px] uppercase tracking-wider text-zinc-500 mr-1">Form</span>
+            {form.length ? form.map((r, i) => (
               <span key={i} className={`w-5 h-5 rounded text-[10px] font-black flex items-center justify-center ${
                 r === "W" ? "bg-[#39FF14]/20 text-[#39FF14]" : r === "L" ? "bg-[#FF3B30]/20 text-[#FF3B30]" : "bg-white/10 text-zinc-300"}`}>{r}</span>
-            ))}
+            )) : <span className="text-zinc-600 text-xs">—</span>}
           </div>
         </div>
+        {team.position != null && (
+          <div className="text-center bg-[#0d1117] border border-[#30363d] rounded-xl px-5 py-3">
+            <div className="text-[10px] text-zinc-500 uppercase">League Pos.</div>
+            <div className="font-display font-black text-3xl text-[#39FF14] leading-none mt-0.5">#{team.position}</div>
+          </div>
+        )}
       </div>
 
-      <h3 className="font-display font-black uppercase text-sm text-zinc-400 mt-6 mb-3">Team stats</h3>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-        <Stat label="Goals / game" value={team.goalsPerGame} tip="Average goals this team scores per match." />
+      {/* Key stats */}
+      <h3 className="font-display font-black uppercase text-sm text-zinc-400 mt-6 mb-3">Season stats</h3>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <Stat label="Points" value={team.points} tip="Total league points this season." />
+        <Stat label="Played" value={team.played} tip="Matches played this season." />
+        <Stat label="Last 5 (W-D-L)" value={form.length ? `${wins}-${draws}-${losses}` : null} />
+        <Stat label="Goals / game" value={team.goalsPerGame} tip="Average goals scored per match." />
         <Stat label="Conceded / game" value={team.concededPerGame} tip="Average goals conceded per match." />
-        <Stat label="Possession" value={team.possession != null ? `${team.possession}%` : null} />
-        <Stat label="Pass accuracy" value={team.passAccuracy != null ? `${team.passAccuracy}%` : null} />
-        <Stat label="Both teams score" value={team.btts != null ? `${team.btts}%` : null} tip="How often both teams score in this team's matches." />
-        <Stat label="Over 2.5 goals" value={team.over25 != null ? `${team.over25}%` : null} tip="How often matches have 3+ goals." />
-        <Stat label="Shots / game" value={team.shotsPerGame} />
-        <Stat label="xG" value={team.xg} tip="Expected goals — chance quality. Shown when the stats provider supplies it." />
       </div>
-      <p className="text-[11px] text-zinc-600 mt-2">
-        Stadium, coach, league position and home/away splits appear here once the live stats provider (API-Football) is connected.
-      </p>
 
+      {/* Squad */}
       <h3 className="font-display font-black uppercase text-sm text-zinc-400 mt-7 mb-3 flex items-center gap-2">
-        <Users className="w-4 h-4" /> Squad
+        <Users className="w-4 h-4" /> Squad {players && <span className="text-zinc-600">({players.length})</span>}
       </h3>
       {loading ? (
         <div className="py-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-zinc-500" /></div>
+      ) : !players || players.length === 0 ? (
+        <div className="text-zinc-500 text-sm py-6">Squad data not available for this team.</div>
       ) : (
-        <>
-          {sample && <p className="text-[11px] text-[#FF9500] mb-2">Sample roster — connect the stats provider for real player data.</p>}
-          <div className="overflow-x-auto rounded-xl border border-[#30363d]">
-            <table className="w-full text-sm min-w-[680px]" data-testid="players-table">
-              <thead className="bg-[#0d1117] text-zinc-500 text-[11px] uppercase tracking-wider">
-                <tr>
-                  {["#", "Player", "Pos", "Age", "Nat", "Apps", "Min", "Goals", "Assists", "Shots", "Tackles", "Cards", "Rating"].map((h) => (
-                    <th key={h} className="px-3 py-2 text-left font-bold whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {players.map((p) => (
-                  <tr key={p.id} className="hover:bg-white/[0.03]" data-testid={`player-row-${p.id}`}>
-                    <td className="px-3 py-2 text-zinc-500">{p.number}</td>
-                    <td className="px-3 py-2 text-white font-semibold whitespace-nowrap">
-                      {p.name} {p.injured && <ShieldAlert className="inline w-3.5 h-3.5 text-[#FF3B30] ml-1" title="Injured" />}
-                    </td>
-                    <td className="px-3 py-2 text-zinc-400">{p.position}</td>
-                    <td className="px-3 py-2 text-zinc-400">{p.age}</td>
-                    <td className="px-3 py-2 text-zinc-400 whitespace-nowrap">{p.nationality}</td>
-                    <td className="px-3 py-2 text-zinc-300">{p.appearances}</td>
-                    <td className="px-3 py-2 text-zinc-300">{p.minutes}</td>
-                    <td className="px-3 py-2 text-[#39FF14] font-bold">{p.goals}</td>
-                    <td className="px-3 py-2 text-zinc-300">{p.assists}</td>
-                    <td className="px-3 py-2 text-zinc-300">{p.shots}</td>
-                    <td className="px-3 py-2 text-zinc-300">{p.tackles}</td>
-                    <td className="px-3 py-2 text-zinc-300 whitespace-nowrap">
-                      <span className="text-[#FFD60A]">{p.yellow}🟨</span>{p.red ? <span className="ml-1 text-[#FF3B30]">{p.red}🟥</span> : null}
-                    </td>
-                    <td className="px-3 py-2 font-bold text-white">{p.rating}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
+        <div className="space-y-5" data-testid="players-table">
+          {grouped.map(([pos, arr]) => (
+            <div key={pos}>
+              <div className="text-[10px] uppercase tracking-[0.18em] font-bold text-zinc-600 mb-2">{pos} <span className="text-zinc-700">· {arr.length}</span></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {arr.map((p) => <PlayerCard key={p.id} p={p} />)}
+              </div>
+            </div>
+          ))}
+          <p className="text-[11px] text-zinc-600">Detailed per-player stats (goals, assists, minutes) appear here as the stats provider supplies them.</p>
+        </div>
       )}
     </div>
   );
