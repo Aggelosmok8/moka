@@ -1,9 +1,11 @@
 import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
-import { Wallet, TrendingUp, Target, Percent, Trash2, Check, X, Clock, Flame, CircleSlash } from "lucide-react";
+import { Wallet, TrendingUp, Target, Percent, Trash2, Check, X, Clock, Flame, CircleSlash, Lock } from "lucide-react";
 import Header from "../components/Header";
-import { usePortfolio } from "../contexts/PortfolioContext";
+import { usePortfolio, computeStats } from "../contexts/PortfolioContext";
+import { useEntitlements } from "../hooks/useEntitlements";
+import { UpgradeButton } from "../components/Gating";
 
 const GREEN = "#39FF14";
 const RED = "#FF3B30";
@@ -78,14 +80,23 @@ function BetRow({ b, settle, remove }) {
   );
 }
 
+const FREE_LIMIT = 5;
+
 export default function PortfolioPage() {
-  const { bets, stats, settle, remove, clear } = usePortfolio();
+  const { bets, settle, remove, clear } = usePortfolio();
+  const { role } = useEntitlements();
+  const isPro = role === "pro";
   const [filter, setFilter] = useState("all");
 
+  // Free users only see (and are scored on) their latest 5 bets.
+  const scopedBets = useMemo(() => (isPro ? bets : bets.slice(0, FREE_LIMIT)), [bets, isPro]);
+  const stats = useMemo(() => computeStats(scopedBets), [scopedBets]);
+  const hiddenCount = isPro ? 0 : Math.max(0, bets.length - FREE_LIMIT);
+
   const list = useMemo(() => {
-    if (filter === "all") return bets;
-    return bets.filter((b) => b.status === filter);
-  }, [bets, filter]);
+    if (filter === "all") return scopedBets;
+    return scopedBets.filter((b) => b.status === filter);
+  }, [scopedBets, filter]);
 
   return (
     <div className="min-h-screen bg-[#0d1117]">
@@ -163,6 +174,17 @@ export default function PortfolioPage() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3" data-testid="portfolio-bets">
                 {list.map((b) => <BetRow key={b.id} b={b} settle={settle} remove={remove} />)}
+              </div>
+            )}
+
+            {hiddenCount > 0 && (
+              <div className="mt-8 flex flex-col items-center gap-3 text-center bg-[#161b22] border border-[#30363d] rounded-2xl p-6" data-testid="portfolio-free-limit">
+                <Lock className="w-6 h-6 text-[#39FF14]" />
+                <div className="font-display font-black uppercase tracking-tight text-white text-lg">Your free portfolio includes your latest 5 matches</div>
+                <p className="text-zinc-400 text-sm max-w-md">
+                  Upgrade to PRO to keep your complete history ({bets.length} bets) and track your long-term performance.
+                </p>
+                <UpgradeButton label="Upgrade to Pro" />
               </div>
             )}
           </>

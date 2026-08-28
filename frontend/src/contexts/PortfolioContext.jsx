@@ -24,6 +24,49 @@ function betReturn(b) {
   return 0; // pending
 }
 
+// Pure stats over any list of bets (used for full portfolio + free-tier limited view).
+export function computeStats(bets) {
+  const settled = bets.filter((b) => b.status !== "pending");
+  const pending = bets.filter((b) => b.status === "pending");
+  const won = settled.filter((b) => b.status === "won");
+  const lost = settled.filter((b) => b.status === "lost");
+
+  const stakedAll = bets.reduce((s, b) => s + b.stake, 0);
+  const stakedSettled = settled.reduce((s, b) => s + b.stake, 0);
+  const returnsSettled = settled.reduce((s, b) => s + betReturn(b), 0);
+  const profit = returnsSettled - stakedSettled;
+  const roi = stakedSettled > 0 ? (profit / stakedSettled) * 100 : 0;
+  const decided = won.length + lost.length;
+  const winRate = decided > 0 ? (won.length / decided) * 100 : 0;
+  const pendingStake = pending.reduce((s, b) => s + b.stake, 0);
+  const pendingPotential = pending.reduce((s, b) => s + b.stake * b.odds, 0);
+
+  const timeline = [...settled]
+    .sort((a, b) => (Date.parse(a.settledAt) || 0) - (Date.parse(b.settledAt) || 0))
+    .reduce((acc, b) => {
+      const delta = betReturn(b) - b.stake;
+      const running = (acc.length ? acc[acc.length - 1].pl : 0) + delta;
+      acc.push({ label: `${b.home?.slice(0, 3) || "?"}`.toUpperCase(), pl: Math.round(running * 100) / 100, delta });
+      return acc;
+    }, []);
+
+  return {
+    total: bets.length,
+    settledCount: settled.length,
+    pendingCount: pending.length,
+    wonCount: won.length,
+    lostCount: lost.length,
+    stakedAll: Math.round(stakedAll * 100) / 100,
+    stakedSettled: Math.round(stakedSettled * 100) / 100,
+    profit: Math.round(profit * 100) / 100,
+    roi: Math.round(roi * 10) / 10,
+    winRate: Math.round(winRate),
+    pendingStake: Math.round(pendingStake * 100) / 100,
+    pendingPotential: Math.round(pendingPotential * 100) / 100,
+    timeline,
+  };
+}
+
 export function PortfolioProvider({ children }) {
   const [bets, setBets] = useState(load);
 
@@ -86,48 +129,7 @@ export function PortfolioProvider({ children }) {
 
   const pendingCount = useMemo(() => bets.filter((b) => b.status === "pending").length, [bets]);
 
-  const stats = useMemo(() => {
-    const settled = bets.filter((b) => b.status !== "pending");
-    const pending = bets.filter((b) => b.status === "pending");
-    const won = settled.filter((b) => b.status === "won");
-    const lost = settled.filter((b) => b.status === "lost");
-
-    const stakedAll = bets.reduce((s, b) => s + b.stake, 0);
-    const stakedSettled = settled.reduce((s, b) => s + b.stake, 0);
-    const returnsSettled = settled.reduce((s, b) => s + betReturn(b), 0);
-    const profit = returnsSettled - stakedSettled;
-    const roi = stakedSettled > 0 ? (profit / stakedSettled) * 100 : 0;
-    const decided = won.length + lost.length;
-    const winRate = decided > 0 ? (won.length / decided) * 100 : 0;
-    const pendingStake = pending.reduce((s, b) => s + b.stake, 0);
-    const pendingPotential = pending.reduce((s, b) => s + b.stake * b.odds, 0);
-
-    // cumulative P/L timeline over settled bets (oldest -> newest)
-    const timeline = [...settled]
-      .sort((a, b) => (Date.parse(a.settledAt) || 0) - (Date.parse(b.settledAt) || 0))
-      .reduce((acc, b) => {
-        const delta = betReturn(b) - b.stake;
-        const running = (acc.length ? acc[acc.length - 1].pl : 0) + delta;
-        acc.push({ label: `${b.home?.slice(0, 3) || "?"}`.toUpperCase(), pl: Math.round(running * 100) / 100, delta });
-        return acc;
-      }, []);
-
-    return {
-      total: bets.length,
-      settledCount: settled.length,
-      pendingCount: pending.length,
-      wonCount: won.length,
-      lostCount: lost.length,
-      stakedAll: Math.round(stakedAll * 100) / 100,
-      stakedSettled: Math.round(stakedSettled * 100) / 100,
-      profit: Math.round(profit * 100) / 100,
-      roi: Math.round(roi * 10) / 10,
-      winRate: Math.round(winRate),
-      pendingStake: Math.round(pendingStake * 100) / 100,
-      pendingPotential: Math.round(pendingPotential * 100) / 100,
-      timeline,
-    };
-  }, [bets]);
+  const stats = useMemo(() => computeStats(bets), [bets]);
 
   return (
     <Ctx.Provider value={{ bets, addBet, settle, updateStake, remove, clear, pendingCount, stats }}>
