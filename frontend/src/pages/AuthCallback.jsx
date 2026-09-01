@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { authApi } from "../contexts/AuthContext";
+import { authApi, storeAuthToken } from "../contexts/AuthContext";
 
 /**
  * AuthCallback — processes #session_id=... fragment exactly once.
@@ -23,17 +23,26 @@ export default function AuthCallback() {
     const sessionId = decodeURIComponent(m[1]);
 
     (async () => {
+      let token = null;
       try {
-        await authApi.post(
+        const res = await authApi.post(
           "/auth/session",
           {},
           { headers: { "X-Session-ID": sessionId } }
         );
+        token = res?.data?.session_token || null;
       } catch (err) {
-        // even on failure, clear hash and continue to /
+        // fall through — will land on / logged out
       } finally {
         // strip the fragment so we never re-process
         window.history.replaceState(null, "", window.location.pathname);
+      }
+      if (token) {
+        // Persist the Bearer token, then hard-navigate so AuthProvider
+        // re-runs checkAuth() and the app renders the signed-in state.
+        storeAuthToken(token);
+        window.location.replace("/account");
+      } else {
         navigate("/", { replace: true });
       }
     })();
