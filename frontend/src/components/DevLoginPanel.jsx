@@ -12,8 +12,10 @@ const TEST_USERS = [
 ];
 
 const isPreview = () => {
-  const h = window.location.hostname || "";
-  return h.includes("preview.emergentagent.com") || h.includes("localhost") || h.startsWith("127.");
+  // Show everywhere (preview + deployed) so QA/test-user switching works on any
+  // domain. NOTE: this is a temporary QA aid — remove before a public launch,
+  // as it lets anyone sign in as the seeded Pro test accounts.
+  return true;
 };
 
 export default function DevLoginPanel() {
@@ -36,7 +38,7 @@ export default function DevLoginPanel() {
         <div className="w-64 bg-[#161b22] border border-[#30363d] rounded-xl p-3 shadow-2xl">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-black uppercase tracking-wider text-[#FFD60A] flex items-center gap-1.5">
-              <KeyRound className="w-3.5 h-3.5" /> Test users (preview)
+              <KeyRound className="w-3.5 h-3.5" /> Test users (QA)
             </span>
             <button onClick={() => setOpen(false)} data-testid="dev-login-close" className="text-zinc-500 hover:text-white"><X className="w-4 h-4" /></button>
           </div>
