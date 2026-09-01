@@ -47,6 +47,8 @@ export default function LeagueDetailPage() {
   }, [slug]);
 
   const name = data?.name || NAMES[slug] || "League";
+  const isBasket = data?.sport === "basketball";
+  const tabs = isBasket ? TABS.filter((t) => t.key === "standings") : TABS;
 
   return (
     <div className="min-h-screen bg-[#0d1117]">
@@ -58,7 +60,7 @@ export default function LeagueDetailPage() {
         <h1 className="font-display font-black uppercase tracking-tight text-3xl sm:text-4xl text-white mb-5">{name}</h1>
 
         <div className="flex items-center gap-2 mb-6">
-          {TABS.map((t) => (
+          {tabs.map((t) => (
             <button key={t.key} onClick={() => setTab(t.key)} data-testid={`league-tab-${t.key}`}
               className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${tab === t.key ? "bg-[#39FF14] text-black" : "bg-white/5 text-zinc-300 hover:bg-white/10"}`}>
               <t.icon className="w-4 h-4" /> {t.label}
@@ -78,10 +80,20 @@ export default function LeagueDetailPage() {
                   <th className="px-3 py-2 text-left font-bold">#</th>
                   <th className="px-3 py-2 text-left font-bold">Team</th>
                   <th className="px-3 py-2 text-center font-bold">P</th>
-                  <th className="px-3 py-2 text-center font-bold">GF/g</th>
-                  <th className="px-3 py-2 text-center font-bold">GA/g</th>
-                  <th className="px-3 py-2 text-left font-bold">Form</th>
-                  <th className="px-3 py-2 text-right font-bold">Pts</th>
+                  {isBasket ? (
+                    <>
+                      <th className="px-3 py-2 text-center font-bold">W</th>
+                      <th className="px-3 py-2 text-center font-bold">L</th>
+                      <th className="px-3 py-2 text-right font-bold">Win%</th>
+                    </>
+                  ) : (
+                    <>
+                      <th className="px-3 py-2 text-center font-bold">GF/g</th>
+                      <th className="px-3 py-2 text-center font-bold">GA/g</th>
+                      <th className="px-3 py-2 text-left font-bold">Form</th>
+                      <th className="px-3 py-2 text-right font-bold">Pts</th>
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
@@ -94,10 +106,20 @@ export default function LeagueDetailPage() {
                       </Link>
                     </td>
                     <td className="px-3 py-2 text-center text-zinc-300">{t.played}</td>
-                    <td className="px-3 py-2 text-center text-zinc-300">{t.goalsPerGame ?? "—"}</td>
-                    <td className="px-3 py-2 text-center text-zinc-300">{t.concededPerGame ?? "—"}</td>
-                    <td className="px-3 py-2"><FormBadges form={t.form} /></td>
-                    <td className="px-3 py-2 text-right font-display font-black text-white">{t.points}</td>
+                    {isBasket ? (
+                      <>
+                        <td className="px-3 py-2 text-center text-[#39FF14] font-bold">{t.wins}</td>
+                        <td className="px-3 py-2 text-center text-[#FF3B30]">{t.losses}</td>
+                        <td className="px-3 py-2 text-right font-display font-black text-white">{t.winPct ?? "—"}</td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="px-3 py-2 text-center text-zinc-300">{t.goalsPerGame ?? "—"}</td>
+                        <td className="px-3 py-2 text-center text-zinc-300">{t.concededPerGame ?? "—"}</td>
+                        <td className="px-3 py-2"><FormBadges form={t.form} /></td>
+                        <td className="px-3 py-2 text-right font-display font-black text-white">{t.points}</td>
+                      </>
+                    )}
                   </tr>
                 ))}
               </tbody>

@@ -69,14 +69,16 @@ function PlayerCard({ p }) {
 function TeamDetail({ team, onBack }) {
   const [players, setPlayers] = useState(null);
   const [loading, setLoading] = useState(true);
+  const isBasket = team.sport === "basketball";
 
   useEffect(() => {
+    if (isBasket) { setPlayers([]); setLoading(false); return; }
     setLoading(true);
     api.get(`/teams/${team.id}/players`)
       .then((r) => setPlayers(r.data.players || []))
       .catch(() => setPlayers([]))
       .finally(() => setLoading(false));
-  }, [team.id]);
+  }, [team.id, isBasket]);
 
   const form = Array.isArray(team.form) ? team.form.slice(-5) : [];
   const wins = form.filter((r) => r === "W").length;
@@ -121,18 +123,32 @@ function TeamDetail({ team, onBack }) {
       {/* Key stats */}
       <h3 className="font-display font-black uppercase text-sm text-zinc-400 mt-6 mb-3">Season stats</h3>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <Stat label="Points" value={team.points} tip="Total league points this season." />
-        <Stat label="Played" value={team.played} tip="Matches played this season." />
-        <Stat label="Last 5 (W-D-L)" value={form.length ? `${wins}-${draws}-${losses}` : null} />
-        <Stat label="Goals / game" value={team.goalsPerGame} tip="Average goals scored per match." />
-        <Stat label="Conceded / game" value={team.concededPerGame} tip="Average goals conceded per match." />
+        {isBasket ? (
+          <>
+            <Stat label="Wins" value={team.wins} />
+            <Stat label="Losses" value={team.losses} />
+            <Stat label="Win %" value={team.winPct} />
+            <Stat label="Played" value={team.played} tip="Games played this season." />
+            <Stat label="League Pos." value={team.position != null ? `#${team.position}` : null} />
+          </>
+        ) : (
+          <>
+            <Stat label="Points" value={team.points} tip="Total league points this season." />
+            <Stat label="Played" value={team.played} tip="Matches played this season." />
+            <Stat label="Last 5 (W-D-L)" value={form.length ? `${wins}-${draws}-${losses}` : null} />
+            <Stat label="Goals / game" value={team.goalsPerGame} tip="Average goals scored per match." />
+            <Stat label="Conceded / game" value={team.concededPerGame} tip="Average goals conceded per match." />
+          </>
+        )}
       </div>
 
       {/* Squad */}
       <h3 className="font-display font-black uppercase text-sm text-zinc-400 mt-7 mb-3 flex items-center gap-2">
-        <Users className="w-4 h-4" /> Squad {players && <span className="text-zinc-600">({players.length})</span>}
+        <Users className="w-4 h-4" /> Squad {players && !isBasket && <span className="text-zinc-600">({players.length})</span>}
       </h3>
-      {loading ? (
+      {isBasket ? (
+        <div className="text-zinc-500 text-sm py-6">Basketball rosters are not available on the current data plan yet.</div>
+      ) : loading ? (
         <div className="py-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-zinc-500" /></div>
       ) : !players || players.length === 0 ? (
         <div className="text-zinc-500 text-sm py-6">Squad data not available for this team.</div>

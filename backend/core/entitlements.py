@@ -37,8 +37,19 @@ class League:
 #   FREE = major football leagues + NBA + EuroLeague.
 #   PRO  = everything (secondary leagues flagged pro_only).
 LEAGUE_CATALOG: List[League] = [
+    League("epl", "Premier League (England)", Sport.FOOTBALL),
+    League("laliga", "La Liga (Spain)", Sport.FOOTBALL),
+    League("seriea", "Serie A (Italy)", Sport.FOOTBALL),
+    League("bundesliga", "Bundesliga (Germany)", Sport.FOOTBALL),
+    League("ligue1", "Ligue 1 (France)", Sport.FOOTBALL),
+    League("eredivisie", "Eredivisie (Netherlands)", Sport.FOOTBALL),
+    League("primeira", "Primeira Liga (Portugal)", Sport.FOOTBALL),
+    League("championship", "Championship (England)", Sport.FOOTBALL),
+    League("superleague", "Super League 1 (Greece)", Sport.FOOTBALL),
     League("denmark", "Superliga (Denmark)", Sport.FOOTBALL),
     League("scotland", "Premiership (Scotland)", Sport.FOOTBALL),
+    League("nba", "NBA (USA)", Sport.BASKETBALL),
+    League("euroleague", "EuroLeague", Sport.BASKETBALL),
 ]
 
 LEAGUE_MAP: Dict[str, League] = {lg.id: lg for lg in LEAGUE_CATALOG}

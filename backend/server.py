@@ -81,30 +81,27 @@ async def status():
 
 @api_router.get("/leagues")
 async def list_leagues():
-    return {"leagues": [
-        {"id": "denmark", "name": "Superliga (Denmark)", "country": "Denmark", "short": "DEN"},
-        {"id": "scotland", "name": "Premiership (Scotland)", "country": "Scotland", "short": "SCO"},
-    ]}
-
-
-LEAGUE_NAMES = {"denmark": "Superliga (Denmark)", "scotland": "Premiership (Scotland)"}
+    import apifootball as af
+    return {"leagues": af.leagues_list()}
 
 
 @api_router.get("/leagues/{slug}")
 async def league_detail(slug: str):
-    """Standings + upcoming fixtures + recent results for a free-plan league."""
-    if slug not in ("denmark", "scotland"):
+    """Standings + upcoming fixtures + recent results for a catalog league."""
+    import apifootball as af
+    c = af.CATALOG.get(slug)
+    if not c:
         raise HTTPException(status_code=404, detail="League not found")
     standings, fixtures = [], {"upcoming": [], "results": []}
     try:
-        import sportmonks as sm
-        standings = await sm.teams_for_league(slug)
-        fixtures = await sm.fixtures_for_league(slug)
+        standings = await af.teams_for_league(slug)
+        fixtures = await af.fixtures_for_league(slug)
     except Exception as e:
         logger.warning("league_detail(%s): %s", slug, e)
     return {
         "slug": slug,
-        "name": LEAGUE_NAMES.get(slug, slug),
+        "name": c["name"],
+        "sport": c["sport"],
         "standings": standings,
         "upcoming": fixtures.get("upcoming", []),
         "results": fixtures.get("results", []),
@@ -133,8 +130,8 @@ async def put_portfolio(payload: dict, user=Depends(current_user)):
 @api_router.get("/teams")
 async def list_teams(league: Optional[str] = None, limit: Optional[int] = None):
     try:
-        import sportmonks as sm
-        teams = await sm.teams_for_league(league) if league in ("denmark", "scotland") else []
+        import apifootball as af
+        teams = await af.teams_for_league(league) if league in af.CATALOG else []
         return {"teams": teams[:limit] if limit else teams}
     except Exception as e:
         logger.warning("list_teams: %s", e)
@@ -144,8 +141,8 @@ async def list_teams(league: Optional[str] = None, limit: Optional[int] = None):
 @api_router.get("/teams/top")
 async def top_teams(limit: int = 10):
     try:
-        import sportmonks as sm
-        teams = await sm.teams_for_league("denmark") + await sm.teams_for_league("scotland")
+        import apifootball as af
+        teams = await af.teams_for_league("epl")
         return {"teams": teams[:limit]}
     except Exception as e:
         logger.warning("top_teams: %s", e)
@@ -155,9 +152,9 @@ async def top_teams(limit: int = 10):
 @api_router.get("/teams/{team_id}")
 async def team_detail(team_id: str):
     try:
-        import sportmonks as sm
-        for slug in ("denmark", "scotland"):
-            for t in await sm.teams_for_league(slug):
+        import apifootball as af
+        for slug in af.CATALOG:
+            for t in await af.teams_for_league(slug):
                 if t.get("id") == team_id:
                     return t
     except Exception:
@@ -167,13 +164,11 @@ async def team_detail(team_id: str):
 
 @api_router.get("/teams/{team_id}/players")
 async def team_players(team_id: str):
-    """Real squad roster from SportMonks (Denmark/Scotland free plan)."""
+    """Real squad roster from API-Football (season 2024)."""
     try:
-        import sportmonks as sm
-        if team_id.isdigit():
-            players = await sm.players_for_team(team_id)
-            if players:
-                return {"team_id": team_id, "source": "live", "players": players}
+        import apifootball as af
+        players = await af.players_for_team(team_id)
+        return {"team_id": team_id, "source": "live", "players": players}
     except Exception as e:
         logger.warning("team_players: %s", e)
     raise HTTPException(status_code=404, detail="Team not found")
