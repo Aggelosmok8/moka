@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Check, ChevronDown, ChevronUp, Lock } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ChevronUp, Lock, ExternalLink } from "lucide-react";
 import Header from "../components/Header";
 import { UpgradeButton } from "../components/Gating";
 import AddToPortfolioButton from "../components/AddToPortfolioButton";
 import AddToSlipButton from "../components/AddToSlipButton";
+import { bookmakerUrl } from "../lib/bookmakers";
 import { useEntitlements } from "../hooks/useEntitlements";
 import { fetchMatchById } from "../lib/catalogApi";
 import { adaptValue, aiExplanation, whyMokaReasons } from "../lib/valueEngine";
@@ -128,13 +129,25 @@ export default function MatchAnalysisPage() {
         <div className="space-y-1.5">
           {oddsRows.length === 0 && <div className="text-sm text-zinc-500">No odds available.</div>}
           {oddsRows.map((o, i) => (
-            <div key={o.bookmaker} className={`flex items-center justify-between rounded-lg px-3 py-2 ${i === 0 ? "bg-[#39FF14]/10 border border-[#39FF14]/40" : "bg-[#0d1117] border border-[#30363d]"}`}>
-              <span className={`text-sm ${i === 0 ? "text-[#39FF14] font-bold" : "text-zinc-300"}`}>{o.bookmaker}{i === 0 && <span className="ml-2 text-[10px] uppercase">Best</span>}</span>
+            <a
+              key={o.bookmaker}
+              href={bookmakerUrl(o.bookmaker)}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid={`odds-link-${i}`}
+              title={`Bet with ${o.bookmaker}`}
+              className={`group flex items-center justify-between rounded-lg px-3 py-2 transition-colors ${i === 0 ? "bg-[#39FF14]/10 border border-[#39FF14]/40 hover:bg-[#39FF14]/20" : "bg-[#0d1117] border border-[#30363d] hover:border-[#39FF14]/40"}`}
+            >
+              <span className={`text-sm flex items-center gap-1.5 ${i === 0 ? "text-[#39FF14] font-bold" : "text-zinc-300"}`}>
+                {o.bookmaker}
+                {i === 0 && <span className="text-[10px] uppercase">Best</span>}
+                <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </span>
               <span className={`font-mono-num font-bold ${i === 0 ? "text-[#39FF14]" : "text-white"}`}>{o.price}</span>
-            </div>
+            </a>
           ))}
         </div>
-        <div className="text-[11px] text-zinc-500 mt-2">Odds shown for Moka's pick ({value.pickName}), best to worst.</div>
+        <div className="text-[11px] text-zinc-500 mt-2">Tap any bookmaker to open their site · odds for {value.pickName}, best to worst.</div>
       </Card>
 
       {/* ADVANCED STATISTICS — collapsed by default */}
