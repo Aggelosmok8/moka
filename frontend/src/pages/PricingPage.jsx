@@ -39,6 +39,8 @@ export default function PricingPage() {
   const startCheckout = async (packageId) => {
     setError("");
     if (!user) {
+      // Remember the plan so we can auto-resume checkout right after sign-in.
+      try { sessionStorage.setItem("moka_pending_checkout", packageId); } catch {}
       // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
       const redirectUrl = window.location.origin + "/pricing";
       window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
@@ -55,6 +57,18 @@ export default function PricingPage() {
       setBusy("");
     }
   };
+
+  // After returning from sign-in, resume the plan the user picked.
+  useEffect(() => {
+    if (loading || !user) return;
+    let pending = null;
+    try { pending = sessionStorage.getItem("moka_pending_checkout"); } catch {}
+    if (pending) {
+      try { sessionStorage.removeItem("moka_pending_checkout"); } catch {}
+      startCheckout(pending);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, loading]);
 
   const isPro = user?.is_pro;
   const onTrial = user?.subscription_status === "trial";

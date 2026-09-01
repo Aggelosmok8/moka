@@ -38,10 +38,14 @@ export default function AuthCallback() {
         window.history.replaceState(null, "", window.location.pathname);
       }
       if (token) {
-        // Persist the Bearer token, then hard-navigate so AuthProvider
-        // re-runs checkAuth() and the app renders the signed-in state.
+        // Persist the Bearer token, then hard-navigate back to where the user
+        // started (e.g. /pricing to resume checkout, or /account) so AuthProvider
+        // re-runs checkAuth() and renders the signed-in state.
         storeAuthToken(token);
-        window.location.replace("/account");
+        const dest = window.location.pathname && window.location.pathname !== "/"
+          ? window.location.pathname
+          : "/account";
+        window.location.replace(dest);
       } else {
         navigate("/", { replace: true });
       }
