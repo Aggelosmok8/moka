@@ -1,0 +1,36 @@
+{
+  "summary": "Tested the sports-stats MOCK FALLBACK end-to-end. Backend: new pytest suite /app/backend/tests/test_mock_fallback.py (25 tests, all PASS) covering /api/leagues (13 leagues), /api/teams for all 13 slugs, limit/invalid-league handling, /api/leagues/{slug} for football (standings 20 + 10 results + 10 upcoming with scores/kickoffs) and basketball (wins/losses/winPct, empty fixtures), /api/teams/{id} (mock id resolution, 404 for unknown, no _id leak), /api/teams/m_epl_0/players (22 players, 4 position groups, deterministic across calls). Frontend (Playwright, preview URL): /leagues shows 13 clickable 'Open' cards in Football + Basketball groups (0 locked for anonymous/free); /leagues/epl shows 20-row standings incl. Manchester City, Fixtures tab 10 upcoming, Results tab 10 finished matches with scores; /leagues/nba shows only the Standings tab with W/L/WIN% and Boston Celtics; /teams -> La Liga lists 20 teams, team detail shows Season stats + Squad(22) grouped Goalkeeper/Defender/Midfielder/Attacker, back-button works; NBA teams list populated and NBA team detail shows W/L/Win% with a graceful 'Basketball rosters are not available' message. No console errors and no failed API requests (only Cloudflare /cdn-cgi/rum beacon, unrelated). No blank/empty states found.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/teams?league={slug} (mockdata.standings)", "issue": "leagueName is set to the TEAM name instead of the league display name (e.g. Manchester City -> leagueName 'Manchester City'). UI renders it as a subtitle so every team card/detail shows the team name twice ('Real Madrid / Real Madrid'). Should be CATALOG[slug]['name']."},
+      {"endpoint": "/api/teams?league=nba (and euroleague)", "issue": "Basketball mock standings are not sorted by wins: position 12 Los Angeles Lakers has 35 wins while position 13 Sacramento Kings has 36 (hash jitter 0-3 exceeds the 2-win step). Sort by wins desc before assigning position, or reduce jitter."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "TeamsPage team card / TeamDetail header", "issue": "Team name duplicated (title + subtitle) because backend mock leagueName equals the team name", "selector": "[data-testid^=\"team-card-\"], [data-testid=\"team-detail\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "League detail standings", "issues": ["Crest placeholder squares render as empty grey/white blocks in standings rows (no initials fallback there, unlike team cards) - slightly noisy but intentional per brief"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_mock_fallback.py", "/app/test_reports/pytest/mock_fallback.xml"],
+  "action_items": [
+    "mockdata.standings(): set leagueName to the league display name (apifootball.CATALOG[slug]['name']) instead of the team name",
+    "mockdata.standings(): sort basketball rows by wins desc before assigning position so Win% ordering matches rank"
+  ],
+  "critical_code_review_comments": [
+    "apifootball.py: `import mockdata` is repeated inside 6 exception/fallback branches - move to a module-level import for clarity.",
+    "server.py /api/teams/{team_id} iterates every league in CATALOG until a match is found (13 sequential calls on cache miss). Cheap with mock data but will burn live API quota; consider resolving the slug from the id prefix (m_<slug>_<i>) or a reverse index.",
+    "server.py /api/teams/{team_id}/players hardcodes \"source\": \"live\" even when mock data is served - misleading; expose the real source so the Live/Mock pill can be accurate."
+  ],
+  "updated_files": ["/app/backend/tests/test_mock_fallback.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "None - all data is deterministic built-in mock data; no DB writes.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Mock fallback works everywhere (team ids 'm_<slug>_<i>'). Regression suite: /app/backend/tests/test_mock_fallback.py (run with `cd /app/backend && python -m pytest tests/test_mock_fallback.py -v`). Note mock is cached with 300s TTL, so results can flip to live data if the API-Football account is reactivated - assertions on exact team names (Manchester City / Boston Celtics) would then need loosening. Only open items are two cosmetic mockdata bugs (leagueName, basketball sort order).",
+  "rca_of_the_issue": "mockdata.standings() builds each row with \"leagueName\": name (the team name) and assigns position by list index; basketball wins are computed as 60 - i*2 - (hash%4), where the hash jitter (0-3) can exceed the 2-win positional step, producing rank/Win% inversions."
+}

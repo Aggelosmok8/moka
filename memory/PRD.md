@@ -163,3 +163,11 @@ Fixes:
 - `AuthCallback.jsx`: after storing the token, redirect to the **intended path** (`window.location.pathname`, e.g. `/pricing`) instead of hardcoded `/account`, so users return to where they started. Falls back to `/account` when path is `/`.
 - `PricingPage.jsx`: on `!user` checkout, saves chosen `package_id` to `sessionStorage["moka_pending_checkout"]` before the auth redirect; on mount when `user` is present, auto-resumes `startCheckout(pending)`.
 VERIFIED in browser: logged-in user with a pending plan auto-redirects to the Stripe Checkout page (Annual €79, prefilled email, card form). Full flow: pick plan → sign in → auto-resume → Stripe → pay (test card 4242…) → `/pricing/success` polls `/billing/status` → Pro.
+
+## Phase 14 (2026-09-01) — Mock fallback for stats (API-Football inactive)
+The API-Football free plan went inactive/quota-exhausted → leagues/teams/players/basketball came back empty. Added a built-in deterministic MOCK FALLBACK so users can always browse/test, with zero API credits.
+- New `backend/mockdata.py`: real team-name lists for all 13 leagues (11 football + NBA + EuroLeague), deterministic (hash-seeded) standings/form/goals, fixtures (10 past results w/ scores + 10 future upcoming), and 22-player rosters grouped GK/DEF/MID/ATT. Mock ids: teams `m_<slug>_<i>`, players `..._p<n>`. Logos omitted (frontend Crest → initials).
+- `backend/apifootball.py`: `teams_for_league` / `fixtures_for_league` / `players_for_team` now fall back to mockdata when the live call returns empty/errors; mock cached with a short 300s TTL so it auto-retries live and switches back to real data once the account is reactivated. Module-level `import mockdata`.
+- `server.py`: `/teams/{id}` resolves the league from the `m_<slug>_` prefix (no full-catalog scan); `/teams/{id}/players` reports accurate `source` ("mock"|"live").
+- VERIFIED: testing_agent iteration_6 = 100% backend + 100% frontend (13 leagues open, EPL 20 standings + fixtures + results, NBA W/L/Win% standings, La Liga teams + 22-player squads). Regression suite `backend/tests/test_mock_fallback.py` (25 passed). Post-fixes (leagueName = league display name; basketball sorted by wins) confirmed.
+- When API-Football is reactivated (or plan upgraded), the app automatically shows real season-2024 data again — no code change needed.

@@ -10,6 +10,7 @@ import os
 import time as _time
 import logging
 import httpx
+import mockdata
 
 logger = logging.getLogger(__name__)
 
@@ -140,15 +141,23 @@ async def teams_for_league(slug: str) -> list:
             teams.sort(key=lambda x: x["wins"], reverse=True)
             for i, t in enumerate(teams):
                 t["position"] = i + 1
+        if not teams:
+            teams = mockdata.standings(slug)
+            _c_set(ck, teams, ttl=300)
+            return teams
         _c_set(ck, teams)
         return teams
     except Exception as e:
         logger.warning("apifootball.teams_for_league(%s): %s", slug, e)
-        return []
+        m = mockdata.standings(slug)
+        _c_set(ck, m, ttl=300)
+        return m
 
 
 async def players_for_team(team_id: str) -> list:
     """Football squad (api-football). Basketball squads not on free plan."""
+    if team_id.startswith("m_"):
+        return mockdata.players_for_mock_team(team_id)
     ck = f"squad_{team_id}"
     hit = _c_get(ck)
     if hit is not None:
@@ -167,11 +176,15 @@ async def players_for_team(team_id: str) -> list:
                     "photo": p.get("photo"),
                     "age": p.get("age"),
                 })
+        if not players:
+            players = mockdata.players_for_mock_team(team_id)
+            _c_set(ck, players, ttl=300)
+            return players
         _c_set(ck, players)
         return players
     except Exception as e:
         logger.warning("apifootball.players_for_team(%s): %s", team_id, e)
-        return []
+        return mockdata.players_for_mock_team(team_id)
 
 
 def _fx_shape(f: dict) -> dict:
@@ -207,8 +220,12 @@ async def fixtures_for_league(slug: str) -> dict:
         results.sort(key=lambda x: x["kickoff"] or "", reverse=True)
         upcoming.sort(key=lambda x: x["kickoff"] or "")
         out = {"upcoming": upcoming[:20], "results": results[:20]}
+        if not out["upcoming"] and not out["results"]:
+            out = mockdata.fixtures(slug)
+            _c_set(ck, out, ttl=300)
+            return out
         _c_set(ck, out)
         return out
     except Exception as e:
         logger.warning("apifootball.fixtures_for_league(%s): %s", slug, e)
-        return {"upcoming": [], "results": []}
+        return mockdata.fixtures(slug)

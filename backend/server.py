@@ -153,7 +153,14 @@ async def top_teams(limit: int = 10):
 async def team_detail(team_id: str):
     try:
         import apifootball as af
-        for slug in af.CATALOG:
+        # Mock ids are 'm_<slug>_<i>' — resolve the league directly to avoid
+        # scanning every league (which would burn live API quota).
+        slugs = list(af.CATALOG)
+        if team_id.startswith("m_"):
+            parts = team_id.split("_")
+            if len(parts) >= 3 and parts[1] in af.CATALOG:
+                slugs = [parts[1]]
+        for slug in slugs:
             for t in await af.teams_for_league(slug):
                 if t.get("id") == team_id:
                     return t
@@ -164,11 +171,12 @@ async def team_detail(team_id: str):
 
 @api_router.get("/teams/{team_id}/players")
 async def team_players(team_id: str):
-    """Real squad roster from API-Football (season 2024)."""
+    """Real squad roster from API-Football (season 2024), or mock fallback."""
     try:
         import apifootball as af
         players = await af.players_for_team(team_id)
-        return {"team_id": team_id, "source": "live", "players": players}
+        source = "mock" if team_id.startswith("m_") else "live"
+        return {"team_id": team_id, "source": source, "players": players}
     except Exception as e:
         logger.warning("team_players: %s", e)
     raise HTTPException(status_code=404, detail="Team not found")
