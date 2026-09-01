@@ -22,6 +22,7 @@ import PortfolioPage from "./pages/PortfolioPage";
 import SportsPage from "./pages/SportsPage";
 import LeagueDetailPage from "./pages/LeagueDetailPage";
 import SlipFab from "./components/SlipFab";
+import DevLoginPanel from "./components/DevLoginPanel";
 import "@/index.css";
 
 function AppRouter() {
@@ -63,6 +64,7 @@ function App() {
             <Toaster position="top-right" theme="dark" />
             <AppRouter />
             <SlipFab />
+            <DevLoginPanel />
           </PortfolioProvider>
         </ChartProvider>
       </AuthProvider>

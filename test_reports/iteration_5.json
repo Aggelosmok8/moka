@@ -1,0 +1,26 @@
+{
+  "summary": "Tested the preview-only Dev Login panel and the 4 seeded test-user Bearer tokens end-to-end. Backend: created /app/backend/tests/test_dev_login_tokens.py (13 tests, all passing) covering /api/auth/me plan state for free/trial/pro-monthly/pro-annual, trial_days_left, /api/me/entitlements role gating, 401 on missing/invalid token, and portfolio GET/PUT persistence. Frontend: Playwright verified the toggle+panel render bottom-left, all 4 user buttons work, each login lands on /account with correct email/plan (Free, Free trial - 7 days left, Pro - Monthly, Pro - Annual), Header shows avatar + PRO badge (no Sign In) for logged-in users, free user's /portfolio is limited to latest 5 bets with the upgrade banner, and Log out clears moka_session_token and returns to signed-out home. No console errors. All requested features work.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Portfolio (free user)", "issues": ["Header nav 'Portfolio' badge shows the total bet count (7) while the free user can only see 5 entries - slightly inconsistent with the enforced free limit", "Bet cards render 'vs' with blank team names / blank PICK when a bet record lacks home/away/pick fields (observed with synthetic seeded bets); a fallback label would be more robust"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_dev_login_tokens.py", "/app/test_reports/pytest/iteration_5.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "DevLoginPanel.jsx: data-testid=\"dev-login-panel\" sits on the always-rendered outer wrapper, so it is present even when the panel is collapsed. Move it to the expanded panel div so tests can assert open/closed state.",
+    "DevLoginPanel.loginAs always redirects to /account, discarding the current route; acceptable for a dev helper but noted.",
+    "Panel does not highlight which test user is currently active (only shows the email line); a checkmark on the active row would reduce confusion when switching."
+  ],
+  "updated_files": ["/app/backend/tests/test_dev_login_tokens.py"],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "100% (all 7 requested flows)"},
+  "seed_data_creation": "Temporarily PUT 7 TEST_ bets to free@moka.test portfolio to verify the 5-entry free limit; portfolio restored to empty afterwards. Seeded users already existed (no re-seed needed).",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "Bearer tokens: test-free-token, test-trial-token, test-pro-monthly-token, test-pro-annual-token (all valid, /api/auth/me returns 200)",
+  "context_for_next_testing_agent": "Seeded tokens are live in the preview DB and return correct plan states; no re-seed needed. Dev Login panel (bottom-left) reliably switches users - use data-testid dev-login-toggle then dev-login-<token>, it does a full page replace to /account so re-wait for networkidle. Free user portfolio limit is enforced client-side (FREE_LIMIT=5 in PortfolioPage.jsx); backend /api/me/portfolio returns all entries. Real Google OAuth round-trip was not attempted (per request).",
+  "rca_of_the_issue": "N/A - no defects found. One test failure during authoring was my own wrong payload shape for PUT /api/me/portfolio (expects flat {bets, tickets}, not nested {data}); test corrected."
+}
