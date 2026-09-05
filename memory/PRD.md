@@ -217,3 +217,14 @@ The API-Football free plan went inactive/quota-exhausted → leagues/teams/playe
 - Player stats now CLUB-ONLY: player_stats(player_id, season, team_id) filters /players statistics to the opened club's entries (national-team caps excluded). `played` flag = club apps/minutes>0. Endpoint GET /api/players/{id}?team=<teamId>. Verified Haaland@ManCity: 3 apps, 2 goals, rating 6.95 (club only, was Norway-inflated before).
 - Not-played UX: if played=false or 404 -> modal shows "{name} hasn't played for {club} yet this season" (uses squad player info). 
 - Per-player mini bar chart added (PlayerBarChart, CSS bars #39FF14: Goals/Assists/Shots/Key Passes/Tackles/Duels Won). No new deps. Consistent with existing dark design.
+
+
+## Update 2026-09-05 — Home picks + match card actions
+- Home: added HomePicks section at the very TOP (above hero, no scroll) showing top 3 real value picks; dark cards w/ neon accent, grow on hover, existing arena photo bg. Hero + marketing kept below as before.
+- ValueCard: removed "Add to Portfolio"; now "Add to Watchlist" (save/keep-for-later -> /charts) + "Add to slip". Shows kickoff date/time (or LIVE badge+score).
+- Backend value_engine.public_match now exposes commence_time + score.
+- Files: components/HomePicks.jsx (new), components/ValueCard.jsx, components/AddToChartButton.jsx (relabel Watchlist), pages/HomePage.jsx, backend/src/services/value_engine.py
+
+
+## Update 2026-09-05 (correction) — Home top = advertising sentences + diagram
+- Home top section (HomePicks.jsx) now shows the 6 advertising SENTENCES (English, no periods, numbered 01-06, hover->green) over the existing arena photo, with the Season-output bar-chart diagram below. NO value picks on home. Visible without scroll; hero + marketing below unchanged.

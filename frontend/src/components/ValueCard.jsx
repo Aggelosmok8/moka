@@ -1,11 +1,38 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { Lock, ChevronDown, ChevronUp, ArrowRight } from "lucide-react";
+import { Lock, ChevronDown, ChevronUp, ArrowRight, Clock } from "lucide-react";
 import { aiExplanation, shortExplanation } from "../lib/valueEngine";
 import { UpgradeButton } from "./Gating";
 import AddToChartButton from "./AddToChartButton";
-import AddToPortfolioButton from "./AddToPortfolioButton";
+import AddToSlipButton from "./AddToSlipButton";
 import InfoTip from "./InfoTip";
+
+function fmtKickoff(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+function MatchWhen({ match }) {
+  if (match.status === "live") {
+    return (
+      <div className="flex items-center gap-2 mb-3" data-testid={`match-live-${match.id}`}>
+        <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/30">
+          <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> Live
+        </span>
+        {match.score && <span className="font-display font-black text-white text-sm font-mono-num">{match.score}</span>}
+      </div>
+    );
+  }
+  const when = fmtKickoff(match.commence_time);
+  if (!when) return null;
+  return (
+    <div className="flex items-center gap-1.5 text-[11px] text-zinc-400 mb-3" data-testid={`match-kickoff-${match.id}`}>
+      <Clock className="w-3.5 h-3.5 text-zinc-500" /> {when}
+    </div>
+  );
+}
 
 function Metric({ label, v, accent, tip }) {
   return (
@@ -77,9 +104,10 @@ export default function ValueCard({ entry }) {
           {value.level.emoji} {value.level.label}
         </span>
       </div>
-      <div className="font-display font-bold text-white text-lg leading-tight mb-3">
+      <div className="font-display font-bold text-white text-lg leading-tight mb-2">
         {match.home && match.home.name} <span className="text-zinc-600 text-sm">vs</span> {match.away && match.away.name}
       </div>
+      <MatchWhen match={match} />
 
       {/* Simple info — always visible */}
       <div className="flex items-center justify-between text-xs border-t border-white/5 pt-2">
@@ -136,7 +164,7 @@ export default function ValueCard({ entry }) {
 
       <div className="mt-3 grid grid-cols-2 gap-2">
         <AddToChartButton entry={entry} className="w-full justify-center" />
-        <AddToPortfolioButton entry={entry} className="w-full" />
+        <AddToSlipButton entry={entry} className="w-full" />
       </div>
     </Link>
   );

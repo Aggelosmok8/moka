@@ -94,6 +94,8 @@ def public_match(m: dict) -> dict:
         "leagueName": m["leagueName"],
         "sport": m["sport"],
         "status": m["status"],
+        "commence_time": m.get("commence_time"),
+        "score": m.get("score"),
         "home": {"name": m["home"]["name"]},
         "away": {"name": m["away"]["name"]},
         "homeTeam": _stats(m["home"]),

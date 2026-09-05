@@ -2,6 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, Search, TrendingUp, BarChart3, Wallet, ChevronDown } from "lucide-react";
 import Header from "../components/Header";
+import HomePicks from "../components/HomePicks";
 
 const IMG = {
   hero: "https://images.unsplash.com/photo-1604524404499-67ba5a962db8?crop=entropy&cs=srgb&fm=jpg&q=85&w=2400",
@@ -51,8 +52,11 @@ export default function HomePage() {
     <div className="min-h-screen bg-[#0d1117]">
       <Header />
 
+      {/* TODAY'S TOP OPPORTUNITIES — real value picks first, visible without scroll */}
+      <HomePicks />
+
       {/* HERO */}
-      <section className="relative min-h-[92vh] flex items-center justify-center overflow-hidden">
+      <section className="relative min-h-[88vh] flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${IMG.hero})` }} />
         <div className="absolute inset-0" style={{ background: "radial-gradient(120% 80% at 50% 20%, rgba(13,17,23,0.35) 0%, rgba(13,17,23,0.85) 55%, #0d1117 100%)" }} />
         <div className="relative text-center px-4 sm:px-6 max-w-4xl mx-auto">
