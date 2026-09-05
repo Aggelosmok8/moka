@@ -279,7 +279,7 @@ def _mw_entries(bookmakers: list) -> list:
                 price = float(v.get("odd") or 0)
             except (TypeError, ValueError):
                 price = 0.0
-            if val in o:
+            if val in o and 1.0 < price <= 51.0:
                 o[val] = price
         if o["home"] or o["draw"] or o["away"]:
             entries.append({"bookmaker": bk.get("name"), "odds": o})
@@ -287,7 +287,9 @@ def _mw_entries(bookmakers: list) -> list:
 
 
 async def upcoming_fixtures_raw(slug: str, n: int = 8) -> list:
-    """Nearest N upcoming fixtures for a football league (1 batch call, cached)."""
+    """Nearest N upcoming fixtures for a football league (1 batch call, cached).
+    NOTE: the `next` param must NOT be combined with `season` (API-Football
+    returns empty if both are sent)."""
     c = CATALOG.get(slug)
     if not c or c["sport"] != "football":
         return []
@@ -298,7 +300,7 @@ async def upcoming_fixtures_raw(slug: str, n: int = 8) -> list:
     out = []
     try:
         d = await _get(FOOTBALL_BASE, "/fixtures",
-                       {"league": c["league_id"], "season": FOOTBALL_SEASON, "next": n})
+                       {"league": c["league_id"], "next": n})
         for f in d.get("response") or []:
             fx = f["fixture"]
             out.append({
@@ -309,7 +311,41 @@ async def upcoming_fixtures_raw(slug: str, n: int = 8) -> list:
             })
     except Exception as e:
         logger.warning("apifootball.upcoming_fixtures_raw(%s): %s", slug, e)
-    _c_set(ck, out, ttl=6 * 3600)
+    _c_set(ck, out, ttl=6 * 3600 if out else 300)
+    return out
+
+
+async def odds_for_dates(slug: str, dates: list) -> dict:
+    """fixture_id -> [odds entries] for a league on the given match dates
+    (1 call per date, cached 12h). Aligns odds to upcoming fixtures by date."""
+    c = CATALOG.get(slug)
+    if not c or c["sport"] != "football":
+        return {}
+    out = {}
+    for d in (dates or [])[:2]:
+        ck = f"afodds_{slug}_{d}"
+        hit = _c_get(ck)
+        if hit is None:
+            hit = {}
+            try:
+                page, total = 1, 1
+                while page <= total and page <= 2:
+                    r = await _get(FOOTBALL_BASE, "/odds",
+                                   {"league": c["league_id"], "season": FOOTBALL_SEASON,
+                                    "date": d, "page": page})
+                    for e in r.get("response") or []:
+                        fid = str((e.get("fixture") or {}).get("id"))
+                        ent = _mw_entries(e.get("bookmakers"))
+                        if fid and ent:
+                            hit[fid] = ent
+                    total = (r.get("paging") or {}).get("total") or 1
+                    page += 1
+                _c_set(ck, hit, ttl=12 * 3600)
+            except Exception as e:
+                logger.warning("apifootball.odds_for_dates(%s,%s): %s", slug, d, e)
+                _c_set(ck, {}, ttl=300)
+                hit = {}
+        out.update(hit)
     return out
 
 

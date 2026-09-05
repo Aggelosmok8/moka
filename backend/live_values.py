@@ -1,16 +1,20 @@
 """Live value-match builder.
 
-Real upcoming fixtures + real bookmaker odds from The Odds API, combined with
-real team stats (form, goals for/against) from API-Football standings (Pro
-subscription, current season). Emitted in the value-engine schema so the
-existing rank_value_matches() produces real "Moka values". The Moka
-probability / value / EV model itself is UNCHANGED — this only feeds it real
-data instead of mock data.
+Real upcoming fixtures + real bookmaker odds + real team stats, all from
+API-Football (Pro). Emitted in the value-engine schema so the existing
+rank_value_matches() produces real "Moka values". The Moka probability / value
+/ EV model itself is UNCHANGED — this only feeds it real data.
 
-Call efficiency:
-  * The Odds API — 1 request per league (all upcoming fixtures + odds), cached 12h.
-  * API-Football — 1 standings request per league for team stats, cached 24h
-    (goes through apifootball._get which enforces the <=100/day budget).
+Why API-Football only: The Odds API free tier (500 req/month) gets exhausted
+mid-month, which left matches empty (and the app fell back to mock team names).
+API-Football Pro (7500 req/day) covers fixtures, odds and stats for every
+league in one place, so it's the single reliable source.
+
+Call efficiency (all cached, all through apifootball._get which enforces the
+daily budget):
+  * standings  -> 1 call/league (team stats), cached 24h
+  * fixtures   -> 1 call/league (nearest upcoming),      cached 6h
+  * odds       -> 1 call per near match-date/league,      cached 12h
 No per-match calls, no polling, no per-render calls.
 """
 import re
@@ -18,32 +22,20 @@ import time
 import logging
 import unicodedata
 
-import the_odds_api as oa
 import apifootball as af
 
 logger = logging.getLogger(__name__)
 
-# internal slug -> The Odds API sport key (None => odds come from API-Football).
-# League id/name come from af.CATALOG.
-LIVE_LEAGUES = {
-    "epl":         "soccer_epl",
-    "laliga":      "soccer_spain_la_liga",
-    "seriea":      "soccer_italy_serie_a",
-    "bundesliga":  "soccer_germany_bundesliga",
-    "ligue1":      "soccer_france_ligue_one",
-    # Covered via API-Football fixtures + odds (The Odds API doesn't map these):
-    "eredivisie":  None,
-    "primeira":    None,
-    "championship": None,
-    "superleague": None,
-    "denmark":     None,
-    "scotland":    None,
-}
+# Football leagues surfaced on the Matches page (ids/names from af.CATALOG).
+LIVE_LEAGUES = [
+    "epl", "laliga", "seriea", "bundesliga", "ligue1",
+    "eredivisie", "primeira", "championship", "superleague",
+    "denmark", "scotland",
+]
 
-ODDS_TTL = 12 * 3600      # The Odds API: 500 req/month -> cache hard
-STATS_TTL = 24 * 3600     # standings barely change intraday
+STATS_TTL = 24 * 3600
 MATCHES_TTL = 30 * 60
-MAX_PER_LEAGUE = 6        # keep the real-data set small (~20-30 matches total)
+MAX_PER_LEAGUE = 6        # keep the real-data set reasonable
 
 _cache: dict = {}
 
@@ -66,31 +58,8 @@ def _norm(name: str) -> str:
     return re.sub(r"[^a-z0-9]", "", s)
 
 
-def _best_odds_entries(event: dict) -> list:
-    """Extract 1X2 (h2h) odds per bookmaker from a The Odds API event."""
-    home, away = event.get("home_team"), event.get("away_team")
-    entries = []
-    for bk in event.get("bookmakers") or []:
-        title = bk.get("title") or bk.get("key")
-        h = d = a = 0.0
-        for m in bk.get("markets") or []:
-            if m.get("key") != "h2h":
-                continue
-            for o in m.get("outcomes") or []:
-                nm, pr = o.get("name"), float(o.get("price") or 0)
-                if nm == home:
-                    h = pr
-                elif nm == away:
-                    a = pr
-                elif (nm or "").lower() == "draw":
-                    d = pr
-        if h or d or a:
-            entries.append({"bookmaker": title, "odds": {"home": h, "draw": d, "away": a}})
-    return entries
-
-
 def _form_num(form_list) -> float:
-    """W/D/L list -> 0-10 form number (same scale the model expects)."""
+    """W/D/L list -> 0-10 form number (the scale the model expects)."""
     recent = (form_list or [])[-5:]
     if not recent:
         return 5.0
@@ -144,98 +113,56 @@ async def build_live_matches() -> list:
         return cached
 
     matches = []
-    for slug, sport_key in LIVE_LEAGUES.items():
+    for slug in LIVE_LEAGUES:
         c = af.CATALOG.get(slug, {})
         lid, lname = slug, c.get("name", slug)
 
         idx = await _stats_index(slug)
 
-        events = []
-        if sport_key:
-            events = _cache_get(f"odds_{sport_key}")
-            if events is None:
-                try:
-                    events, _quota = await oa.league_odds(sport_key)
-                    _cache_set(f"odds_{sport_key}", events, ODDS_TTL)
-                except Exception as e:
-                    logger.warning("odds %s: %s", sport_key, e)
-                    events = []
+        try:
+            fixtures = await af.upcoming_fixtures_raw(slug, MAX_PER_LEAGUE * 2)
+        except Exception as e:
+            logger.warning("fixtures %s: %s", slug, e)
+            fixtures = []
+        if not fixtures:
+            continue
+
+        # Odds for the 1-2 nearest match dates (bookmakers price near-term games).
+        dates = []
+        for f in fixtures:
+            dd = (f.get("kickoff") or "")[:10]
+            if dd and dd not in dates:
+                dates.append(dd)
+        try:
+            odds_map = await af.odds_for_dates(slug, dates[:2])
+        except Exception as e:
+            logger.warning("odds %s: %s", slug, e)
+            odds_map = {}
 
         count = 0
-        covered = set()
-        league_matches = []
-        for ev in events or []:
+        for f in fixtures:
             if count >= MAX_PER_LEAGUE:
                 break
-            home, away = ev.get("home_team"), ev.get("away_team")
-            if not home or not away:
+            odds = odds_map.get(f["id"])
+            if not odds:                     # no odds -> skip (never show empty odds)
                 continue
-            odds = _best_odds_entries(ev)
-            if not odds:
-                continue
+            home, away = f["home"], f["away"]
             hs = _lookup(idx, home)
             as_ = _lookup(idx, away)
-            league_matches.append({
-                "id": f"live_{ev.get('id')}",
+            matches.append({
+                "id": f"live_af_{f['id']}",
                 "leagueId": lid,
                 "leagueName": lname,
                 "sport": "football",
                 "status": "upcoming",
-                "commence_time": ev.get("commence_time"),
+                "commence_time": f.get("kickoff"),
                 "home": _team_obj(home, hs),
                 "away": _team_obj(away, as_),
                 "odds": odds,
-                "dataSource": "odds_api+apifootball" if (hs or as_) else "odds_api",
+                "dataSource": "apifootball",
             })
-            covered.add((_norm(home), _norm(away)))
             count += 1
 
-        # Fill any gap with API-Football fixtures + odds so no match is left
-        # without odds. Driven by the odds endpoint (fixtures that actually have
-        # odds), then one batch call for their details -> guarantees alignment.
-        # Lazy: for the big-5 leagues The Odds API already fills the quota, so
-        # this block makes zero extra API-Football calls there.
-        if count < MAX_PER_LEAGUE:
-            try:
-                af_odds = await af.odds_by_fixture(slug)
-                if af_odds:
-                    details = await af.fixtures_by_ids(list(af_odds.keys()))
-                    ordered = sorted(details.items(), key=lambda kv: kv[1].get("kickoff") or "")
-                    for fid, det in ordered:
-                        if count >= MAX_PER_LEAGUE:
-                            break
-                        if det.get("finished"):
-                            continue
-                        home, away = det.get("home"), det.get("away")
-                        pair = (_norm(home), _norm(away))
-                        if pair in covered:
-                            continue
-                        odds = af_odds.get(fid)
-                        if not odds:
-                            continue
-                        hs = _lookup(idx, home)
-                        as_ = _lookup(idx, away)
-                        league_matches.append({
-                            "id": f"live_af_{fid}",
-                            "leagueId": lid,
-                            "leagueName": lname,
-                            "sport": "football",
-                            "status": "upcoming",
-                            "commence_time": det.get("kickoff"),
-                            "home": _team_obj(home, hs),
-                            "away": _team_obj(away, as_),
-                            "odds": odds,
-                            "dataSource": "apifootball",
-                        })
-                        covered.add(pair)
-                        count += 1
-            except Exception as e:
-                logger.warning("live_values af-odds fill %s: %s", slug, e)
-
-        matches.extend(league_matches)
-
-    # Cache non-empty results for the full window; if empty (transient API
-    # failure) retry soon so we don't get stuck on mock.
     _cache_set("live_matches", matches, MATCHES_TTL if matches else 60)
     return matches
 
