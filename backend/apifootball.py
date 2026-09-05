@@ -21,10 +21,10 @@ BASKETBALL_BASE = "https://v1.basketball.api-sports.io"
 
 def _current_football_season() -> int:
     """European seasons span two years; api-sports keys them by the start year.
-    Sept 2026 -> season 2026 (the 2026/27 campaign). Override via env."""
-    override = os.environ.get("API_FOOTBALL_SEASON")
-    if override:
-        return int(override)
+    Always computed from the current date (Sept 2026 -> season 2026). We do NOT
+    read a season override from the environment anymore: a stale
+    API_FOOTBALL_SEASON=2024 left over from the free-plan era was forcing old,
+    finished-season standings and breaking live odds (season/date mismatch)."""
     now = _dt.datetime.now(_dt.timezone.utc)
     return now.year if now.month >= 7 else now.year - 1
 

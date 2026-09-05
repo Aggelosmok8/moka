@@ -199,3 +199,9 @@ The API-Football free plan went inactive/quota-exhausted → leagues/teams/playe
 - Preview (latest code) returns 48 real matches / 11 leagues / 0 mock / 0 junk odds; detail endpoint works for live_af_ ids. So the code is correct — the LIVE site just needs a redeploy.
 - Production tuning: API_FOOTBALL_MAX_CALLS default raised 100 -> 500 (11 leagues need headroom; still tiny vs Pro 7500/day). Caches lengthened: upcoming fixtures 12h, odds-by-date 24h -> real usage ~50-70/day.
 - ACTION FOR USER: Save to GitHub -> redeploy the Render backend (Vercel frontend needs no change). Ensure Render env has API_FOOTBALL_KEY (present — 38 calls succeeded).
+
+## 2026-09-05 (cont.) — ROOT CAUSE of deployed empty/wrong data: stale API_FOOTBALL_SEASON
+- Render /api/leagues/epl showed Man City 88 pts (finished 2024 season) while preview showed current 2026 -> Render had API_FOOTBALL_SEASON=2024 set (manually in Render dashboard; NOT in render.yaml). This one stale env var caused BOTH symptoms: wrong (old) standings AND 0 live matches (fixtures via `next`=2026 dates but odds queried with season=2024 -> season/date mismatch -> no odds -> no matches).
+- FIX (bulletproof, no env hunting): `apifootball._current_football_season()` now ALWAYS computes the current season and ignores any API_FOOTBALL_SEASON env override. Plus `odds_for_dates` derives season from each fixture DATE (not the global season). Empty odds cached only 600s (was 24h) to self-heal.
+- USER ACTION: Save to GitHub -> redeploy Render backend (definitive). OR faster without redeploy: delete API_FOOTBALL_SEASON in Render dashboard -> Environment.
+- Preview verified live=true after change.
