@@ -75,8 +75,17 @@ async def status():
         "fsl_cache": fsl_cache_meta(),
         "live": live,
         "api_football_key_configured": live,  # drives the header Live/Mock pill
+        "api_football_usage": _af_usage(),
         "cache_meta": {"live_values": last} if last else {},
     }
+
+
+def _af_usage():
+    try:
+        import apifootball as af
+        return af.usage()
+    except Exception:
+        return {}
 
 
 @api_router.get("/leagues")

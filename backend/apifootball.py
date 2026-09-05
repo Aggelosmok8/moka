@@ -8,6 +8,7 @@ odds/matches keep coming from The Odds API separately.
 """
 import os
 import time as _time
+import datetime as _dt
 import logging
 import httpx
 import mockdata
@@ -16,8 +17,38 @@ logger = logging.getLogger(__name__)
 
 FOOTBALL_BASE = "https://v3.football.api-sports.io"
 BASKETBALL_BASE = "https://v1.basketball.api-sports.io"
-FOOTBALL_SEASON = 2024
+
+
+def _current_football_season() -> int:
+    """European seasons span two years; api-sports keys them by the start year.
+    Sept 2026 -> season 2026 (the 2026/27 campaign). Override via env."""
+    override = os.environ.get("API_FOOTBALL_SEASON")
+    if override:
+        return int(override)
+    now = _dt.datetime.now(_dt.timezone.utc)
+    return now.year if now.month >= 7 else now.year - 1
+
+
+FOOTBALL_SEASON = _current_football_season()
 BASKETBALL_SEASON = "2023-2024"
+
+# ── API-Football request budget (hard safety cap + daily logging) ──────────────
+MAX_CALLS = int(os.environ.get("API_FOOTBALL_MAX_CALLS", "100"))
+_usage = {"date": None, "count": 0}
+
+
+def _bump_usage() -> int:
+    today = _dt.date.today().isoformat()
+    if _usage["date"] != today:
+        _usage["date"], _usage["count"] = today, 0
+    if _usage["count"] >= MAX_CALLS:
+        raise RuntimeError(f"API-Football daily call budget reached ({MAX_CALLS})")
+    _usage["count"] += 1
+    return _usage["count"]
+
+
+def usage() -> dict:
+    return {"date": _usage["date"], "count": _usage["count"], "max": MAX_CALLS}
 
 # slug -> catalog entry. Verified league ids against api-sports.io.
 CATALOG = {
@@ -40,7 +71,7 @@ CATALOG = {
 
 
 def _key() -> str:
-    return os.environ.get("APISPORTS_KEY", "")
+    return os.environ.get("API_FOOTBALL_KEY") or os.environ.get("APISPORTS_KEY", "")
 
 
 def leagues_list() -> list:
@@ -64,7 +95,9 @@ def _c_set(k, v, ttl=24 * 3600):
 async def _get(base: str, path: str, params: dict) -> dict:
     key = _key()
     if not key:
-        raise RuntimeError("APISPORTS_KEY not configured")
+        raise RuntimeError("API_FOOTBALL_KEY not configured")
+    n = _bump_usage()
+    logger.info("[api-football] call #%d/%d GET %s%s %s", n, MAX_CALLS, base, path, params)
     async with httpx.AsyncClient(timeout=25, headers={"x-apisports-key": key}) as c:
         r = await c.get(f"{base}{path}", params=params)
     r.raise_for_status()
