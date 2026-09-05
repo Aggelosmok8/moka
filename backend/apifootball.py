@@ -262,3 +262,78 @@ async def fixtures_for_league(slug: str) -> dict:
     except Exception as e:
         logger.warning("apifootball.fixtures_for_league(%s): %s", slug, e)
         return mockdata.fixtures(slug)
+
+
+
+def _mw_entries(bookmakers: list) -> list:
+    """API-Football odds -> value schema [{bookmaker, odds:{home,draw,away}}]."""
+    entries = []
+    for bk in bookmakers or []:
+        mw = next((b for b in (bk.get("bets") or []) if b.get("name") == "Match Winner"), None)
+        if not mw:
+            continue
+        o = {"home": 0.0, "draw": 0.0, "away": 0.0}
+        for v in mw.get("values") or []:
+            val = (v.get("value") or "").lower()
+            try:
+                price = float(v.get("odd") or 0)
+            except (TypeError, ValueError):
+                price = 0.0
+            if val in o:
+                o[val] = price
+        if o["home"] or o["draw"] or o["away"]:
+            entries.append({"bookmaker": bk.get("name"), "odds": o})
+    return entries
+
+
+async def upcoming_fixtures_raw(slug: str, n: int = 8) -> list:
+    """Nearest N upcoming fixtures for a football league (1 batch call, cached)."""
+    c = CATALOG.get(slug)
+    if not c or c["sport"] != "football":
+        return []
+    ck = f"upfix_{slug}_{n}"
+    hit = _c_get(ck)
+    if hit is not None:
+        return hit
+    out = []
+    try:
+        d = await _get(FOOTBALL_BASE, "/fixtures",
+                       {"league": c["league_id"], "season": FOOTBALL_SEASON, "next": n})
+        for f in d.get("response") or []:
+            fx = f["fixture"]
+            out.append({
+                "id": str(fx["id"]),
+                "home": f["teams"]["home"]["name"],
+                "away": f["teams"]["away"]["name"],
+                "kickoff": fx.get("date"),
+            })
+    except Exception as e:
+        logger.warning("apifootball.upcoming_fixtures_raw(%s): %s", slug, e)
+    _c_set(ck, out, ttl=6 * 3600)
+    return out
+
+
+async def odds_by_fixture(slug: str) -> dict:
+    """fixture_id -> [odds entries] for a league's near-term fixtures (1 batch
+    call, page 1 ~10 fixtures, cached 12h). Used only to fill matches that The
+    Odds API doesn't cover, so no fixture ever shows empty odds."""
+    c = CATALOG.get(slug)
+    if not c or c["sport"] != "football":
+        return {}
+    ck = f"afodds_{slug}"
+    hit = _c_get(ck)
+    if hit is not None:
+        return hit
+    out = {}
+    try:
+        d = await _get(FOOTBALL_BASE, "/odds",
+                       {"league": c["league_id"], "season": FOOTBALL_SEASON, "page": 1})
+        for e in d.get("response") or []:
+            fid = str((e.get("fixture") or {}).get("id"))
+            ent = _mw_entries(e.get("bookmakers"))
+            if fid and ent:
+                out[fid] = ent
+    except Exception as e:
+        logger.warning("apifootball.odds_by_fixture(%s): %s", slug, e)
+    _c_set(ck, out, ttl=12 * 3600)
+    return out

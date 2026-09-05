@@ -152,6 +152,8 @@ async def build_live_matches() -> list:
                 events = []
 
         count = 0
+        covered = set()
+        league_matches = []
         for ev in events or []:
             if count >= MAX_PER_LEAGUE:
                 break
@@ -163,7 +165,7 @@ async def build_live_matches() -> list:
                 continue
             hs = _lookup(idx, home)
             as_ = _lookup(idx, away)
-            matches.append({
+            league_matches.append({
                 "id": f"live_{ev.get('id')}",
                 "leagueId": lid,
                 "leagueName": lname,
@@ -175,7 +177,47 @@ async def build_live_matches() -> list:
                 "odds": odds,
                 "dataSource": "odds_api+apifootball" if (hs or as_) else "odds_api",
             })
+            covered.add((_norm(home), _norm(away)))
             count += 1
+
+        # Fill any gap with API-Football fixtures + odds so no match is left
+        # without odds (only runs when The Odds API under-covers the league;
+        # lazy -> zero extra API-Football calls when odds_api already fills up).
+        if count < MAX_PER_LEAGUE:
+            try:
+                fixtures = await af.upcoming_fixtures_raw(slug, MAX_PER_LEAGUE)
+                af_odds = None
+                for fx in fixtures:
+                    if count >= MAX_PER_LEAGUE:
+                        break
+                    pair = (_norm(fx.get("home")), _norm(fx.get("away")))
+                    if pair in covered:
+                        continue
+                    if af_odds is None:
+                        af_odds = await af.odds_by_fixture(slug)
+                    odds = af_odds.get(fx.get("id"))
+                    if not odds:
+                        continue
+                    hs = _lookup(idx, fx.get("home"))
+                    as_ = _lookup(idx, fx.get("away"))
+                    league_matches.append({
+                        "id": f"live_af_{fx.get('id')}",
+                        "leagueId": lid,
+                        "leagueName": lname,
+                        "sport": "football",
+                        "status": "upcoming",
+                        "commence_time": fx.get("kickoff"),
+                        "home": _team_obj(fx.get("home"), hs),
+                        "away": _team_obj(fx.get("away"), as_),
+                        "odds": odds,
+                        "dataSource": "apifootball",
+                    })
+                    covered.add(pair)
+                    count += 1
+            except Exception as e:
+                logger.warning("live_values af-odds fill %s: %s", slug, e)
+
+        matches.extend(league_matches)
 
     # Cache non-empty results for the full window; if empty (transient API
     # failure) retry soon so we don't get stuck on mock.
