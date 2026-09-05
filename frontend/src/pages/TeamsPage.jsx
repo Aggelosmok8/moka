@@ -75,17 +75,44 @@ function PlayerStatCell({ label, value }) {
   );
 }
 
-function PlayerModal({ player, onClose }) {
+function PlayerBarChart({ stats }) {
+  const rows = [
+    ["Goals", stats.goals], ["Assists", stats.assists], ["Shots", stats.shots],
+    ["Key Passes", stats.keyPasses], ["Tackles", stats.tackles], ["Duels Won", stats.duelsWon],
+  ];
+  const max = Math.max(1, ...rows.map(([, v]) => v || 0));
+  return (
+    <div className="mt-4 bg-[#0d1117] border border-[#30363d] rounded-lg p-3" data-testid="player-chart">
+      <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-2">Season output</div>
+      <div className="space-y-1.5">
+        {rows.map(([label, v]) => (
+          <div key={label} className="flex items-center gap-2">
+            <div className="w-20 text-[11px] text-zinc-400 shrink-0">{label}</div>
+            <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
+              <div className="h-full bg-[#39FF14] rounded-full transition-all" style={{ width: `${((v || 0) / max) * 100}%` }} />
+            </div>
+            <div className="w-6 text-right text-[11px] font-mono-num text-white">{v || 0}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PlayerModal({ player, teamId, teamName, onClose }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState(false);
+  const [notPlayed, setNotPlayed] = useState(false);
   useEffect(() => {
-    setLoading(true); setErr(false);
-    api.get(`/players/${player.id}`)
-      .then((r) => setData(r.data))
-      .catch(() => setErr(true))
+    setLoading(true); setNotPlayed(false); setData(null);
+    api.get(`/players/${player.id}${teamId ? `?team=${teamId}` : ""}`)
+      .then((r) => {
+        if (r.data && r.data.played === false) setNotPlayed(true);
+        else setData(r.data);
+      })
+      .catch(() => setNotPlayed(true))
       .finally(() => setLoading(false));
-  }, [player.id]);
+  }, [player.id, teamId]);
   const s = data?.stats || {};
   const cells = [
     ["Apps", s.appearances], ["Minutes", s.minutes], ["Goals", s.goals],
@@ -111,14 +138,17 @@ function PlayerModal({ player, onClose }) {
         </div>
         {loading ? (
           <div className="py-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-zinc-500" /></div>
-        ) : err || !data ? (
-          <div className="text-zinc-500 text-sm py-6 text-center">Detailed stats not available for this player this season.</div>
+        ) : notPlayed || !data ? (
+          <div className="text-zinc-400 text-sm py-8 text-center" data-testid="player-not-played">
+            {player.name} hasn't played for {teamName || "this club"} yet this season.
+          </div>
         ) : (
           <>
-            <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-2">{data.team || ""} · {data.season} season</div>
+            <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-2">{data.team || teamName || ""} · {data.season} season</div>
             <div className="grid grid-cols-3 gap-2" data-testid="player-stats-grid">
               {cells.map(([l, v]) => <PlayerStatCell key={l} label={l} value={v} />)}
             </div>
+            <PlayerBarChart stats={s} />
           </>
         )}
       </div>
@@ -226,7 +256,7 @@ function TeamDetail({ team, onBack }) {
           <p className="text-[11px] text-zinc-600">Tap any player to see their real season statistics.</p>
         </div>
       )}
-      {openPlayer && <PlayerModal player={openPlayer} onClose={() => setOpenPlayer(null)} />}
+      {openPlayer && <PlayerModal player={openPlayer} teamId={team.id} teamName={team.name} onClose={() => setOpenPlayer(null)} />}
     </div>
   );
 }

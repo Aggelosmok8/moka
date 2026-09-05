@@ -223,12 +223,13 @@ async def team_players(team_id: str):
 
 
 @api_router.get("/players/{player_id}")
-async def player_detail(player_id: str, season: Optional[int] = None):
-    """Real per-player stats (lazy — only when the user opens a player)."""
+async def player_detail(player_id: str, season: Optional[int] = None, team: Optional[str] = None):
+    """Real per-player stats (lazy). If `team` is passed, only that club's
+    stats are returned (national-team caps excluded)."""
     import apifootball as af
     if not player_id.isdigit():
         raise HTTPException(status_code=404, detail="Player stats not available")
-    data = await af.player_stats(player_id, season)
+    data = await af.player_stats(player_id, season, team)
     if not data:
         raise HTTPException(status_code=404, detail="Player stats not available")
     return data

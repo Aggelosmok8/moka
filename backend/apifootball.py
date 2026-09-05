@@ -223,11 +223,13 @@ async def players_for_team(team_id: str) -> list:
         return mockdata.players_for_mock_team(team_id)
 
 
-async def player_stats(player_id: str, season: int = None) -> dict:
+async def player_stats(player_id: str, season: int = None, team_id: str = None) -> dict:
     """Real per-player statistics for a season (api-football /players).
+    If team_id is given, only that CLUB's stats are counted (national-team
+    appearances are excluded) and `played` reflects club minutes.
     Fetched lazily (only when a player is opened) and cached."""
     season = season or FOOTBALL_SEASON
-    ck = f"pstats_{player_id}_{season}"
+    ck = f"pstats_{player_id}_{season}_{team_id or 'all'}"
     hit = _c_get(ck)
     if hit is not None:
         return hit or None
@@ -239,6 +241,17 @@ async def player_stats(player_id: str, season: int = None) -> dict:
             return None
         player = resp[0].get("player") or {}
         stats = resp[0].get("statistics") or []
+        club_name = None
+        if team_id:
+            try:
+                tid = int(team_id)
+            except (TypeError, ValueError):
+                tid = None
+            if tid is not None:
+                for s in stats:
+                    if ((s.get("team") or {}).get("id")) == tid:
+                        club_name = (s.get("team") or {}).get("name")
+                stats = [s for s in stats if ((s.get("team") or {}).get("id")) == tid]
         agg = {k: 0 for k in ("appearances", "minutes", "goals", "assists", "shots",
                               "shotsOn", "passes", "keyPasses", "tackles", "interceptions",
                               "duelsWon", "fouls", "yellow", "red")}
@@ -283,8 +296,9 @@ async def player_stats(player_id: str, season: int = None) -> dict:
             "age": player.get("age"),
             "nationality": player.get("nationality"),
             "position": position,
-            "team": team,
+            "team": (club_name or team) if team_id else team,
             "season": season,
+            "played": (agg["appearances"] > 0 or agg["minutes"] > 0),
             "rating": round(sum(ratings) / len(ratings), 2) if ratings else None,
             "stats": agg,
         }
