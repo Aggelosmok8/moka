@@ -192,3 +192,10 @@ The API-Football free plan went inactive/quota-exhausted → leagues/teams/playe
 - NOTE: 429 per-minute rate limit exists on API-Football; one cold build (~45 calls) is within it. Standings verified REAL & correctly ordered for all 11 leagues (current 2026/27 season, early games). 
 - Verified: /api/value-matches source=live, 48 matches across all 11 leagues, 0 odds>51, 0 mock names, usage 45/100. Screenshot: real teams, sane odds, no 1000.
 - KNOWN (unchanged model, by user instruction): on sparse early-season data the model rates some longshots (e.g. Nacional @16.5) as "Strong" — expected; needs a min-games guard to fix, deferred.
+
+## 2026-09-05 — Deployed (Vercel+Render) shows empty/MOCK: diagnosis
+- Deployed frontend (Vercel) correctly calls Render backend https://moka-backend-s9fj.onrender.com; CORS ok (allow-origin *).
+- Render backend RUNS AN OLDER/INTERMEDIATE build: /api/status has api_football_usage (count 38) but /api/value-matches returns source=live count=0, live=false ("MOCK · never" pill). Root cause = the pre-fix `next`+`season` bug (empty upcoming fixtures) that was fixed on preview but NOT yet on Render.
+- Preview (latest code) returns 48 real matches / 11 leagues / 0 mock / 0 junk odds; detail endpoint works for live_af_ ids. So the code is correct — the LIVE site just needs a redeploy.
+- Production tuning: API_FOOTBALL_MAX_CALLS default raised 100 -> 500 (11 leagues need headroom; still tiny vs Pro 7500/day). Caches lengthened: upcoming fixtures 12h, odds-by-date 24h -> real usage ~50-70/day.
+- ACTION FOR USER: Save to GitHub -> redeploy the Render backend (Vercel frontend needs no change). Ensure Render env has API_FOOTBALL_KEY (present — 38 calls succeeded).

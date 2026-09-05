@@ -32,8 +32,11 @@ def _current_football_season() -> int:
 FOOTBALL_SEASON = _current_football_season()
 BASKETBALL_SEASON = "2023-2024"
 
-# ── API-Football request budget (hard safety cap + daily logging) ──────────────
-MAX_CALLS = int(os.environ.get("API_FOOTBALL_MAX_CALLS", "100"))
+# ── API-Football request budget (safety cap + daily logging) ──────────────────
+# 100/day was the implementation/testing cap. Production serves 11 leagues, so
+# the default is higher (still a tiny fraction of the Pro 7500/day limit) and is
+# env-overridable. Aggressive caching keeps real usage ~50-70/day.
+MAX_CALLS = int(os.environ.get("API_FOOTBALL_MAX_CALLS", "500"))
 _usage = {"date": None, "count": 0}
 
 
@@ -311,7 +314,7 @@ async def upcoming_fixtures_raw(slug: str, n: int = 8) -> list:
             })
     except Exception as e:
         logger.warning("apifootball.upcoming_fixtures_raw(%s): %s", slug, e)
-    _c_set(ck, out, ttl=6 * 3600 if out else 300)
+    _c_set(ck, out, ttl=12 * 3600 if out else 300)
     return out
 
 
@@ -340,7 +343,7 @@ async def odds_for_dates(slug: str, dates: list) -> dict:
                             hit[fid] = ent
                     total = (r.get("paging") or {}).get("total") or 1
                     page += 1
-                _c_set(ck, hit, ttl=12 * 3600)
+                _c_set(ck, hit, ttl=24 * 3600)
             except Exception as e:
                 logger.warning("apifootball.odds_for_dates(%s,%s): %s", slug, d, e)
                 _c_set(ck, {}, ttl=300)
