@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Lock, ChevronLeft, Loader2, Shield, ShieldAlert, Users } from "lucide-react";
 import Header from "../components/Header";
 import InfoTip from "../components/InfoTip";
@@ -41,9 +41,9 @@ function Stat({ label, value, tip }) {
 
 const POS_ORDER = ["Goalkeeper", "Defender", "Midfielder", "Attacker"];
 
-function PlayerCard({ p }) {
+function PlayerCard({ p, onClick }) {
   return (
-    <div className="flex items-center gap-3 bg-[#0d1117] border border-[#30363d] rounded-lg p-2.5" data-testid={`player-row-${p.id}`}>
+    <button type="button" onClick={onClick} className="w-full text-left flex items-center gap-3 bg-[#0d1117] border border-[#30363d] rounded-lg p-2.5 hover:border-[#39FF14]/40 transition-colors" data-testid={`player-row-${p.id}`}>
       {p.photo ? (
         <img src={p.photo} alt={p.name} className="w-10 h-10 rounded-full object-cover bg-white/5 shrink-0"
           onError={(e) => { e.currentTarget.style.display = "none"; }} />
@@ -62,6 +62,66 @@ function PlayerCard({ p }) {
           {p.goals ? <span className="text-[#39FF14] ml-1">· {p.goals}⚽</span> : null}
         </div>
       </div>
+    </button>
+  );
+}
+
+function PlayerStatCell({ label, value }) {
+  return (
+    <div className="bg-[#0d1117] border border-[#30363d] rounded-lg p-3">
+      <div className="text-[10px] text-zinc-500 uppercase tracking-wider">{label}</div>
+      <div className="font-display font-black text-lg text-white mt-0.5">{value ?? "—"}</div>
+    </div>
+  );
+}
+
+function PlayerModal({ player, onClose }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState(false);
+  useEffect(() => {
+    setLoading(true); setErr(false);
+    api.get(`/players/${player.id}`)
+      .then((r) => setData(r.data))
+      .catch(() => setErr(true))
+      .finally(() => setLoading(false));
+  }, [player.id]);
+  const s = data?.stats || {};
+  const cells = [
+    ["Apps", s.appearances], ["Minutes", s.minutes], ["Goals", s.goals],
+    ["Assists", s.assists], ["Shots", s.shots], ["On Target", s.shotsOn],
+    ["Key Passes", s.keyPasses], ["Passes", s.passes], ["Tackles", s.tackles],
+    ["Interceptions", s.interceptions], ["Duels Won", s.duelsWon], ["Fouls", s.fouls],
+    ["Yellow", s.yellow], ["Red", s.red], ["Rating", data?.rating],
+  ];
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose} data-testid="player-modal">
+      <div className="bg-[#161b22] border border-[#30363d] rounded-xl w-full max-w-lg max-h-[85vh] overflow-y-auto p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-3 mb-4">
+          {player.photo ? (
+            <img src={player.photo} alt={player.name} className="w-14 h-14 rounded-full object-cover bg-white/5" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+          ) : (
+            <div className="w-14 h-14 rounded-full bg-white/5 flex items-center justify-center text-zinc-500 font-bold">{player.number ?? "?"}</div>
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="font-display font-black text-xl text-white truncate">{player.name}</div>
+            <div className="text-[11px] text-zinc-500">{[data?.position || player.position, data?.nationality, data?.age ? `${data.age}y` : null].filter(Boolean).join(" · ")}</div>
+          </div>
+          <button onClick={onClose} data-testid="player-modal-close" className="text-zinc-500 hover:text-white text-sm px-2">✕</button>
+        </div>
+        {loading ? (
+          <div className="py-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-zinc-500" /></div>
+        ) : err || !data ? (
+          <div className="text-zinc-500 text-sm py-6 text-center">Detailed stats not available for this player this season.</div>
+        ) : (
+          <>
+            <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-2">{data.team || ""} · {data.season} season</div>
+            <div className="grid grid-cols-3 gap-2" data-testid="player-stats-grid">
+              {cells.map(([l, v]) => <PlayerStatCell key={l} label={l} value={v} />)}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -69,6 +129,7 @@ function PlayerCard({ p }) {
 function TeamDetail({ team, onBack }) {
   const [players, setPlayers] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [openPlayer, setOpenPlayer] = useState(null);
   const isBasket = team.sport === "basketball";
 
   useEffect(() => {
@@ -158,19 +219,23 @@ function TeamDetail({ team, onBack }) {
             <div key={pos}>
               <div className="text-[10px] uppercase tracking-[0.18em] font-bold text-zinc-600 mb-2">{pos} <span className="text-zinc-700">· {arr.length}</span></div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {arr.map((p) => <PlayerCard key={p.id} p={p} />)}
+                {arr.map((p) => <PlayerCard key={p.id} p={p} onClick={() => setOpenPlayer(p)} />)}
               </div>
             </div>
           ))}
-          <p className="text-[11px] text-zinc-600">Detailed per-player stats (goals, assists, minutes) appear here as the stats provider supplies them.</p>
+          <p className="text-[11px] text-zinc-600">Tap any player to see their real season statistics.</p>
         </div>
       )}
+      {openPlayer && <PlayerModal player={openPlayer} onClose={() => setOpenPlayer(null)} />}
     </div>
   );
 }
 
 export default function TeamsPage() {
   const { accessibleIds } = useEntitlements();
+  const [searchParams] = useSearchParams();
+  const wantLeague = searchParams.get("league");
+  const [pendingTeam, setPendingTeam] = useState(searchParams.get("team"));
   const [league, setLeague] = useState(null);
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -185,16 +250,26 @@ export default function TeamsPage() {
   }, []);
 
   useEffect(() => {
-    const first = LEAGUE_CATALOG.find((l) => accessibleIds.has(l.id)) || LEAGUE_CATALOG[0];
-    if (first && !league) setLeague(first.id);
-  }, [accessibleIds, league]);
+    if (league) return;
+    const wanted = wantLeague && LEAGUE_CATALOG.find((l) => l.id === wantLeague && accessibleIds.has(l.id));
+    const first = wanted || LEAGUE_CATALOG.find((l) => accessibleIds.has(l.id)) || LEAGUE_CATALOG[0];
+    if (first) setLeague(first.id);
+  }, [accessibleIds, league, wantLeague]);
 
   useEffect(() => {
     if (!league) return;
     setTeam(null);
     setLoading(true);
     api.get(`/teams?league=${encodeURIComponent(league)}`)
-      .then((r) => setTeams(r.data.teams || []))
+      .then((r) => {
+        const list = r.data.teams || [];
+        setTeams(list);
+        if (pendingTeam) {
+          const match = list.find((t) => String(t.id) === String(pendingTeam));
+          if (match) setTeam(match);
+          setPendingTeam(null);
+        }
+      })
       .catch(() => setTeams([]))
       .finally(() => setLoading(false));
   }, [league]);

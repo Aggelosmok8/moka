@@ -101,7 +101,7 @@ export default function LeagueDetailPage() {
                   <tr key={t.id} className="hover:bg-white/[0.03]" data-testid={`standings-row-${t.id}`}>
                     <td className="px-3 py-2 text-zinc-500 font-mono-num">{t.position}</td>
                     <td className="px-3 py-2">
-                      <Link to="/teams" className="flex items-center gap-2 text-white font-semibold hover:text-[#39FF14]">
+                      <Link to={`/teams?league=${slug}&team=${t.id}`} className="flex items-center gap-2 text-white font-semibold hover:text-[#39FF14]">
                         <Logo src={t.image} name={t.name} /> {t.name}
                       </Link>
                     </td>

@@ -223,6 +223,78 @@ async def players_for_team(team_id: str) -> list:
         return mockdata.players_for_mock_team(team_id)
 
 
+async def player_stats(player_id: str, season: int = None) -> dict:
+    """Real per-player statistics for a season (api-football /players).
+    Fetched lazily (only when a player is opened) and cached."""
+    season = season or FOOTBALL_SEASON
+    ck = f"pstats_{player_id}_{season}"
+    hit = _c_get(ck)
+    if hit is not None:
+        return hit or None
+    try:
+        d = await _get(FOOTBALL_BASE, "/players", {"id": player_id, "season": season})
+        resp = d.get("response") or []
+        if not resp:
+            _c_set(ck, {}, ttl=600)
+            return None
+        player = resp[0].get("player") or {}
+        stats = resp[0].get("statistics") or []
+        agg = {k: 0 for k in ("appearances", "minutes", "goals", "assists", "shots",
+                              "shotsOn", "passes", "keyPasses", "tackles", "interceptions",
+                              "duelsWon", "fouls", "yellow", "red")}
+        ratings, team, position, team_apps = [], None, None, -1
+        for s in stats:
+            g = s.get("games") or {}
+            apps = g.get("appearences") or 0
+            agg["appearances"] += apps
+            agg["minutes"] += g.get("minutes") or 0
+            position = position or g.get("position")
+            if apps > team_apps and s.get("team"):
+                team = (s["team"] or {}).get("name")
+                team_apps = apps
+            if g.get("rating"):
+                try:
+                    ratings.append(float(g["rating"]))
+                except (TypeError, ValueError):
+                    pass
+            go = s.get("goals") or {}
+            agg["goals"] += go.get("total") or 0
+            agg["assists"] += go.get("assists") or 0
+            sh = s.get("shots") or {}
+            agg["shots"] += sh.get("total") or 0
+            agg["shotsOn"] += sh.get("on") or 0
+            ps = s.get("passes") or {}
+            agg["passes"] += ps.get("total") or 0
+            agg["keyPasses"] += ps.get("key") or 0
+            tk = s.get("tackles") or {}
+            agg["tackles"] += tk.get("total") or 0
+            agg["interceptions"] += tk.get("interceptions") or 0
+            du = s.get("duels") or {}
+            agg["duelsWon"] += du.get("won") or 0
+            fo = s.get("fouls") or {}
+            agg["fouls"] += fo.get("committed") or 0
+            cd = s.get("cards") or {}
+            agg["yellow"] += cd.get("yellow") or 0
+            agg["red"] += cd.get("red") or 0
+        out = {
+            "id": str(player.get("id")),
+            "name": player.get("name"),
+            "photo": player.get("photo"),
+            "age": player.get("age"),
+            "nationality": player.get("nationality"),
+            "position": position,
+            "team": team,
+            "season": season,
+            "rating": round(sum(ratings) / len(ratings), 2) if ratings else None,
+            "stats": agg,
+        }
+        _c_set(ck, out)
+        return out
+    except Exception as e:
+        logger.warning("apifootball.player_stats(%s): %s", player_id, e)
+        return None
+
+
 def _fx_shape(f: dict) -> dict:
     fx = f["fixture"]
     status = (fx.get("status") or {}).get("short")
