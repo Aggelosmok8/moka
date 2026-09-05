@@ -326,6 +326,14 @@ async def odds_for_dates(slug: str, dates: list) -> dict:
         return {}
     out = {}
     for d in (dates or [])[:2]:
+        # Derive the season from the fixture DATE, not the global season, so
+        # odds always align with the fixture even if API_FOOTBALL_SEASON is set
+        # to a stale value in the environment.
+        try:
+            yr, mo = int(d[:4]), int(d[5:7])
+            season = yr if mo >= 7 else yr - 1
+        except (ValueError, IndexError):
+            season = FOOTBALL_SEASON
         ck = f"afodds_{slug}_{d}"
         hit = _c_get(ck)
         if hit is None:
@@ -334,7 +342,7 @@ async def odds_for_dates(slug: str, dates: list) -> dict:
                 page, total = 1, 1
                 while page <= total and page <= 2:
                     r = await _get(FOOTBALL_BASE, "/odds",
-                                   {"league": c["league_id"], "season": FOOTBALL_SEASON,
+                                   {"league": c["league_id"], "season": season,
                                     "date": d, "page": page})
                     for e in r.get("response") or []:
                         fid = str((e.get("fixture") or {}).get("id"))
@@ -343,7 +351,7 @@ async def odds_for_dates(slug: str, dates: list) -> dict:
                             hit[fid] = ent
                     total = (r.get("paging") or {}).get("total") or 1
                     page += 1
-                _c_set(ck, hit, ttl=24 * 3600)
+                _c_set(ck, hit, ttl=24 * 3600 if hit else 600)
             except Exception as e:
                 logger.warning("apifootball.odds_for_dates(%s,%s): %s", slug, d, e)
                 _c_set(ck, {}, ttl=300)
