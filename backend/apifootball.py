@@ -337,3 +337,31 @@ async def odds_by_fixture(slug: str) -> dict:
         logger.warning("apifootball.odds_by_fixture(%s): %s", slug, e)
     _c_set(ck, out, ttl=12 * 3600)
     return out
+
+
+
+async def fixtures_by_ids(ids: list) -> dict:
+    """fixture_id -> {home, away, kickoff, finished} for up to 20 ids (1 call)."""
+    ids = [str(i) for i in (ids or []) if i][:20]
+    if not ids:
+        return {}
+    ck = "fxids_" + "_".join(sorted(ids))
+    hit = _c_get(ck)
+    if hit is not None:
+        return hit
+    out = {}
+    try:
+        d = await _get(FOOTBALL_BASE, "/fixtures", {"ids": "-".join(ids)})
+        for f in d.get("response") or []:
+            fx = f["fixture"]
+            status = (fx.get("status") or {}).get("short")
+            out[str(fx["id"])] = {
+                "home": f["teams"]["home"]["name"],
+                "away": f["teams"]["away"]["name"],
+                "kickoff": fx.get("date"),
+                "finished": status in ("FT", "AET", "PEN"),
+            }
+    except Exception as e:
+        logger.warning("apifootball.fixtures_by_ids: %s", e)
+    _c_set(ck, out, ttl=6 * 3600)
+    return out
