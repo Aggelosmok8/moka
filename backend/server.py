@@ -88,6 +88,37 @@ def _af_usage():
         return {}
 
 
+@api_router.get("/debug/apifootball")
+async def debug_apifootball():
+    """Read-only diagnostic: confirms whether API-Football works on THIS server
+    (used to debug why the deployed backend falls back to mock/sample data)."""
+    import apifootball as af
+    import httpx
+    key = af._key()
+    out = {
+        "key_present": bool(key),
+        "key_tail": key[-4:] if key else None,
+        "football_season": af.FOOTBALL_SEASON,
+        "usage": af.usage(),
+    }
+    try:
+        async with httpx.AsyncClient(timeout=20, headers={"x-apisports-key": key}) as c:
+            r = await c.get(f"{af.FOOTBALL_BASE}/status")
+        out["http_status"] = r.status_code
+        j = r.json()
+        out["errors"] = j.get("errors")
+        resp = j.get("response") or {}
+        sub = resp.get("subscription") or {}
+        req = resp.get("requests") or {}
+        out["plan"] = sub.get("plan")
+        out["active"] = sub.get("active")
+        out["requests_today"] = req.get("current")
+        out["limit_day"] = req.get("limit_day")
+    except Exception as e:
+        out["exception"] = f"{type(e).__name__}: {e}"
+    return out
+
+
 @api_router.get("/leagues")
 async def list_leagues():
     import apifootball as af
