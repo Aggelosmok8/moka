@@ -2,7 +2,6 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, Search, TrendingUp, BarChart3, Wallet, ChevronDown } from "lucide-react";
 import Header from "../components/Header";
-import HomePicks from "../components/HomePicks";
 
 const IMG = {
   hero: "https://images.unsplash.com/photo-1604524404499-67ba5a962db8?crop=entropy&cs=srgb&fm=jpg&q=85&w=2400",
@@ -52,11 +51,8 @@ export default function HomePage() {
     <div className="min-h-screen bg-[#0d1117]">
       <Header />
 
-      {/* TODAY'S TOP OPPORTUNITIES — real value picks first, visible without scroll */}
-      <HomePicks />
-
       {/* HERO */}
-      <section className="relative min-h-[88vh] flex items-center justify-center overflow-hidden">
+      <section className="relative min-h-[92vh] flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${IMG.hero})` }} />
         <div className="absolute inset-0" style={{ background: "radial-gradient(120% 80% at 50% 20%, rgba(13,17,23,0.35) 0%, rgba(13,17,23,0.85) 55%, #0d1117 100%)" }} />
         <div className="relative text-center px-4 sm:px-6 max-w-4xl mx-auto">
@@ -86,23 +82,23 @@ export default function HomePage() {
       {/* FOUR MOKA STEPS */}
       <Step
         n="01" kicker="Find the opportunities" image={IMG.fog}
-        title="Βρες τα matches που αξίζει να εξετάσεις."
-        text="Το Moka αναλύει τα διαθέσιμα δεδομένα και σε βοηθά να εντοπίζεις τις ευκαιρίες που αξίζει να προσέξεις."
+        title="Find the matches worth analysing"
+        text="Moka analyses the available data and helps you spot the opportunities worth paying attention to"
       />
       <Step
         n="02" kicker="Find the best odds" image={IMG.arena} align="right"
-        title="Βρες τις καλύτερες αποδόσεις."
-        text="Δες τις διαθέσιμες στοιχηματικές αποδόσεις για κάθε match και βρες εύκολα την καλύτερη τιμή."
+        title="Find the best odds"
+        text="See the available betting odds for every match and easily find the best price"
       />
       <Step
         n="03" kicker="Know the game" image={IMG.grass}
-        title="Δες το παιχνίδι σε βάθος."
-        text="Μελέτησε τα στατιστικά των ομάδων και των παικτών, τη φόρμα, τα αποτελέσματα και όλα τα δεδομένα που χρειάζεσαι."
+        title="See the game in depth"
+        text="Study team and player statistics, form, results and all the data you need"
       />
       <Step
         n="04" kicker="Track your performance" image={IMG.hero} align="right"
-        title="Φτιάξε το δικό σου Portfolio."
-        text="Κατέγραψε τα matches που έπαιξες, τις αποδόσεις και το αποτέλεσμα και μέτρα κάθε φορά τι κερδίζεις και τι χάνεις."
+        title="Build your own portfolio"
+        text="Record the matches you played, the odds and the result, and track what you win and lose every time"
       />
 
       {/* BRAND STATEMENT */}
@@ -111,9 +107,9 @@ export default function HomePage() {
         <div className="absolute inset-0 bg-[#0d1117]/85" />
         <div className="relative text-center px-4 max-w-4xl mx-auto">
           <h2 className="font-display font-black uppercase tracking-tight text-white text-4xl sm:text-6xl lg:text-7xl leading-[0.95]">
-            Το στοίχημα<br />δεν είναι<br /><span style={{ color: NEON }}>απλή υπόθεση.</span>
+            Betting<br />is not<br /><span style={{ color: NEON }}>a simple matter</span>
           </h2>
-          <p className="text-zinc-300 text-lg sm:text-2xl mt-8">Πριν από κάθε απόφαση, υπάρχουν δεδομένα.</p>
+          <p className="text-zinc-300 text-lg sm:text-2xl mt-8">Before every decision, there is data</p>
           <p className="text-zinc-500 text-base sm:text-lg mt-3 max-w-2xl mx-auto">
             The more you understand the game, the more informed your decision can be.
           </p>
@@ -126,16 +122,16 @@ export default function HomePage() {
         <div className="absolute inset-0 bg-gradient-to-b from-[#0d1117] via-[#0d1117]/70 to-[#0d1117]" />
         <div className="relative max-w-5xl mx-auto px-4 sm:px-6 text-center">
           <h2 className="font-display font-black uppercase tracking-tight text-white text-4xl sm:text-6xl lg:text-7xl leading-[0.95]">
-            Η στατιστική<br />δεν λέει <span style={{ color: NEON }}>ψέματα.</span>
+            Statistics<br />do not <span style={{ color: NEON }}>lie</span>
           </h2>
-          <p className="font-display font-black uppercase text-2xl sm:text-4xl text-zinc-200 mt-6">Κάν' την εργαλείο σου.</p>
-          <p className="text-zinc-400 text-lg sm:text-xl mt-10">Μελέτησε κάθε λεπτομέρεια.</p>
+          <p className="font-display font-black uppercase text-2xl sm:text-4xl text-zinc-200 mt-6">Make them your tool</p>
+          <p className="text-zinc-400 text-lg sm:text-xl mt-10">Study every detail</p>
           <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 mt-6 font-display font-black uppercase tracking-tight text-xl sm:text-3xl text-white/90">
-            <span>Ομάδες.</span><span>Παίκτες.</span><span>Φόρμα.</span>
-            <span>Αποτελέσματα.</span><span>Αποδόσεις.</span><span>Στατιστικά.</span>
+            <span>Teams</span><span>Players</span><span>Form</span>
+            <span>Results</span><span>Odds</span><span>Stats</span>
           </div>
           <p className="text-[#39FF14] font-display font-black uppercase tracking-tight text-2xl sm:text-4xl mt-14">
-            Η λεπτομέρεια μπορεί να κάνει τη διαφορά.
+            The details can make the difference
           </p>
         </div>
       </section>
@@ -145,12 +141,12 @@ export default function HomePage() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <div className="space-y-6 sm:space-y-8">
             {[
-              "Βρες τα matches που αξίζει να εξετάσεις.",
-              "Βρες τις καλύτερες στοιχηματικές αποδόσεις για κάθε match.",
-              "Δες τα στατιστικά κάθε ομάδας.",
-              "Δες τα στατιστικά κάθε παίκτη.",
-              "Μελέτησε κάθε λεπτομέρεια.",
-              "Μέτρα το δικό σου κέρδος και τις απώλειές σου.",
+              "Find the matches worth analysing",
+              "Find the best betting odds for every match",
+              "See the stats of every team",
+              "See the stats of every player",
+              "Study every detail",
+              "Track your own profit and losses",
             ].map((t, i) => (
               <div key={i} className="group flex items-baseline gap-4 sm:gap-6">
                 <span className="font-display font-black text-[#39FF14]/40 text-xl sm:text-3xl w-10 shrink-0">{String(i + 1).padStart(2, "0")}</span>
@@ -193,7 +189,7 @@ export default function HomePage() {
         <div className="absolute inset-0 bg-gradient-to-t from-[#0d1117] via-[#0d1117]/80 to-[#0d1117]/60" />
         <div className="relative text-center px-4 max-w-4xl mx-auto">
           <h2 className="font-display font-black uppercase tracking-tight text-white text-3xl sm:text-5xl lg:text-6xl leading-[0.95]">
-            Μελέτησε το παιχνίδι.<br />Δες τις ευκαιρίες.<br /><span style={{ color: NEON }}>Πάρε τη δική σου απόφαση.</span>
+            Study the game<br />See the opportunities<br /><span style={{ color: NEON }}>Make your own decision</span>
           </h2>
           <p className="text-zinc-300 text-lg sm:text-xl mt-8">Ready to see today's opportunities?</p>
           <Link to="/matches" data-testid="cta-explore-matches" className="inline-flex items-center gap-2 mt-8 px-10 py-4 rounded-full bg-[#39FF14] text-black font-black uppercase tracking-wider text-sm hover:brightness-110 transition">
