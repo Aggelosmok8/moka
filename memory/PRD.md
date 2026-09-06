@@ -249,3 +249,15 @@ The API-Football free plan went inactive/quota-exhausted → leagues/teams/playe
 - Verified 0 horizontal overflow on Home/Matches/Analysis/Teams/Portfolio/Pricing/Charts (desktop). Tables (LeagueDetail standings, Charts watchlist) already wrapped in overflow-x-auto.
 - LIMITATION: screenshot tool renders at 1920px only; true mobile (320-430px) verified via code review of responsive classes + programmatic scrollWidth check, not visual mobile screenshots.
 - All 4 phases (prediction engine, Match Analysis UI + player status, AI GPT-5.6 Luna, responsive) complete.
+
+
+## Update 2026-09-06 — Auto-settlement + Portfolio period filters + Matches filters
+### Auto-settlement (real final scores)
+- apifootball.fixture_results(ids): batched /fixtures?ids=fid1-fid2 (<=20/call), cached (finished 7d, pending 2m). Backend GET /api/results?ids=comma-list.
+- catalogApi.fetchResults(); PortfolioContext.autoSettle() settles pending single bets + accumulator legs by comparing pick side (home/draw/away) to real outcome -> won/lost + finalScore + settledAt. Accumulator ticket auto-settles via existing computeTicket. Runs on Portfolio open (1 batched call) + "Refresh results" button.
+### Portfolio period filter (PRO)
+- PERIODS all/day/week/month/year filter stats (P/L, ROI, win rate, money) + history by settledAt|createdAt. Free unchanged: latest 5 bets, no filters.
+### Matches filters
+- League dropdown + team search + date picker on /matches (client-side over value-matches). data-testids: matches-filters, filter-league, filter-team, filter-date, filter-clear.
+### Real xG & H2H — HONEST STATUS
+- API-Football does NOT expose pre-match xG for UPCOMING fixtures (only post-match team statistics, not all plans). The 'xG' shown remains the model's deterministic expected goals. The prediction engine  multiplier hook is ready. H2H is available but needs team-id plumbing (public_match currently strips ids) + per-match cached call — NOT yet wired. Offered as next step.

@@ -274,6 +274,62 @@ async def injuries_for_team(team_id: str, season: int = None) -> dict:
     return out
 
 
+def _outcome(hs, a):
+    if hs is None or a is None:
+        return None
+    if hs > a:
+        return "home"
+    if hs < a:
+        return "away"
+    return "draw"
+
+
+_FINISHED = {"FT", "AET", "PEN"}
+
+
+async def fixture_results(ids: list) -> dict:
+    """Map 'live_af_<fid>' ids -> {finished, home, away, outcome, status}.
+
+    Batched (up to 20 fixtures per call) and cached. Finished results are cached
+    for 7 days (they never change); pending ones for 2 minutes."""
+    out: dict = {}
+    fid_map: dict = {}
+    to_fetch: list = []
+    for mid in ids:
+        s = str(mid)
+        if not s.startswith("live_af_"):
+            continue
+        fid = s.split("live_af_")[-1]
+        if not fid.isdigit():
+            continue
+        hit = _c_get(f"result_{fid}")
+        if hit is not None:
+            out[mid] = hit
+        else:
+            fid_map[fid] = mid
+            to_fetch.append(fid)
+    for i in range(0, len(to_fetch), 20):
+        chunk = to_fetch[i:i + 20]
+        try:
+            d = await _get(FOOTBALL_BASE, "/fixtures", {"ids": "-".join(chunk)})
+            for item in d.get("response") or []:
+                fx = item.get("fixture") or {}
+                fid = str(fx.get("id"))
+                status = ((fx.get("status") or {}).get("short")) or ""
+                goals = item.get("goals") or {}
+                hs, a = goals.get("home"), goals.get("away")
+                finished = status in _FINISHED
+                res = {"finished": finished, "home": hs, "away": a,
+                       "outcome": _outcome(hs, a) if finished else None, "status": status}
+                mid = fid_map.get(fid)
+                if mid:
+                    out[mid] = res
+                    _c_set(f"result_{fid}", res, ttl=(7 * 24 * 3600 if finished else 120))
+        except Exception as e:
+            logger.warning("apifootball.fixture_results: %s", e)
+    return out
+
+
 async def player_stats(player_id: str, season: int = None, team_id: str = None) -> dict:
     """Real per-player statistics for a season (api-football /players).
     If team_id is given, only that CLUB's stats are counted (national-team

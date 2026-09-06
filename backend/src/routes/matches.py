@@ -37,6 +37,16 @@ async def trending_matches():
         return {"matches": _mock_matches(), "source": "mock", "meta": {}}
 
 
+@router.get("/results")
+async def match_results(ids: str = ""):
+    """Final results for a comma-separated list of live match ids (batched+cached)."""
+    id_list = [x for x in ids.split(",") if x]
+    if not id_list:
+        return {"results": {}}
+    import apifootball
+    return {"results": await apifootball.fixture_results(id_list)}
+
+
 async def _resolve_match(match_id: str):
     m = MATCH_INDEX.get(match_id)
     if not m:

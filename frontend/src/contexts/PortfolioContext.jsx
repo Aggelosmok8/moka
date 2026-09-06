@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useCallback, useMemo, useState, useEffect, useRef } from "react";
 import { useAuth } from "./AuthContext";
 import { getPortfolioRemote, putPortfolioRemote } from "../lib/api";
+import { fetchResults } from "../lib/catalogApi";
 
 const KEY = "moka_portfolio_bets";
 const SLIP_KEY = "moka_bet_slip";
@@ -232,6 +233,47 @@ export function PortfolioProvider({ children }) {
 
   const clearTickets = useCallback(() => saveTickets([]), []);
 
+  // --- Auto-settlement from real final scores -------------------------------
+  // Finds every pending single bet + pending accumulator leg, fetches final
+  // results in ONE batched (cached) backend call, and marks won/lost by
+  // comparing the pick side (home/draw/away) to the real outcome.
+  const autoSettle = useCallback(async () => {
+    const ids = [
+      ...bets.filter((b) => b.status === "pending" && b.matchId).map((b) => b.matchId),
+      ...tickets.flatMap((t) => t.legs.filter((l) => l.status === "pending" && l.matchId).map((l) => l.matchId)),
+    ];
+    const unique = [...new Set(ids)];
+    if (!unique.length) return { settled: 0 };
+    let results = {};
+    try { results = await fetchResults(unique); } catch { return { settled: 0 }; }
+    let settled = 0;
+    const settleLegOrBet = (item) => {
+      if (item.status !== "pending") return item;
+      const r = results[item.matchId];
+      if (r && r.finished && r.outcome) {
+        settled++;
+        return {
+          ...item,
+          status: r.outcome === item.pick ? "won" : "lost",
+          finalScore: `${r.home}-${r.away}`,
+          settledAt: new Date().toISOString(),
+        };
+      }
+      return item;
+    };
+    setBets((prev) => {
+      const next = prev.map(settleLegOrBet);
+      try { localStorage.setItem(KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+    setTickets((prev) => {
+      const next = prev.map((t) => ({ ...t, legs: t.legs.map(settleLegOrBet) }));
+      try { localStorage.setItem(TICKETS_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+    return { settled };
+  }, [bets, tickets]);
+
   const pendingCount = useMemo(() => bets.filter((b) => b.status === "pending").length, [bets]);
 
   const stats = useMemo(() => computeStats(bets), [bets]);
@@ -273,7 +315,7 @@ export function PortfolioProvider({ children }) {
     <Ctx.Provider value={{
       bets, addBet, settle, updateStake, remove, clear, pendingCount, stats,
       slip, addToSlip, removeFromSlip, clearSlip, slipHas, slipCount: slip.length,
-      tickets, placeTicket, settleLeg, removeTicket, clearTickets,
+      tickets, placeTicket, settleLeg, removeTicket, clearTickets, autoSettle,
     }}>
       {children}
     </Ctx.Provider>

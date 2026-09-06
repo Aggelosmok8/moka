@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
-import { Wallet, TrendingUp, Target, Percent, Trash2, Check, X, Clock, Flame, CircleSlash, Lock, Layers, Receipt, Plus } from "lucide-react";
+import { Wallet, TrendingUp, Target, Percent, Trash2, Check, X, Clock, Flame, CircleSlash, Lock, Layers, Receipt, Plus, RefreshCw, Loader2, Calendar } from "lucide-react";
+import { toast } from "sonner";
 import Header from "../components/Header";
 import { usePortfolio, computeStats, computeTicket } from "../contexts/PortfolioContext";
 import { useEntitlements } from "../hooks/useEntitlements";
@@ -33,6 +34,24 @@ const STATUS = {
 };
 
 const FILTERS = { all: "All", pending: "Pending", won: "Won", lost: "Lost" };
+const PERIODS = { all: "All time", day: "Today", week: "This week", month: "This month", year: "This year" };
+
+function inPeriod(iso, period) {
+  if (period === "all" || !iso) return true;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return true;
+  const now = new Date();
+  if (period === "day") return d.toDateString() === now.toDateString();
+  if (period === "year") return d.getFullYear() === now.getFullYear();
+  if (period === "month") return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  if (period === "week") {
+    const s = new Date(now);
+    s.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+    s.setHours(0, 0, 0, 0);
+    return d >= s;
+  }
+  return true;
+}
 
 function BetRow({ b, settle, remove }) {
   const st = STATUS[b.status] || STATUS.pending;
@@ -235,22 +254,42 @@ function TicketsView({ isPro }) {
 }
 
 export default function PortfolioPage() {
-  const { bets, settle, remove, clear, slipCount } = usePortfolio();
+  const { bets, settle, remove, clear, slipCount, autoSettle } = usePortfolio();
   const { role } = useEntitlements();
   const isPro = role === "pro";
   const [filter, setFilter] = useState("all");
+  const [period, setPeriod] = useState("all");
+  const [settling, setSettling] = useState(false);
   const [params] = useSearchParams();
   const [tab, setTab] = useState(params.get("tab") === "tickets" ? "tickets" : "bets");
 
+  // On open, auto-settle finished matches from real results (one batched call).
+  useEffect(() => { autoSettle(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const refresh = async () => {
+    setSettling(true);
+    try {
+      const { settled } = await autoSettle();
+      toast.success(settled ? `${settled} pick${settled > 1 ? "s" : ""} settled from final results` : "No finished matches to settle yet");
+    } finally {
+      setSettling(false);
+    }
+  };
+
   // Free users only see (and are scored on) their latest 5 bets.
   const scopedBets = useMemo(() => (isPro ? bets : bets.slice(0, FREE_LIMIT)), [bets, isPro]);
-  const stats = useMemo(() => computeStats(scopedBets), [scopedBets]);
+  // PRO can filter stats & history by period (day/week/month/year).
+  const periodBets = useMemo(
+    () => ((isPro && period !== "all") ? scopedBets.filter((b) => inPeriod(b.settledAt || b.createdAt, period)) : scopedBets),
+    [scopedBets, period, isPro]
+  );
+  const stats = useMemo(() => computeStats(periodBets), [periodBets]);
   const hiddenCount = isPro ? 0 : Math.max(0, bets.length - FREE_LIMIT);
 
   const list = useMemo(() => {
-    if (filter === "all") return scopedBets;
-    return scopedBets.filter((b) => b.status === filter);
-  }, [scopedBets, filter]);
+    if (filter === "all") return periodBets;
+    return periodBets.filter((b) => b.status === filter);
+  }, [periodBets, filter]);
 
   return (
     <div className="min-h-screen bg-[#0d1117]">
@@ -261,11 +300,16 @@ export default function PortfolioPage() {
             <h1 className="font-display font-black uppercase tracking-tight text-3xl sm:text-4xl text-white">My Portfolio</h1>
             <p className="text-zinc-400 text-sm mt-1">Track the bets you play and see exactly how much you win or lose.</p>
           </div>
-          {tab === "bets" && bets.length > 0 && (
-            <button onClick={clear} data-testid="portfolio-clear" className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-400 hover:text-[#FF3B30] border border-white/10 rounded-md px-3 py-1.5">
-              <Trash2 className="w-3.5 h-3.5" /> Clear All
+          <div className="flex items-center gap-2">
+            <button onClick={refresh} disabled={settling} data-testid="portfolio-refresh" className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-300 hover:text-[#39FF14] border border-white/10 rounded-md px-3 py-1.5 disabled:opacity-50">
+              {settling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} Refresh results
             </button>
-          )}
+            {tab === "bets" && bets.length > 0 && (
+              <button onClick={clear} data-testid="portfolio-clear" className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-400 hover:text-[#FF3B30] border border-white/10 rounded-md px-3 py-1.5">
+                <Trash2 className="w-3.5 h-3.5" /> Clear All
+              </button>
+            )}
+          </div>
         </div>
 
         {/* TOP TABS */}
@@ -295,6 +339,19 @@ export default function PortfolioPage() {
           </div>
         ) : (
           <>
+            {/* PERIOD FILTER — Pro only */}
+            {isPro && (
+              <div className="flex items-center gap-1.5 mb-4 flex-wrap" data-testid="portfolio-period">
+                <span className="text-[10px] uppercase tracking-wider text-zinc-500 mr-1 flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> Period</span>
+                {Object.entries(PERIODS).map(([k, label]) => (
+                  <button key={k} onClick={() => setPeriod(k)} data-testid={`portfolio-period-${k}`}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${period === k ? "bg-[#39FF14] text-black" : "bg-white/5 text-zinc-300 hover:bg-white/10"}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* STATS */}
             <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6" data-testid="portfolio-stats">
               <StatCard icon={TrendingUp} label="Net P/L" value={money(stats.profit)} color={stats.profit >= 0 ? GREEN : RED} sub={`${stats.settledCount} settled bets`} />

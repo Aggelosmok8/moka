@@ -7,6 +7,8 @@ export const fetchValueMatches = (opts = {}) =>
   api.get(`/value-matches${opts.limit ? `?limit=${opts.limit}` : ""}`).then((r) => r.data);
 export const fetchMatches = () => api.get("/matches").then((r) => r.data);
 export const fetchMatchById = (id) => api.get(`/matches/${id}`).then((r) => r.data);
+export const fetchResults = (ids) =>
+  api.get(`/results`, { params: { ids: (ids || []).join(",") } }).then((r) => r.data.results || {});
 export const fetchMatchAi = (id) =>
   api.get(`/matches/${id}/ai-analysis`, { timeout: 90000 }).then((r) => r.data);
 
