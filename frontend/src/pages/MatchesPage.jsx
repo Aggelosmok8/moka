@@ -7,6 +7,7 @@ import { adaptValueMatches } from "../lib/valueEngine";
 import ValueCard, { LockedValueCard } from "../components/ValueCard";
 import { UpgradeButton } from "../components/Gating";
 import { useEntitlements } from "../hooks/useEntitlements";
+import { useLiveScores } from "../contexts/LiveScoresContext";
 
 const VIEWS = {
   strong: { title: "Today's Best Opportunities", sub: "The strongest opportunities Moka has identified today.", levels: ["HIGH"] },
@@ -24,6 +25,30 @@ const Skel = () => (
   </div>
 );
 
+function LiveMatchCard({ m }) {
+  return (
+    <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-4" data-testid={`live-card-${m.id}`}>
+      <div className="flex items-center justify-between mb-3 gap-2">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 truncate">{m.league}</span>
+        <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/30">
+          <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> Live{m.minute != null ? ` ${m.minute}'` : ""}
+        </span>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          {m.homeLogo && <img src={m.homeLogo} alt="" className="w-6 h-6 object-contain shrink-0" onError={(e) => { e.currentTarget.style.display = "none"; }} />}
+          <span className="font-display font-bold text-white truncate">{m.home}</span>
+        </div>
+        <span className="font-display font-black text-white text-2xl font-mono-num shrink-0" data-testid={`live-score-${m.id}`}>{m.homeScore ?? 0}-{m.awayScore ?? 0}</span>
+        <div className="flex items-center gap-2 min-w-0 flex-1 justify-end">
+          <span className="font-display font-bold text-white truncate text-right">{m.away}</span>
+          {m.awayLogo && <img src={m.awayLogo} alt="" className="w-6 h-6 object-contain shrink-0" onError={(e) => { e.currentTarget.style.display = "none"; }} />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function MatchesPage() {
   const [params] = useSearchParams();
   const view = VIEWS[params.get("view")] ? params.get("view") : "strong";
@@ -35,6 +60,8 @@ export default function MatchesPage() {
   const [fLeague, setFLeague] = useState("");
   const [fTeam, setFTeam] = useState("");
   const [fDate, setFDate] = useState("");
+  const [liveMode, setLiveMode] = useState(false);
+  const { list: liveList } = useLiveScores();
 
   useEffect(() => {
     let active = true;
@@ -51,7 +78,10 @@ export default function MatchesPage() {
     return entries.filter((e) => cfg.levels.includes(e.value?.valueLevel));
   }, [entries, cfg]);
 
-  const leagues = useMemo(() => [...new Set(entries.map((e) => e.match.leagueName).filter(Boolean))].sort(), [entries]);
+  const leagues = useMemo(() => {
+    const src = liveMode ? liveList.map((m) => m.league) : entries.map((e) => e.match.leagueName);
+    return [...new Set(src.filter(Boolean))].sort();
+  }, [entries, liveList, liveMode]);
 
   const filtered = useMemo(() => list.filter((e) => {
     const m = e.match;
@@ -64,6 +94,15 @@ export default function MatchesPage() {
     return true;
   }), [list, fLeague, fTeam, fDate]);
 
+  const liveFiltered = useMemo(() => liveList.filter((m) => {
+    if (fLeague && m.league !== fLeague) return false;
+    if (fTeam) {
+      const q = fTeam.toLowerCase();
+      if (!`${m.home || ""} ${m.away || ""}`.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  }), [liveList, fLeague, fTeam]);
+
   const hasFilters = fLeague || fTeam || fDate;
   const clearFilters = () => { setFLeague(""); setFTeam(""); setFDate(""); };
 
@@ -75,16 +114,25 @@ export default function MatchesPage() {
     <div className="min-h-screen bg-[#0d1117]">
       <Header />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex items-center gap-2 mb-5">
-          <Chip to="/matches?view=strong" active={view === "strong"}>🟢 Strong</Chip>
-          <Chip to="/matches?view=watching" active={view === "watching"}>🟡 Worth Watching</Chip>
-          <Chip to="/matches?view=all" active={view === "all"}>All Matches</Chip>
+        <div className="flex items-center gap-2 mb-5 flex-wrap">
+          <Chip to="/matches?view=strong" active={view === "strong" && !liveMode}>🟢 Strong</Chip>
+          <Chip to="/matches?view=watching" active={view === "watching" && !liveMode}>🟡 Worth Watching</Chip>
+          <Chip to="/matches?view=all" active={view === "all" && !liveMode}>All Matches</Chip>
+          <button
+            type="button"
+            onClick={() => setLiveMode((v) => !v)}
+            data-testid="chip-live"
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold transition-colors ${liveMode ? "bg-red-500 text-white" : "bg-white/5 text-zinc-300 hover:bg-white/10"}`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full bg-red-${liveMode ? "200" : "500"} ${liveMode ? "" : "animate-pulse"}`} style={{ background: liveMode ? "#fff" : "#ef4444" }} />
+            Live{liveList.length ? ` (${liveList.length})` : ""}
+          </button>
         </div>
 
-        <h1 className="font-display font-black uppercase tracking-tight text-3xl sm:text-4xl text-white">{cfg.title}</h1>
-        <p className="text-zinc-400 mt-1 mb-6 text-sm">{cfg.sub}</p>
+        <h1 className="font-display font-black uppercase tracking-tight text-3xl sm:text-4xl text-white">{liveMode ? "Live Now" : cfg.title}</h1>
+        <p className="text-zinc-400 mt-1 mb-6 text-sm">{liveMode ? "Every match in play right now, across all leagues." : cfg.sub}</p>
 
-        {!busy && entries.length > 0 && (
+        {!busy && (liveMode ? liveList.length > 0 : entries.length > 0) && (
           <div className="flex flex-wrap items-center gap-2 mb-6" data-testid="matches-filters">
             <select value={fLeague} onChange={(e) => setFLeague(e.target.value)} data-testid="filter-league"
               className="bg-[#161b22] border border-[#30363d] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#39FF14]">
@@ -96,12 +144,14 @@ export default function MatchesPage() {
               <input value={fTeam} onChange={(e) => setFTeam(e.target.value)} placeholder="Search team…" data-testid="filter-team"
                 className="bg-[#161b22] border border-[#30363d] rounded-lg pl-8 pr-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#39FF14]" />
             </div>
-            <div className="relative inline-flex items-center gap-1.5 bg-[#161b22] border border-[#30363d] rounded-lg px-3 py-2">
-              <CalendarDays className="w-4 h-4 text-zinc-500" />
-              <input type="date" value={fDate} onChange={(e) => setFDate(e.target.value)} data-testid="filter-date"
-                className="bg-transparent text-sm text-white focus:outline-none [color-scheme:dark]" />
-            </div>
-            {hasFilters && (
+            {!liveMode && (
+              <div className="relative inline-flex items-center gap-1.5 bg-[#161b22] border border-[#30363d] rounded-lg px-3 py-2">
+                <CalendarDays className="w-4 h-4 text-zinc-500" />
+                <input type="date" value={fDate} onChange={(e) => setFDate(e.target.value)} data-testid="filter-date"
+                  className="bg-transparent text-sm text-white focus:outline-none [color-scheme:dark]" />
+              </div>
+            )}
+            {(fLeague || fTeam || (!liveMode && fDate)) && (
               <button onClick={clearFilters} data-testid="filter-clear" className="inline-flex items-center gap-1 text-xs font-bold text-zinc-400 hover:text-[#FF3B30] border border-white/10 rounded-lg px-3 py-2">
                 <X className="w-3.5 h-3.5" /> Clear
               </button>
@@ -109,7 +159,17 @@ export default function MatchesPage() {
           </div>
         )}
 
-        {busy ? (
+        {liveMode ? (
+          liveFiltered.length === 0 ? (
+            <div className="text-center py-16 text-zinc-400" data-testid="live-empty">
+              {liveList.length === 0 ? "No matches are live right now." : "No live matches match your filters."}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="live-grid">
+              {liveFiltered.map((m) => <LiveMatchCard key={m.id} m={m} />)}
+            </div>
+          )
+        ) : busy ? (
           <Skel />
         ) : filtered.length === 0 ? (
           <div className="text-center py-16 text-zinc-400" data-testid="matches-empty">
