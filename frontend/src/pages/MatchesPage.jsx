@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
-import { Lock, Search, X, CalendarDays, ArrowRight } from "lucide-react";
+import { Lock, Search, X, CalendarDays } from "lucide-react";
 import Header from "../components/Header";
-import { fetchValueMatches } from "../lib/catalogApi";
-import { adaptValueMatches } from "../lib/valueEngine";
+import { fetchValueMatches, fetchMatchById } from "../lib/catalogApi";
+import { adaptValueMatches, adaptValue } from "../lib/valueEngine";
 import ValueCard, { LockedValueCard } from "../components/ValueCard";
 import { UpgradeButton } from "../components/Gating";
 import { useEntitlements } from "../hooks/useEntitlements";
@@ -25,31 +25,17 @@ const Skel = () => (
   </div>
 );
 
-function LiveMatchCard({ m }) {
-  return (
-    <Link to={`/analysis/${m.id}`} data-testid={`live-card-${m.id}`} className="block bg-[#161b22] border border-[#30363d] rounded-xl p-4 hover:border-[#39FF14]/40 transition-all">
-      <div className="flex items-center justify-between mb-3 gap-2">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 truncate">{m.league}</span>
-        <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/30">
-          <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> Live{m.minute != null ? ` ${m.minute}'` : ""}
-        </span>
-      </div>
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          {m.homeLogo && <img src={m.homeLogo} alt="" className="w-6 h-6 object-contain shrink-0" onError={(e) => { e.currentTarget.style.display = "none"; }} />}
-          <span className="font-display font-bold text-white truncate">{m.home}</span>
-        </div>
-        <span className="font-display font-black text-white text-2xl font-mono-num shrink-0" data-testid={`live-score-${m.id}`}>{m.homeScore ?? 0}-{m.awayScore ?? 0}</span>
-        <div className="flex items-center gap-2 min-w-0 flex-1 justify-end">
-          <span className="font-display font-bold text-white truncate text-right">{m.away}</span>
-          {m.awayLogo && <img src={m.awayLogo} alt="" className="w-6 h-6 object-contain shrink-0" onError={(e) => { e.currentTarget.style.display = "none"; }} />}
-        </div>
-      </div>
-      <div className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-[#39FF14]">
-        See Analysis <ArrowRight className="w-3.5 h-3.5" />
-      </div>
-    </Link>
-  );
+function LiveValueCard({ id }) {
+  const [entry, setEntry] = useState(null);
+  useEffect(() => {
+    let active = true;
+    fetchMatchById(id)
+      .then((d) => active && setEntry({ match: d, value: adaptValue(d.value) }))
+      .catch(() => {});
+    return () => { active = false; };
+  }, [id]);
+  if (!entry || !entry.value) return <div className="h-56 bg-[#161b22] border border-[#30363d] rounded-xl animate-pulse" />;
+  return <ValueCard entry={entry} />;
 }
 
 export default function MatchesPage() {
@@ -84,7 +70,9 @@ export default function MatchesPage() {
   }, [entries, cfg]);
 
   const leagues = useMemo(() => {
-    const src = liveMode ? liveList.map((m) => m.league) : entries.map((e) => e.match.leagueName);
+    const src = liveMode
+      ? liveList.filter((m) => m.supported).map((m) => m.league)
+      : entries.map((e) => e.match.leagueName);
     return [...new Set(src.filter(Boolean))].sort();
   }, [entries, liveList, liveMode]);
 
@@ -100,6 +88,7 @@ export default function MatchesPage() {
   }), [list, fLeague, fTeam, fDate]);
 
   const liveFiltered = useMemo(() => liveList.filter((m) => {
+    if (!m.supported) return false;
     if (fLeague && m.league !== fLeague) return false;
     if (fTeam) {
       const q = fTeam.toLowerCase();
@@ -129,8 +118,8 @@ export default function MatchesPage() {
             data-testid="chip-live"
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold transition-colors ${liveMode ? "bg-red-500 text-white" : "bg-white/5 text-zinc-300 hover:bg-white/10"}`}
           >
-            <span className={`w-1.5 h-1.5 rounded-full bg-red-${liveMode ? "200" : "500"} ${liveMode ? "" : "animate-pulse"}`} style={{ background: liveMode ? "#fff" : "#ef4444" }} />
-            Live{liveList.length ? ` (${liveList.length})` : ""}
+            <span className={`w-1.5 h-1.5 rounded-full ${liveMode ? "" : "animate-pulse"}`} style={{ background: liveMode ? "#fff" : "#ef4444" }} />
+            Live{(() => { const n = liveList.filter((m) => m.supported).length; return n ? ` (${n})` : ""; })()}
           </button>
         </div>
 
@@ -170,7 +159,7 @@ export default function MatchesPage() {
               <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> Live now ({liveFiltered.length})
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {liveFiltered.map((m) => <LiveMatchCard key={m.id} m={m} />)}
+              {liveFiltered.map((m) => <LiveValueCard key={m.id} id={m.id} />)}
             </div>
           </div>
         )}
@@ -178,11 +167,11 @@ export default function MatchesPage() {
         {liveMode ? (
           liveFiltered.length === 0 ? (
             <div className="text-center py-16 text-zinc-400" data-testid="live-empty">
-              {liveList.length === 0 ? "No matches are live right now." : "No live matches match your filters."}
+              {liveList.filter((m) => m.supported).length === 0 ? "No matches from the major leagues are live right now." : "No live matches match your filters."}
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="live-grid">
-              {liveFiltered.map((m) => <LiveMatchCard key={m.id} m={m} />)}
+              {liveFiltered.map((m) => <LiveValueCard key={m.id} id={m.id} />)}
             </div>
           )
         ) : busy ? (

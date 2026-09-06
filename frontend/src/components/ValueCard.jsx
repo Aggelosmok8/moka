@@ -98,6 +98,7 @@ export default function ValueCard({ entry }) {
   const live = useLiveScores().get(match.id);
   const [adv, setAdv] = useState(false);
   const probs = value.probabilities || {};
+  const isLive = value.liveOnly || match.status === "live";
   const toggle = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -112,27 +113,52 @@ export default function ValueCard({ entry }) {
     >
       <div className="flex items-center justify-between mb-2 gap-2">
         <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 truncate">{match.leagueName}</span>
-        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full whitespace-nowrap ${value.level.cls}`}>
-          {value.level.emoji} {value.level.label}
-        </span>
+        {isLive ? (
+          <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/30 whitespace-nowrap">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> Live
+          </span>
+        ) : (
+          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full whitespace-nowrap ${value.level.cls}`}>
+            {value.level.emoji} {value.level.label}
+          </span>
+        )}
       </div>
       <div className="font-display font-bold text-white text-lg leading-tight mb-2">
         {match.home && match.home.name} <span className="text-zinc-600 text-sm">vs</span> {match.away && match.away.name}
       </div>
       <MatchWhen match={match} live={live} />
 
-      {/* Simple info — always visible */}
-      <div className="flex items-center justify-between text-xs border-t border-white/5 pt-2">
-        <span className="text-zinc-500">Best odds</span>
-        <span className="text-white font-bold font-mono-num">
-          {value.bestOdds} <span className="text-zinc-500 font-normal">@ {value.bookmaker}</span>
-        </span>
-      </div>
-      <div className="flex items-center justify-between text-xs mt-1.5">
-        <span className="text-zinc-500">Moka pick</span>
-        <span className="text-white font-bold truncate ml-2">{value.pickName}</span>
-      </div>
-      <p className="text-xs text-zinc-400 mt-2 leading-snug">{shortExplanation(match, value)}</p>
+      {isLive ? (
+        /* Live: no pre-match odds/pick — show Moka's live model read */
+        <div className="border-t border-white/5 pt-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-zinc-500">Possible outcome</span>
+            <span className="text-[#39FF14] font-black uppercase">{value.possibleOutcome || "—"}</span>
+          </div>
+          {value.prediction && (
+            <div className="flex items-center justify-between text-[11px] mt-1.5 text-zinc-400">
+              <span>Home <b className="text-white">{value.prediction.home}%</b></span>
+              <span>Draw <b className="text-white">{value.prediction.draw}%</b></span>
+              <span>Away <b className="text-white">{value.prediction.away}%</b></span>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          {/* Simple info — always visible */}
+          <div className="flex items-center justify-between text-xs border-t border-white/5 pt-2">
+            <span className="text-zinc-500">Best odds</span>
+            <span className="text-white font-bold font-mono-num">
+              {value.bestOdds} <span className="text-zinc-500 font-normal">@ {value.bookmaker}</span>
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-xs mt-1.5">
+            <span className="text-zinc-500">Moka pick</span>
+            <span className="text-white font-bold truncate ml-2">{value.pickName}</span>
+          </div>
+          <p className="text-xs text-zinc-400 mt-2 leading-snug">{shortExplanation(match, value)}</p>
+        </>
+      )}
       <div className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-[#39FF14]">
         See Analysis <ArrowRight className="w-3.5 h-3.5" />
       </div>
@@ -150,16 +176,20 @@ export default function ValueCard({ entry }) {
 
       {adv && (
         <div className="mt-3 space-y-3" data-testid={`advanced-${match.id}`}>
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <Metric label="Value" v={value.valueScore} accent="#39FF14" tip="Overall strength of this betting opportunity (0-100)." />
-            <Metric label="Potential Value" v={`${value.ev > 0 ? "+" : ""}${value.ev}%`} accent="#58a6ff" tip="Potential Value — expected return on this pick (formerly 'EV'). Higher is better." />
-            <Metric label="Confidence" v={`${value.confidence}%`} accent="#FF9500" tip="How sure the Moka model is about this pick." />
-          </div>
-          <div className="flex items-center justify-between text-[11px] text-zinc-400 gap-2">
-            <span><InfoTip label="Moka Estimate" text="Our model's win chance for the pick." /> <b className="text-[#39FF14]">{Math.round(value.mokaProb * 100)}%</b></span>
-            <span><InfoTip label="Market Estimate" text="Win chance implied by bookmaker odds." /> <b className="text-zinc-200">{Math.round(value.bookProb * 100)}%</b></span>
-            <span><InfoTip label="Market Difference" text="Gap between Moka Estimate and Market Estimate (formerly 'Edge')." /> <b className="text-white">{value.edge > 0 ? "+" : ""}{value.edge}</b></span>
-          </div>
+          {!isLive && (
+            <>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <Metric label="Value" v={value.valueScore} accent="#39FF14" tip="Overall strength of this betting opportunity (0-100)." />
+                <Metric label="Potential Value" v={`${value.ev > 0 ? "+" : ""}${value.ev}%`} accent="#58a6ff" tip="Potential Value — expected return on this pick (formerly 'EV'). Higher is better." />
+                <Metric label="Confidence" v={`${value.confidence}%`} accent="#FF9500" tip="How sure the Moka model is about this pick." />
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-zinc-400 gap-2">
+                <span><InfoTip label="Moka Estimate" text="Our model's win chance for the pick." /> <b className="text-[#39FF14]">{Math.round(value.mokaProb * 100)}%</b></span>
+                <span><InfoTip label="Market Estimate" text="Win chance implied by bookmaker odds." /> <b className="text-zinc-200">{Math.round(value.bookProb * 100)}%</b></span>
+                <span><InfoTip label="Market Difference" text="Gap between Moka Estimate and Market Estimate (formerly 'Edge')." /> <b className="text-white">{value.edge > 0 ? "+" : ""}{value.edge}</b></span>
+              </div>
+            </>
+          )}
           {(probs.home != null || probs.away != null) && (
             <div className="space-y-1.5 pt-1">
               <div className="text-[10px] text-zinc-500 uppercase tracking-wider">
@@ -170,14 +200,17 @@ export default function ValueCard({ entry }) {
               <ProbBar label="Away" pct={probs.away || 0} color="#58a6ff" />
             </div>
           )}
-          <p className="text-[11px] text-zinc-500">{aiExplanation(match, value)}</p>
+          {!isLive && <p className="text-[11px] text-zinc-500">{aiExplanation(match, value)}</p>}
+          {isLive && <p className="text-[11px] text-zinc-500">Live model read — open the match for full analysis and live statistics.</p>}
         </div>
       )}
 
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <AddToChartButton entry={entry} className="w-full justify-center" />
-        <AddToSlipButton entry={entry} className="w-full" />
-      </div>
+      {!isLive && (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <AddToChartButton entry={entry} className="w-full justify-center" />
+          <AddToSlipButton entry={entry} className="w-full" />
+        </div>
+      )}
     </Link>
   );
 }

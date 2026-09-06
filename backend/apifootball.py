@@ -72,6 +72,10 @@ CATALOG = {
     "euroleague":   {"name": "EuroLeague",               "sport": "basketball", "league_id": 120},
 }
 
+SUPPORTED_FOOTBALL_LEAGUE_IDS = {
+    c["league_id"] for c in CATALOG.values() if c["sport"] == "football"
+}
+
 
 def _key() -> str:
     return os.environ.get("API_FOOTBALL_KEY") or os.environ.get("APISPORTS_KEY", "")
@@ -360,6 +364,7 @@ async def live_fixtures() -> list:
                 "awayScore": g.get("away"),
                 "minute": st.get("elapsed"),
                 "status": st.get("short"),
+                "supported": lg.get("id") in SUPPORTED_FOOTBALL_LEAGUE_IDS,
             })
     except Exception as e:
         logger.warning("apifootball.live_fixtures: %s", e)
