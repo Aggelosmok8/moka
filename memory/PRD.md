@@ -228,3 +228,17 @@ The API-Football free plan went inactive/quota-exhausted → leagues/teams/playe
 
 ## Update 2026-09-05 (correction) — Home top = advertising sentences + diagram
 - Home top section (HomePicks.jsx) now shows the 6 advertising SENTENCES (English, no periods, numbered 01-06, hover->green) over the existing arena photo, with the Season-output bar-chart diagram below. NO value picks on home. Visible without scroll; hero + marketing below unchanged.
+
+
+## Update 2026-09-06 — Prediction engine + Player status + AI analysis (Phases 1-3)
+### Phase 1 (backend, 0 new API calls)
+- Rewrote probability_engine.py -> deterministic Poisson model: expected goals (attack/defense rates + form + explicit home advantage) -> 1X2 + Over/Under 2.5 + BTTS + expected goals. Added possible_outcome() (single or double-chance from model).
+- value_engine.evaluate_match now exposes value.prediction + value.possible_outcome. Existing EV/value/market comparison unchanged.
+### Phase 2 (Match Analysis UI + player status)
+- MatchAnalysisPage: new Moka Prediction card (Possible Outcome + 1X2) + Goal Markets card (O/U 2.5, BTTS, xG). Advanced stats now PRO-gated: PRO -> organized section (Moka vs Market, Team Statistics w/ N/A for missing, Full Model Output); Free -> "Show advanced statistics — Pro" opens upsell modal (NO API call).
+- apifootball.injuries_for_team() (lazy+cached 12h) attaches status (injured/suspended/yellow/doubtful) to squad players. TeamsPage StatusBadge renders coloured badges (verified 2 real badges on Man City).
+### Phase 3 (AI, GPT-5.6 Luna)
+- ai_analysis.py: emergentintegrations LlmChat, model from OPENAI_MODEL env (gpt-5.6-luna), EMERGENT_LLM_KEY. Strict anti-hallucination prompt; only supplied data; possible_outcome from engine (not AI). Cached (apifootball cache) keyed by match id + data hash -> repeat opens = NO OpenAI call (verified 0.028s cached).
+- Endpoint GET /api/matches/<built-in function id>/ai-analysis. Frontend MatchAnalysisPage fetches lazily (90s timeout), renders "Moka Analysis" card + Possible Outcome badge.
+- Keys server-side only in backend/.env: OPENAI_API_KEY (stored, unused-by-default), OPENAI_MODEL=gpt-5.6-luna. AI uses EMERGENT_LLM_KEY via emergentintegrations.
+### Pending: Phase 4 responsive/layout audit (Home, Analysis, Teams, Players, Charts, Portfolio, Pricing); optional lazy xG/H2H multipliers into prediction adjust; inline player-stats-in-analysis lineup.

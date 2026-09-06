@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Lock, ChevronLeft, Loader2, Shield, ShieldAlert, Users } from "lucide-react";
+import { Lock, ChevronLeft, Loader2, Shield, ShieldAlert, Users, Ban, AlertTriangle, Square } from "lucide-react";
 import Header from "../components/Header";
 import InfoTip from "../components/InfoTip";
 import { api } from "../lib/api";
@@ -41,6 +41,27 @@ function Stat({ label, value, tip }) {
 
 const POS_ORDER = ["Goalkeeper", "Defender", "Midfielder", "Attacker"];
 
+function StatusBadge({ status, reason }) {
+  if (!status) return null;
+  const MAP = {
+    injured:   { cls: "bg-[#FF3B30]/15 text-[#FF3B30] border-[#FF3B30]/30", Icon: ShieldAlert, label: "Injured" },
+    suspended: { cls: "bg-[#FF3B30]/15 text-[#FF3B30] border-[#FF3B30]/30", Icon: Ban, label: "Suspended" },
+    yellow:    { cls: "bg-[#FFD60A]/15 text-[#FFD60A] border-[#FFD60A]/40", Icon: Square, label: "Booking" },
+    doubtful:  { cls: "bg-[#FF9500]/15 text-[#FF9500] border-[#FF9500]/30", Icon: AlertTriangle, label: "Doubtful" },
+  };
+  const m = MAP[status] || MAP.injured;
+  const Icon = m.Icon;
+  return (
+    <span
+      title={reason || m.label}
+      data-testid={`player-status-${status}`}
+      className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-black uppercase leading-none shrink-0 ${m.cls}`}
+    >
+      <Icon className="w-3 h-3" /> {m.label}
+    </span>
+  );
+}
+
 function PlayerCard({ p, onClick }) {
   return (
     <button type="button" onClick={onClick} className="w-full text-left flex items-center gap-3 bg-[#0d1117] border border-[#30363d] rounded-lg p-2.5 hover:border-[#39FF14]/40 transition-colors" data-testid={`player-row-${p.id}`}>
@@ -50,10 +71,10 @@ function PlayerCard({ p, onClick }) {
       ) : (
         <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-zinc-500 text-xs font-bold shrink-0">{p.number ?? "?"}</div>
       )}
-      <div className="min-w-0">
-        <div className="text-sm text-white font-semibold truncate flex items-center gap-1">
-          {p.name}
-          {p.injured && <ShieldAlert className="w-3.5 h-3.5 text-[#FF3B30]" title="Injured" />}
+      <div className="min-w-0 flex-1">
+        <div className="text-sm text-white font-semibold flex items-center gap-1.5">
+          <span className="truncate">{p.name}</span>
+          <StatusBadge status={p.status} reason={p.statusReason} />
         </div>
         <div className="text-[11px] text-zinc-500">
           {p.number != null && <span className="font-mono-num">#{p.number}</span>}
@@ -133,6 +154,7 @@ function PlayerModal({ player, teamId, teamName, onClose }) {
           <div className="min-w-0 flex-1">
             <div className="font-display font-black text-xl text-white truncate">{player.name}</div>
             <div className="text-[11px] text-zinc-500">{[data?.position || player.position, data?.nationality, data?.age ? `${data.age}y` : null].filter(Boolean).join(" · ")}</div>
+            {player.status && <div className="mt-1.5"><StatusBadge status={player.status} reason={player.statusReason} /></div>}
           </div>
           <button onClick={onClose} data-testid="player-modal-close" className="text-zinc-500 hover:text-white text-sm px-2">✕</button>
         </div>

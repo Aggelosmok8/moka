@@ -216,11 +216,62 @@ async def players_for_team(team_id: str) -> list:
             players = mockdata.players_for_mock_team(team_id)
             _c_set(ck, players, ttl=300)
             return players
+        # Attach lazy+cached injury/suspension status (best-effort).
+        try:
+            inj = await injuries_for_team(team_id)
+            for p in players:
+                st = inj.get(str(p["id"]))
+                if st:
+                    p["status"] = st["status"]
+                    p["statusReason"] = st["reason"]
+        except Exception as e:
+            logger.warning("apifootball injuries attach %s: %s", team_id, e)
         _c_set(ck, players)
         return players
     except Exception as e:
         logger.warning("apifootball.players_for_team(%s): %s", team_id, e)
         return mockdata.players_for_mock_team(team_id)
+
+
+def _injury_status(reason: str, itype: str) -> str:
+    r = (reason or "").lower()
+    if "red" in r or "suspend" in r:
+        return "suspended"
+    if "yellow" in r:
+        return "yellow"
+    if any(w in r for w in ("injur", "knock", "strain", "muscle", "surgery", "fitness", "ill", "broken", "tear", "sprain")):
+        return "injured"
+    if (itype or "").lower() == "questionable":
+        return "doubtful"
+    return "injured"
+
+
+async def injuries_for_team(team_id: str, season: int = None) -> dict:
+    """Player-id -> {status, reason} for a team's current injuries/suspensions.
+    Lazy + cached (12h); returns {} on any failure. No mock invented data."""
+    if not team_id or team_id.startswith("m_"):
+        return {}
+    season = season or FOOTBALL_SEASON
+    ck = f"inj_{team_id}_{season}"
+    hit = _c_get(ck)
+    if hit is not None:
+        return hit
+    out: dict = {}
+    try:
+        d = await _get(FOOTBALL_BASE, "/injuries", {"team": team_id, "season": season})
+        for item in d.get("response") or []:
+            p = item.get("player") or {}
+            pid = p.get("id")
+            if pid is None:
+                continue
+            reason = p.get("reason")
+            itype = p.get("type")
+            out[str(pid)] = {"status": _injury_status(reason, itype),
+                             "reason": reason or itype or "Unavailable"}
+    except Exception as e:
+        logger.warning("apifootball.injuries_for_team(%s): %s", team_id, e)
+    _c_set(ck, out, ttl=12 * 3600)
+    return out
 
 
 async def player_stats(player_id: str, season: int = None, team_id: str = None) -> dict:

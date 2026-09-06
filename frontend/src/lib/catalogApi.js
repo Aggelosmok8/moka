@@ -7,6 +7,8 @@ export const fetchValueMatches = (opts = {}) =>
   api.get(`/value-matches${opts.limit ? `?limit=${opts.limit}` : ""}`).then((r) => r.data);
 export const fetchMatches = () => api.get("/matches").then((r) => r.data);
 export const fetchMatchById = (id) => api.get(`/matches/${id}`).then((r) => r.data);
+export const fetchMatchAi = (id) =>
+  api.get(`/matches/${id}/ai-analysis`, { timeout: 90000 }).then((r) => r.data);
 
 // --- Entitlements / catalog (FREE/PRO gating + league browsing) ---
 export const fetchEntitlements = () => api.get("/me/entitlements").then((r) => r.data);
