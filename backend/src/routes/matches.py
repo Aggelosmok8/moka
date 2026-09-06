@@ -62,6 +62,19 @@ async def match_results(ids: str = ""):
     return {"results": await apifootball.fixture_results(id_list)}
 
 
+@router.get("/teams/{team_id}/stats")
+async def team_stats(team_id: str, league: str = ""):
+    """Clean sheets + home/away goal splits for one team (lazy + cached 24h).
+
+    Used by the Team Compare panel. `league` is the catalog slug (e.g. 'epl')."""
+    import apifootball as af
+    c = af.CATALOG.get(league) or {}
+    lid = c.get("league_id")
+    if not lid:
+        return {"stats": None}
+    return {"stats": await af.team_statistics(team_id, lid)}
+
+
 async def _resolve_match(match_id: str):
     m = MATCH_INDEX.get(match_id)
     if not m:

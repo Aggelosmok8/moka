@@ -84,11 +84,13 @@ export default function HomePage() {
           </div>
 
           {/* All the sentences, right here around the hero — no scroll needed */}
-          <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-w-3xl mx-auto" data-testid="hero-sentences">
+          <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl mx-auto" data-testid="hero-sentences">
             {HERO_SENTENCES.map((s, i) => (
-              <div key={i} className="flex items-center gap-2 text-left bg-white/5 border border-white/10 rounded-full px-4 py-2.5 backdrop-blur-sm hover:border-[#39FF14]/40 transition-colors">
-                <Check className="w-4 h-4 text-[#39FF14] shrink-0" />
-                <span className="text-sm text-zinc-200 font-semibold leading-tight">{s}</span>
+              <div key={i} className="group flex items-center gap-3 text-left bg-[#39FF14]/[0.06] border border-[#39FF14]/25 rounded-2xl px-5 py-4 backdrop-blur-sm hover:bg-[#39FF14]/10 hover:border-[#39FF14]/60 transition-all shadow-[0_0_24px_-10px_rgba(57,255,20,0.55)]">
+                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-[#39FF14]/15 border border-[#39FF14]/40 shrink-0">
+                  <Check className="w-5 h-5 text-[#39FF14]" strokeWidth={3} />
+                </span>
+                <span className="text-base sm:text-lg text-white font-bold leading-tight">{s}</span>
               </div>
             ))}
           </div>

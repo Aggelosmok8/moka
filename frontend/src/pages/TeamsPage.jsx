@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Lock, ChevronLeft, Loader2, Shield, ShieldAlert, Users, Ban, AlertTriangle, Square } from "lucide-react";
+import { Lock, ChevronLeft, Loader2, Shield, ShieldAlert, Users, Ban, AlertTriangle, Square, GitCompare } from "lucide-react";
 import Header from "../components/Header";
 import InfoTip from "../components/InfoTip";
 import { api } from "../lib/api";
@@ -178,7 +178,106 @@ function PlayerModal({ player, teamId, teamName, onClose }) {
   );
 }
 
-function TeamDetail({ team, onBack }) {
+function formWDL(form) {
+  const f = Array.isArray(form) ? form.slice(-5) : [];
+  const w = f.filter((r) => r === "W").length;
+  const d = f.filter((r) => r === "D").length;
+  const l = f.filter((r) => r === "L").length;
+  return { str: f.length ? `${w}-${d}-${l}` : null, pts: w * 3 + d };
+}
+
+function pickBetter(a, b, higherBetter) {
+  if (a == null || b == null || Number.isNaN(a) || Number.isNaN(b)) return null;
+  if (a === b) return null;
+  const aWins = higherBetter ? a > b : a < b;
+  return aWins ? "a" : "b";
+}
+
+function CompareRow({ label, a, b, better }) {
+  return (
+    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 py-2.5 border-b border-[#30363d] last:border-0">
+      <div className={`text-right font-display font-black text-lg ${better === "a" ? "text-[#39FF14]" : "text-white"}`}>{a ?? "—"}</div>
+      <div className="text-[10px] uppercase tracking-wider text-zinc-500 text-center px-2 whitespace-nowrap">{label}</div>
+      <div className={`text-left font-display font-black text-lg ${better === "b" ? "text-[#39FF14]" : "text-white"}`}>{b ?? "—"}</div>
+    </div>
+  );
+}
+
+function ComparePanel({ base, teams, league }) {
+  const [otherId, setOtherId] = useState("");
+  const [csA, setCsA] = useState(undefined);
+  const [csB, setCsB] = useState(undefined);
+  const other = teams.find((t) => String(t.id) === String(otherId));
+
+  // Clean sheets are lazy + cached 24h on the backend — fetched only when compare is open.
+  useEffect(() => {
+    setCsA(undefined);
+    api.get(`/teams/${base.id}/stats?league=${encodeURIComponent(league)}`)
+      .then((r) => setCsA(r.data?.stats?.clean_sheets ?? null))
+      .catch(() => setCsA(null));
+  }, [base.id, league]);
+
+  useEffect(() => {
+    setCsB(undefined);
+    if (!other) return;
+    api.get(`/teams/${other.id}/stats?league=${encodeURIComponent(league)}`)
+      .then((r) => setCsB(r.data?.stats?.clean_sheets ?? null))
+      .catch(() => setCsB(null));
+  }, [otherId, league]); // eslint-disable-line
+
+  const num = (v) => (v == null || v === "" ? null : Number(v));
+  const fA = formWDL(base.form);
+  const fB = other ? formWDL(other.form) : null;
+
+  const rows = other ? [
+    { label: "League pos.", a: base.position != null ? `#${base.position}` : null, b: other.position != null ? `#${other.position}` : null, better: pickBetter(base.position, other.position, false) },
+    { label: "Points", a: base.points, b: other.points, better: pickBetter(num(base.points), num(other.points), true) },
+    { label: "Last 5 (W-D-L)", a: fA.str, b: fB?.str, better: pickBetter(fA.pts, fB?.pts, true) },
+    { label: "Goals / game", a: base.goalsPerGame, b: other.goalsPerGame, better: pickBetter(num(base.goalsPerGame), num(other.goalsPerGame), true) },
+    { label: "Conceded / game", a: base.concededPerGame, b: other.concededPerGame, better: pickBetter(num(base.concededPerGame), num(other.concededPerGame), false) },
+    { label: "Clean sheets", a: csA === undefined ? "…" : csA, b: csB === undefined ? "…" : csB, better: pickBetter(num(csA), num(csB), true) },
+  ] : [];
+
+  const options = teams.filter((t) => String(t.id) !== String(base.id));
+
+  return (
+    <div className="mt-7" data-testid="team-compare">
+      <h3 className="font-display font-black uppercase text-sm text-zinc-400 mb-3 flex items-center gap-2">
+        <GitCompare className="w-4 h-4" /> Compare
+      </h3>
+      <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-4">
+        <div className="flex items-center gap-3 flex-wrap mb-4">
+          <span className="text-sm text-white font-bold truncate max-w-[40%]">{base.name}</span>
+          <span className="text-zinc-500 text-xs uppercase tracking-wider">vs</span>
+          <select
+            value={otherId}
+            onChange={(e) => setOtherId(e.target.value)}
+            data-testid="compare-select"
+            className="flex-1 min-w-[160px] bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-sm text-white focus:border-[#39FF14]/50 outline-none"
+          >
+            <option value="">Select a team…</option>
+            {options.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </div>
+        {other ? (
+          <div data-testid="compare-result">
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 pb-3 mb-1 border-b border-[#30363d]">
+              <div className="flex items-center justify-end gap-2 min-w-0"><span className="font-display font-black text-white text-sm truncate">{base.name}</span><Crest team={base} size={28} /></div>
+              <div className="w-6" />
+              <div className="flex items-center gap-2 min-w-0"><Crest team={other} size={28} /><span className="font-display font-black text-white text-sm truncate">{other.name}</span></div>
+            </div>
+            {rows.map((r) => <CompareRow key={r.label} {...r} />)}
+            <p className="text-[11px] text-zinc-600 mt-3">Green highlights the stronger value in each metric.</p>
+          </div>
+        ) : (
+          <div className="text-zinc-500 text-sm py-4 text-center">Pick a team to see a side-by-side comparison of form, goals and clean sheets.</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TeamDetail({ team, teams, league, onBack }) {
   const [players, setPlayers] = useState(null);
   const [loading, setLoading] = useState(true);
   const [openPlayer, setOpenPlayer] = useState(null);
@@ -254,6 +353,11 @@ function TeamDetail({ team, onBack }) {
           </>
         )}
       </div>
+
+      {/* Team comparison (football only) */}
+      {!isBasket && teams && teams.length > 1 && (
+        <ComparePanel base={team} teams={teams} league={league} />
+      )}
 
       {/* Squad */}
       <h3 className="font-display font-black uppercase text-sm text-zinc-400 mt-7 mb-3 flex items-center gap-2">
@@ -371,7 +475,7 @@ export default function TeamsPage() {
           {/* Content */}
           <section>
             {team ? (
-              <TeamDetail team={team} onBack={() => setTeam(null)} />
+              <TeamDetail team={team} teams={teams} league={league} onBack={() => setTeam(null)} />
             ) : loading ? (
               <div className="py-20 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-zinc-500" /></div>
             ) : teams.length === 0 ? (
