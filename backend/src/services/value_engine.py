@@ -8,7 +8,7 @@ not a guarantee or 'sure win'.
 from __future__ import annotations
 
 from ..utils.math import implied_probability
-from .probability_engine import match_probabilities
+from .probability_engine import full_prediction, possible_outcome
 
 OUTCOMES = ("home", "draw", "away")
 MIN_PICK_PROB = 0.12  # ignore longshot outcomes (noise) when selecting a value pick
@@ -30,7 +30,8 @@ def value_level(ev: float) -> str:
 
 def evaluate_match(match: dict):
     """Return the value block for a match (best positive-EV outcome), or None."""
-    probs = match_probabilities(match["home"], match["away"])
+    pred = full_prediction(match["home"], match["away"])
+    probs = {"home": pred["home"], "draw": pred["draw"], "away": pred["away"]}
     odds_list = match.get("odds", [])
     if not odds_list:
         return None
@@ -74,6 +75,19 @@ def evaluate_match(match: dict):
         "confidence": confidence,
         "value_score": value_score,
         "probabilities": {k: round(v * 100) for k, v in probs.items()},
+        "prediction": {
+            "home": round(pred["home"] * 100),
+            "draw": round(pred["draw"] * 100),
+            "away": round(pred["away"] * 100),
+            "over25": round(pred["over25"] * 100),
+            "under25": round(pred["under25"] * 100),
+            "btts_yes": round(pred["btts_yes"] * 100),
+            "btts_no": round(pred["btts_no"] * 100),
+            "xg_home": pred["xg_home"],
+            "xg_away": pred["xg_away"],
+            "xg_total": pred["xg_total"],
+        },
+        "possible_outcome": possible_outcome(probs),
     }
 
 
