@@ -1,4 +1,4 @@
-"""Moka AI match-analysis (GPT-5.6 Luna via Emergent universal key).
+"""Moka AI match-analysis (GPT-5.6 Luna via the direct OpenAI API).
 
 The deterministic Moka engine computes ALL numbers. This module only turns the
 already-computed structured data into a short natural-language explanation.
@@ -100,19 +100,21 @@ async def match_analysis(match: dict, value: dict) -> dict:
     if cached is not None:
         return {"analysis": cached, "possible_outcome": possible, "cached": True}
 
-    key = os.environ.get("EMERGENT_LLM_KEY")
-    if not key:
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
         return {"analysis": None, "possible_outcome": possible, "error": "no_key"}
 
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
-        chat = LlmChat(
-            api_key=key,
-            session_id=f"moka-{match.get('id')}",
-            system_message=SYSTEM,
-        ).with_model("openai", MODEL)
-        text = await chat.send_message(UserMessage(text="Match data (JSON):\n" + raw))
-        text = (text or "").strip()
+        from openai import AsyncOpenAI
+        client = AsyncOpenAI(api_key=api_key)
+        resp = await client.chat.completions.create(
+            model=MODEL,
+            messages=[
+                {"role": "system", "content": SYSTEM},
+                {"role": "user", "content": "Match data (JSON):\n" + raw},
+            ],
+        )
+        text = (resp.choices[0].message.content or "").strip()
     except Exception as e:
         logger.warning("ai_analysis(%s) failed: %s", match.get("id"), e)
         return {"analysis": None, "possible_outcome": possible, "error": True}
