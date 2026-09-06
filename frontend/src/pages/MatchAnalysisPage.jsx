@@ -134,7 +134,7 @@ export default function MatchAnalysisPage() {
           <h3 className="font-display font-bold uppercase tracking-tight text-sm text-white">Moka Analysis</h3>
         </div>
         {aiLoading ? (
-          <div className="flex items-center gap-2 text-sm text-zinc-400 py-4"><Loader2 className="w-4 h-4 animate-spin" /> Generating analysis…</div>
+          <div className="flex items-center gap-2 text-sm text-zinc-400 py-4"><Loader2 className="w-4 h-4 animate-spin" /> Writing the Moka analysis… <span className="text-zinc-600">first view takes a few seconds, then it's instant</span></div>
         ) : ai && ai.analysis ? (
           <div className="space-y-3" data-testid="ai-analysis-text">
             {ai.analysis.split(/\n+/).filter(Boolean).map((para, i) => (
