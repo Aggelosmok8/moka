@@ -176,6 +176,11 @@ export default function MatchAnalysisPage() {
           <Bar label={(match.home && match.home.name) || "Home"} pct={value.prediction.home} color="#39FF14" />
           <Bar label="Draw" pct={value.prediction.draw} color="#FF9500" />
           <Bar label={(match.away && match.away.name) || "Away"} pct={value.prediction.away} color="#58a6ff" />
+          {value.signals && value.signals.h2h && (
+            <p className="text-[11px] text-zinc-500 mt-3" data-testid="prediction-h2h">
+              Recent head-to-head: <b className="text-zinc-300">{value.signals.h2h.home}W</b> · {value.signals.h2h.draw}D · <b className="text-zinc-300">{value.signals.h2h.away}W</b> (adjusted into the model)
+            </p>
+          )}
         </Card>
       )}
 

@@ -158,6 +158,8 @@ async def build_live_matches() -> list:
                 "commence_time": f.get("kickoff"),
                 "home": _team_obj(home, hs),
                 "away": _team_obj(away, as_),
+                "home_id": (hs or {}).get("id"),
+                "away_id": (as_ or {}).get("id"),
                 "odds": odds,
                 "dataSource": "apifootball",
             })

@@ -30,6 +30,7 @@ export function adaptValue(v) {
     probabilities: v.probabilities || {},
     prediction: v.prediction || null,
     possibleOutcome: v.possible_outcome || null,
+    signals: v.signals || null,
   };
 }
 

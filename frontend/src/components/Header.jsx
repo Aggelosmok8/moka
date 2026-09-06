@@ -5,6 +5,7 @@ import LiveStatusPill from "./LiveStatusPill";
 import SearchPalette from "./SearchPalette";
 import UserMenu from "./UserMenu";
 import TrialBanner from "./TrialBanner";
+import LiveTicker from "./LiveTicker";
 import { useChart } from "../contexts/ChartContext";
 import { usePortfolio } from "../contexts/PortfolioContext";
 
@@ -133,6 +134,7 @@ export const Header = () => {
       )}
       <SearchPalette open={searchOpen} onOpenChange={setSearchOpen} />
       <TrialBanner />
+      <LiveTicker />
     </header>
   );
 };

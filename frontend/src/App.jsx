@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ChartProvider } from "./contexts/ChartContext";
 import { PortfolioProvider } from "./contexts/PortfolioContext";
+import { LiveScoresProvider } from "./contexts/LiveScoresContext";
 import HomePage from "./pages/HomePage";
 import TeamPage from "./pages/TeamPage";
 import MatchPage from "./pages/MatchPage";
@@ -61,10 +62,12 @@ function App() {
       <AuthProvider>
         <ChartProvider>
           <PortfolioProvider>
-            <Toaster position="top-right" theme="dark" />
-            <AppRouter />
-            <SlipFab />
-            <DevLoginPanel />
+            <LiveScoresProvider>
+              <Toaster position="top-right" theme="dark" />
+              <AppRouter />
+              <SlipFab />
+              <DevLoginPanel />
+            </LiveScoresProvider>
           </PortfolioProvider>
         </ChartProvider>
       </AuthProvider>

@@ -330,6 +330,108 @@ async def fixture_results(ids: list) -> dict:
     return out
 
 
+async def live_fixtures() -> list:
+    """ALL in-play fixtures across every league in ONE call (/fixtures?live=all).
+    Cached 45s — a single request powers the whole live ticker + live scores."""
+    ck = "live_all"
+    hit = _c_get(ck)
+    if hit is not None:
+        return hit
+    out: list = []
+    try:
+        d = await _get(FOOTBALL_BASE, "/fixtures", {"live": "all"})
+        for item in d.get("response") or []:
+            fx = item.get("fixture") or {}
+            lg = item.get("league") or {}
+            tm = item.get("teams") or {}
+            g = item.get("goals") or {}
+            st = fx.get("status") or {}
+            out.append({
+                "id": f"live_af_{fx.get('id')}",
+                "league": lg.get("name"),
+                "leagueId": lg.get("id"),
+                "home": (tm.get("home") or {}).get("name"),
+                "away": (tm.get("away") or {}).get("name"),
+                "homeLogo": (tm.get("home") or {}).get("logo"),
+                "awayLogo": (tm.get("away") or {}).get("logo"),
+                "homeScore": g.get("home"),
+                "awayScore": g.get("away"),
+                "minute": st.get("elapsed"),
+                "status": st.get("short"),
+            })
+    except Exception as e:
+        logger.warning("apifootball.live_fixtures: %s", e)
+    _c_set(ck, out, ttl=45)
+    return out
+
+
+async def head_to_head(hid, aid, last: int = 6) -> dict:
+    """Recent head-to-head record between two teams (home-team perspective)."""
+    if not hid or not aid:
+        return None
+    ck = f"h2h_{hid}_{aid}"
+    hit = _c_get(ck)
+    if hit is not None:
+        return hit
+    out = {"home_wins": 0, "away_wins": 0, "draws": 0, "count": 0}
+    try:
+        d = await _get(FOOTBALL_BASE, "/fixtures/headtohead", {"h2h": f"{hid}-{aid}", "last": last})
+        for item in d.get("response") or []:
+            g = item.get("goals") or {}
+            hs, a = g.get("home"), g.get("away")
+            if hs is None or a is None:
+                continue
+            tm = item.get("teams") or {}
+            fx_home_is_our_home = str((tm.get("home") or {}).get("id")) == str(hid)
+            out["count"] += 1
+            if hs == a:
+                out["draws"] += 1
+            else:
+                fixture_home_won = hs > a
+                our_home_won = fixture_home_won == fx_home_is_our_home
+                out["home_wins" if our_home_won else "away_wins"] += 1
+    except Exception as e:
+        logger.warning("apifootball.head_to_head(%s,%s): %s", hid, aid, e)
+    _c_set(ck, out, ttl=24 * 3600)
+    return out
+
+
+async def team_statistics(team_id, league_id, season: int = None) -> dict:
+    """Home/away goal splits + clean sheets from /teams/statistics (cached 24h)."""
+    if not team_id or not league_id:
+        return None
+    season = season or FOOTBALL_SEASON
+    ck = f"tstat_{team_id}_{league_id}_{season}"
+    hit = _c_get(ck)
+    if hit is not None:
+        return hit
+
+    def _f(x):
+        try:
+            return float(x)
+        except (TypeError, ValueError):
+            return None
+
+    out = None
+    try:
+        d = await _get(FOOTBALL_BASE, "/teams/statistics",
+                       {"team": team_id, "league": league_id, "season": season})
+        r = d.get("response") or {}
+        goals = r.get("goals") or {}
+        gf = ((goals.get("for") or {}).get("average") or {})
+        ga = ((goals.get("against") or {}).get("average") or {})
+        cs = r.get("clean_sheet") or {}
+        out = {
+            "gf_home": _f(gf.get("home")), "gf_away": _f(gf.get("away")), "gf_total": _f(gf.get("total")),
+            "ga_home": _f(ga.get("home")), "ga_away": _f(ga.get("away")), "ga_total": _f(ga.get("total")),
+            "clean_sheets": cs.get("total"),
+        }
+    except Exception as e:
+        logger.warning("apifootball.team_statistics(%s): %s", team_id, e)
+    _c_set(ck, out, ttl=24 * 3600)
+    return out
+
+
 async def player_stats(player_id: str, season: int = None, team_id: str = None) -> dict:
     """Real per-player statistics for a season (api-football /players).
     If team_id is given, only that CLUB's stats are counted (national-team

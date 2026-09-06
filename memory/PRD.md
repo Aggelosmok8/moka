@@ -261,3 +261,12 @@ The API-Football free plan went inactive/quota-exhausted → leagues/teams/playe
 - League dropdown + team search + date picker on /matches (client-side over value-matches). data-testids: matches-filters, filter-league, filter-team, filter-date, filter-clear.
 ### Real xG & H2H — HONEST STATUS
 - API-Football does NOT expose pre-match xG for UPCOMING fixtures (only post-match team statistics, not all plans). The 'xG' shown remains the model's deterministic expected goals. The prediction engine  multiplier hook is ready. H2H is available but needs team-id plumbing (public_match currently strips ids) + per-match cached call — NOT yet wired. Offered as next step.
+
+
+## Update 2026-09-06 — Live ticker + live scores + H2H + team splits
+- Live ticker (LiveTicker.jsx + LiveScoresContext, mounted in Header -> all pages): thin scrolling bar, ALL leagues, score+minute. Powered by GET /api/live -> apifootball.live_fixtures() /fixtures?live=all = ONE call, cached 45s (204 live matches verified). Poll 60s client-side.
+- Live scores on ValueCard: MatchWhen shows LIVE score+minute if match id is in live map, else kickoff date.
+- H2H multiplier: apifootball.head_to_head (cached 24h) applied via prediction adjust hook in matches._refine_prediction (single-match view only). Verified signals h2h 3-2-1 applied + shown as prediction-h2h line.
+- Team form splits: apifootball.team_statistics /teams/statistics (cached 24h) -> home/away goal splits + clean sheets feed adjust multipliers (clamped 0.85-1.18). Graceful N/A when league has no data (no fake, no 0).
+- Match team ids stored on live match (home_id/away_id) via live_values for H2H/team-stats lookups.
+- API cost: ticker 1 call/45s (all leagues); H2H+team-stats only on single match open, cached 24h.

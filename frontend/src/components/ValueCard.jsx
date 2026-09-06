@@ -6,6 +6,7 @@ import { UpgradeButton } from "./Gating";
 import AddToChartButton from "./AddToChartButton";
 import AddToSlipButton from "./AddToSlipButton";
 import InfoTip from "./InfoTip";
+import { useLiveScores } from "../contexts/LiveScoresContext";
 
 function fmtKickoff(iso) {
   if (!iso) return null;
@@ -14,7 +15,17 @@ function fmtKickoff(iso) {
   return d.toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
-function MatchWhen({ match }) {
+function MatchWhen({ match, live }) {
+  if (live) {
+    return (
+      <div className="flex items-center gap-2 mb-3" data-testid={`match-live-${match.id}`}>
+        <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/30">
+          <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> Live{live.minute != null ? ` ${live.minute}'` : ""}
+        </span>
+        <span className="font-display font-black text-white text-sm font-mono-num">{live.homeScore ?? 0}-{live.awayScore ?? 0}</span>
+      </div>
+    );
+  }
   if (match.status === "live") {
     return (
       <div className="flex items-center gap-2 mb-3" data-testid={`match-live-${match.id}`}>
@@ -84,6 +95,7 @@ export function LockedValueCard() {
 
 export default function ValueCard({ entry }) {
   const { match, value } = entry;
+  const live = useLiveScores().get(match.id);
   const [adv, setAdv] = useState(false);
   const probs = value.probabilities || {};
   const toggle = (e) => {
@@ -107,7 +119,7 @@ export default function ValueCard({ entry }) {
       <div className="font-display font-bold text-white text-lg leading-tight mb-2">
         {match.home && match.home.name} <span className="text-zinc-600 text-sm">vs</span> {match.away && match.away.name}
       </div>
-      <MatchWhen match={match} />
+      <MatchWhen match={match} live={live} />
 
       {/* Simple info — always visible */}
       <div className="flex items-center justify-between text-xs border-t border-white/5 pt-2">
