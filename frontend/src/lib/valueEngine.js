@@ -28,6 +28,8 @@ export function adaptValue(v) {
     valueLevel: v.value_level,
     level: levelStyle(v.value_level),
     probabilities: v.probabilities || {},
+    prediction: v.prediction || null,
+    possibleOutcome: v.possible_outcome || null,
   };
 }
 
