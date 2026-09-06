@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Activity, Flame, Trophy, BarChart3, Search, Tag, User, LineChart, Users, Wallet, Star, Dribbble } from "lucide-react";
+import { Activity, Flame, Trophy, BarChart3, Search, Tag, User, LineChart, Users, Wallet, Star, Dribbble, Menu, X } from "lucide-react";
 import LiveStatusPill from "./LiveStatusPill";
 import SearchPalette from "./SearchPalette";
 import UserMenu from "./UserMenu";
@@ -28,11 +28,26 @@ const NavLink = ({ to, label, icon: Icon, active, testId, badge }) => (
   </Link>
 );
 
+const NAV_ITEMS = [
+  { to: "/", label: "Home", icon: Activity, testId: "nav-home", isActive: (p) => p === "/" },
+  { to: "/matches", label: "Matches", icon: Flame, testId: "nav-matches", isActive: (p) => p.startsWith("/matches") || p.startsWith("/analysis") || p.startsWith("/value") },
+  { to: "/leagues", label: "Leagues", icon: Trophy, testId: "nav-leagues", isActive: (p) => p.startsWith("/leagues") },
+  { to: "/teams", label: "Teams", icon: Users, testId: "nav-teams", isActive: (p) => p.startsWith("/teams") || p.startsWith("/team/") },
+  { to: "/sports", label: "Sports", icon: Dribbble, testId: "nav-sports", isActive: (p) => p.startsWith("/sports") },
+  { to: "/charts", label: "Watchlist", icon: Star, testId: "nav-watchlist", isActive: (p) => p.startsWith("/charts"), badge: "chart" },
+  { to: "/portfolio", label: "Portfolio", icon: Wallet, testId: "nav-portfolio", isActive: (p) => p.startsWith("/portfolio"), badge: "pending" },
+  { to: "/pricing", label: "Pricing", icon: Tag, testId: "nav-pricing", isActive: (p) => p.startsWith("/pricing") },
+  { to: "/account", label: "Account", icon: User, testId: "nav-account", isActive: (p) => p.startsWith("/account") },
+];
+
 export const Header = () => {
   const loc = useLocation();
   const [searchOpen, setSearchOpen] = useState(false);
   const { count: chartCount } = useChart();
   const { pendingCount } = usePortfolio();
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => { setMenuOpen(false); }, [loc.pathname]);
+  const badgeFor = (b) => (b === "chart" ? chartCount : b === "pending" ? pendingCount : 0);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -62,19 +77,22 @@ export const Header = () => {
           </div>
         </Link>
 
-        <nav className="flex items-center gap-0.5">
-          <NavLink to="/" label="Home" icon={Activity} active={loc.pathname === "/"} testId="nav-home" />
-          <NavLink to="/matches" label="Matches" icon={Flame} active={loc.pathname.startsWith("/matches") || loc.pathname.startsWith("/analysis") || loc.pathname.startsWith("/value")} testId="nav-matches" />
-          <NavLink to="/leagues" label="Leagues" icon={Trophy} active={loc.pathname.startsWith("/leagues")} testId="nav-leagues" />
-          <NavLink to="/teams" label="Teams" icon={Users} active={loc.pathname.startsWith("/teams") || loc.pathname.startsWith("/team/")} testId="nav-teams" />
-          <NavLink to="/sports" label="Sports" icon={Dribbble} active={loc.pathname.startsWith("/sports")} testId="nav-sports" />
-          <NavLink to="/charts" label="Watchlist" icon={Star} active={loc.pathname.startsWith("/charts")} testId="nav-watchlist" badge={chartCount} />
-          <NavLink to="/portfolio" label="Portfolio" icon={Wallet} active={loc.pathname.startsWith("/portfolio")} testId="nav-portfolio" badge={pendingCount} />
-          <NavLink to="/pricing" label="Pricing" icon={Tag} active={loc.pathname.startsWith("/pricing")} testId="nav-pricing" />
-          <NavLink to="/account" label="Account" icon={User} active={loc.pathname.startsWith("/account")} testId="nav-account" />
+        <nav className="hidden lg:flex items-center gap-0.5">
+          {NAV_ITEMS.map((it) => (
+            <NavLink key={it.to} to={it.to} label={it.label} icon={it.icon} testId={it.testId}
+              active={it.isActive(loc.pathname)} badge={badgeFor(it.badge)} />
+          ))}
         </nav>
 
         <div className="flex items-center gap-2">
+          <button
+            data-testid="mobile-menu-toggle"
+            onClick={() => setMenuOpen((v) => !v)}
+            className="lg:hidden flex items-center justify-center w-9 h-9 rounded-md text-zinc-300 hover:text-white hover:bg-white/5 transition-colors"
+            aria-label="Menu"
+          >
+            {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
           <button
             data-testid="search-button"
             onClick={() => setSearchOpen(true)}
@@ -88,6 +106,31 @@ export const Header = () => {
           <UserMenu />
         </div>
       </div>
+
+      {menuOpen && (
+        <nav data-testid="mobile-nav" className="lg:hidden border-t border-white/10 bg-[#0A0A0A]/95 backdrop-blur-xl px-4 py-2 flex flex-col gap-0.5">
+          {NAV_ITEMS.map((it) => {
+            const Icon = it.icon;
+            const active = it.isActive(loc.pathname);
+            const badge = badgeFor(it.badge);
+            return (
+              <Link
+                key={it.to}
+                to={it.to}
+                data-testid={`m-${it.testId}`}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-semibold transition-colors ${
+                  active ? "text-[#39FF14] bg-[#39FF14]/10" : "text-zinc-300 hover:bg-white/5"
+                }`}
+              >
+                <Icon className="w-4 h-4" /> {it.label}
+                {badge > 0 && (
+                  <span className="ml-auto min-w-[16px] h-4 px-1 rounded-full bg-[#39FF14] text-black text-[10px] font-black flex items-center justify-center">{badge}</span>
+                )}
+              </Link>
+            );
+          })}
+        </nav>
+      )}
       <SearchPalette open={searchOpen} onOpenChange={setSearchOpen} />
       <TrialBanner />
     </header>

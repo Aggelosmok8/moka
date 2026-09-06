@@ -242,3 +242,10 @@ The API-Football free plan went inactive/quota-exhausted → leagues/teams/playe
 - Endpoint GET /api/matches/<built-in function id>/ai-analysis. Frontend MatchAnalysisPage fetches lazily (90s timeout), renders "Moka Analysis" card + Possible Outcome badge.
 - Keys server-side only in backend/.env: OPENAI_API_KEY (stored, unused-by-default), OPENAI_MODEL=gpt-5.6-luna. AI uses EMERGENT_LLM_KEY via emergentintegrations.
 ### Pending: Phase 4 responsive/layout audit (Home, Analysis, Teams, Players, Charts, Portfolio, Pricing); optional lazy xG/H2H multipliers into prediction adjust; inline player-stats-in-analysis lineup.
+
+
+## Update 2026-09-06 — Phase 4 responsive/layout audit
+- Header: added proper mobile hamburger menu (data-testid mobile-menu-toggle + mobile-nav, m-nav-* links) shown <lg; desktop nav now hidden lg:flex (unchanged visually at lg+). Refactored nav to NAV_ITEMS array.
+- Verified 0 horizontal overflow on Home/Matches/Analysis/Teams/Portfolio/Pricing/Charts (desktop). Tables (LeagueDetail standings, Charts watchlist) already wrapped in overflow-x-auto.
+- LIMITATION: screenshot tool renders at 1920px only; true mobile (320-430px) verified via code review of responsive classes + programmatic scrollWidth check, not visual mobile screenshots.
+- All 4 phases (prediction engine, Match Analysis UI + player status, AI GPT-5.6 Luna, responsive) complete.
