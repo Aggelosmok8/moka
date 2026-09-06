@@ -35,7 +35,7 @@ export default function LiveTicker() {
           <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> Live
         </span>
         <div className="relative flex-1 overflow-hidden py-1.5">
-          <div className="flex w-max" style={{ animation: "moka-ticker 150s linear infinite" }}>
+          <div className="flex w-max" style={{ animation: "moka-ticker 240s linear infinite" }}>
             <Row k={1} />
             <Row k={2} />
           </div>

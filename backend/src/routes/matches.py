@@ -75,6 +75,61 @@ async def team_stats(team_id: str, league: str = ""):
     return {"stats": await af.team_statistics(team_id, lid)}
 
 
+async def _build_live_match(match_id: str):
+    """Build a match object on-demand for an in-play fixture (any league).
+
+    Pay-per-view: reuses the cached live list (no extra call) and only pulls
+    team statistics (cached 24h) + live game stats (cached 60s) for THIS match."""
+    if not match_id.startswith("live_af_"):
+        return None
+    import apifootball as af
+    live = await af.live_fixtures()
+    item = next((x for x in live if x.get("id") == match_id), None)
+    if not item:
+        return None
+    fid = match_id.split("live_af_")[-1]
+    lid = item.get("leagueId")
+    hid, aid = item.get("homeId"), item.get("awayId")
+    hstat = await af.team_statistics(hid, lid) if (hid and lid) else None
+    astat = await af.team_statistics(aid, lid) if (aid and lid) else None
+    stats = await af.live_fixture_stats(fid)
+
+    def _mk(name, st):
+        return {
+            "name": name,
+            "goalsScored": (st or {}).get("gf_total"),
+            "goalsConceded": (st or {}).get("ga_total"),
+            "form": None,
+            "possession": None,
+        }
+
+    hs, as_ = item.get("homeScore"), item.get("awayScore")
+    return {
+        "id": match_id,
+        "leagueId": str(lid) if lid is not None else "live",
+        "leagueName": item.get("league"),
+        "sport": "football",
+        "status": "live",
+        "commence_time": None,
+        "score": f"{hs if hs is not None else 0}-{as_ if as_ is not None else 0}",
+        "home": _mk(item.get("home"), hstat),
+        "away": _mk(item.get("away"), astat),
+        "home_id": hid,
+        "away_id": aid,
+        "odds": [],
+        "live": {
+            "minute": item.get("minute"),
+            "homeScore": hs,
+            "awayScore": as_,
+            "status": item.get("status"),
+            "homeLogo": item.get("homeLogo"),
+            "awayLogo": item.get("awayLogo"),
+            "stats": stats,
+        },
+        "dataSource": "apifootball-live",
+    }
+
+
 async def _resolve_match(match_id: str):
     m = MATCH_INDEX.get(match_id)
     if not m:
@@ -85,7 +140,36 @@ async def _resolve_match(match_id: str):
             m = next((x for x in live if x.get("id") == match_id), None)
         except Exception:
             m = None
+    if not m:
+        # in-play fixture from any league — resolve on demand
+        try:
+            m = await _build_live_match(match_id)
+        except Exception as e:
+            logger.warning("build_live_match(%s): %s", match_id, e)
+            m = None
     return m
+
+
+def _prediction_only_value(m: dict):
+    """Value block for a live match with no pre-match odds: Moka prediction only
+    (no pick / EV / odds — those do not apply in-play)."""
+    pred = full_prediction(m["home"], m["away"])
+    probs = {"home": pred["home"], "draw": pred["draw"], "away": pred["away"]}
+    return {
+        "match_id": m["id"],
+        "pick": None, "pick_name": None, "best_odds": None, "bookmaker": None,
+        "model_prob": None, "market_prob": None, "edge": None, "ev_score": None,
+        "value_level": "LIVE", "confidence": None, "value_score": None,
+        "probabilities": {k: round(v * 100) for k, v in probs.items()},
+        "prediction": {
+            "home": round(pred["home"] * 100), "draw": round(pred["draw"] * 100), "away": round(pred["away"] * 100),
+            "over25": round(pred["over25"] * 100), "under25": round(pred["under25"] * 100),
+            "btts_yes": round(pred["btts_yes"] * 100), "btts_no": round(pred["btts_no"] * 100),
+            "xg_home": pred["xg_home"], "xg_away": pred["xg_away"], "xg_total": pred["xg_total"],
+        },
+        "possible_outcome": possible_outcome(probs),
+        "live_only": True,
+    }
 
 
 async def _refine_prediction(m: dict, value: dict):
@@ -138,7 +222,7 @@ async def get_match(match_id: str):
     m = await _resolve_match(match_id)
     if not m:
         raise HTTPException(status_code=404, detail="Match not found")
-    value = evaluate_match(m)
+    value = evaluate_match(m) or _prediction_only_value(m)
     try:
         await _refine_prediction(m, value)
     except Exception as e:
@@ -154,7 +238,7 @@ async def get_match_ai_analysis(match_id: str):
     m = await _resolve_match(match_id)
     if not m:
         raise HTTPException(status_code=404, detail="Match not found")
-    value = evaluate_match(m)
+    value = evaluate_match(m) or _prediction_only_value(m)
     pm = public_match(m)
     import ai_analysis
     return await ai_analysis.match_analysis(pm, value)

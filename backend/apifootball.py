@@ -352,6 +352,8 @@ async def live_fixtures() -> list:
                 "leagueId": lg.get("id"),
                 "home": (tm.get("home") or {}).get("name"),
                 "away": (tm.get("away") or {}).get("name"),
+                "homeId": (tm.get("home") or {}).get("id"),
+                "awayId": (tm.get("away") or {}).get("id"),
                 "homeLogo": (tm.get("home") or {}).get("logo"),
                 "awayLogo": (tm.get("away") or {}).get("logo"),
                 "homeScore": g.get("home"),
@@ -362,6 +364,35 @@ async def live_fixtures() -> list:
     except Exception as e:
         logger.warning("apifootball.live_fixtures: %s", e)
     _c_set(ck, out, ttl=45)
+    return out
+
+
+async def live_fixture_stats(fixture_id) -> dict:
+    """In-play team statistics for ONE fixture (cached 60s). Only fetched when a
+    user opens a live match — the live list itself never triggers this."""
+    if not fixture_id:
+        return None
+    ck = f"livestat_{fixture_id}"
+    hit = _c_get(ck)
+    if hit is not None:
+        return hit
+    out = None
+    try:
+        d = await _get(FOOTBALL_BASE, "/fixtures/statistics", {"fixture": fixture_id})
+        resp = d.get("response") or []
+
+        def _pick(block):
+            m = {}
+            for s in (block or {}).get("statistics") or []:
+                if s.get("value") is not None:
+                    m[s.get("type")] = s.get("value")
+            return m
+
+        if len(resp) >= 2:
+            out = {"home": _pick(resp[0]), "away": _pick(resp[1])}
+    except Exception as e:
+        logger.warning("apifootball.live_fixture_stats(%s): %s", fixture_id, e)
+    _c_set(ck, out, ttl=60)
     return out
 
 

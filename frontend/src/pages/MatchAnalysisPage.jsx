@@ -56,6 +56,31 @@ function StatsTable({ home = {}, away = {}, hn, an }) {
   );
 }
 
+const LIVE_STAT_ORDER = ["Ball Possession", "Total Shots", "Shots on Goal", "Shots off Goal",
+  "Shots insidebox", "Shots outsidebox", "Corner Kicks", "Fouls", "Offsides",
+  "Yellow Cards", "Red Cards", "Goalkeeper Saves", "Total passes", "Passes accurate", "Passes %"];
+
+function LiveStats({ home = {}, away = {}, hn, an }) {
+  const ordered = LIVE_STAT_ORDER.filter((k) => home[k] != null || away[k] != null);
+  const extra = [...new Set([...Object.keys(home || {}), ...Object.keys(away || {})])].filter((k) => !LIVE_STAT_ORDER.includes(k));
+  const all = [...ordered, ...extra];
+  if (!all.length) return <div className="text-sm text-zinc-500">No live statistics available yet — they appear as the match develops.</div>;
+  return (
+    <div className="space-y-1.5" data-testid="live-stats-table">
+      <div className="grid grid-cols-[1fr_auto_1fr] text-[10px] uppercase tracking-wider text-zinc-500 pb-1">
+        <span className="text-right truncate">{hn || "Home"}</span><span className="px-2" /><span className="text-left truncate">{an || "Away"}</span>
+      </div>
+      {all.map((k) => (
+        <div key={k} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+          <span className="text-right font-display font-black text-white font-mono-num">{home?.[k] ?? "—"}</span>
+          <span className="text-center text-[10px] uppercase tracking-wider text-zinc-500 px-2 whitespace-nowrap">{k}</span>
+          <span className="text-left font-display font-black text-white font-mono-num">{away?.[k] ?? "—"}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function MatchAnalysisPage() {
   const { id } = useParams();
   const { role } = useEntitlements();
@@ -93,6 +118,8 @@ export default function MatchAnalysisPage() {
   const match = data;
   const value = adaptValue(data.value);
   const probs = value.probabilities || {};
+  const live = match.live || null;
+  const isLive = match.status === "live" || value.liveOnly;
   const pick = value.pick;
 
   // Available odds — every bookmaker for the pick, sorted best (highest) to worst.
@@ -111,7 +138,22 @@ export default function MatchAnalysisPage() {
         {match.home && match.home.name} <span className="text-zinc-600 text-xl">vs</span> {match.away && match.away.name}
       </h1>
 
+      {isLive && (
+        <Card testId="live-header">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 text-xs font-black uppercase px-2.5 py-1 rounded-full bg-red-500/15 text-red-400 border border-red-500/30">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> Live{live && live.minute != null ? ` ${live.minute}'` : ""}
+            </span>
+            <span className="font-display font-black text-white text-3xl font-mono-num" data-testid="live-scoreline">
+              {(live && live.homeScore) ?? 0}<span className="text-zinc-600 mx-2">-</span>{(live && live.awayScore) ?? 0}
+            </span>
+          </div>
+          <p className="text-[11px] text-zinc-500 mt-2">Match in play — odds and value picks do not apply live. Below is Moka's model read of the game plus the live match statistics.</p>
+        </Card>
+      )}
+
       {/* MOKA PICK */}
+      {!isLive && (
       <Card testId="moka-pick">
         <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Moka Pick</div>
         <div className="flex items-end justify-between gap-3 flex-wrap">
@@ -126,6 +168,7 @@ export default function MatchAnalysisPage() {
           <AddToSlipButton entry={{ match, value }} size="md" className="w-full" />
         </div>
       </Card>
+      )}
 
       {/* MOKA AI ANALYSIS */}
       <Card testId="ai-analysis">
@@ -154,6 +197,7 @@ export default function MatchAnalysisPage() {
       </Card>
 
       {/* WHY MOKA LIKES IT */}
+      {!isLive && (
       <Card title="Why Moka likes it" testId="why-moka">
         <ul className="space-y-2">
           {whyMokaReasons(match, value).map((r, i) => (
@@ -163,6 +207,7 @@ export default function MatchAnalysisPage() {
           ))}
         </ul>
       </Card>
+      )}
 
       {/* MOKA PREDICTION — basic, visible to all */}
       {value.prediction && (
@@ -206,7 +251,16 @@ export default function MatchAnalysisPage() {
         </Card>
       )}
 
+      {/* LIVE MATCH STATISTICS */}
+      {isLive && live && live.stats && (
+        <Card title="Live match statistics" testId="live-stats">
+          <LiveStats home={live.stats.home} away={live.stats.away} hn={match.home && match.home.name} an={match.away && match.away.name} />
+          <p className="text-[11px] text-zinc-500 mt-3">Real-time statistics from the match, updated as it develops.</p>
+        </Card>
+      )}
+
       {/* AVAILABLE ODDS */}
+      {!isLive && (
       <Card title="Available Odds" testId="available-odds">
         <div className="space-y-1.5">
           {oddsRows.length === 0 && <div className="text-sm text-zinc-500">No odds available.</div>}
@@ -231,6 +285,7 @@ export default function MatchAnalysisPage() {
         </div>
         <div className="text-[11px] text-zinc-500 mt-2">Tap any bookmaker to open their site · odds for {value.pickName}, best to worst.</div>
       </Card>
+      )}
 
       {/* ADVANCED STATISTICS — PRO only, Free sees an upsell */}
       {isPro ? (
@@ -247,6 +302,7 @@ export default function MatchAnalysisPage() {
 
           {showAdv && (
             <div data-testid="advanced-stats">
+              {!isLive && (
               <Card title="Moka vs Market">
                 <div className="grid grid-cols-3 gap-2 text-center mb-3">
                   <div className="bg-[#0d1117] border border-[#30363d] rounded-lg py-2"><div className="text-[10px] text-zinc-500 uppercase">Moka Prob.</div><div className="font-display font-black text-lg text-[#39FF14]">{Math.round(value.mokaProb * 100)}%</div></div>
@@ -258,6 +314,7 @@ export default function MatchAnalysisPage() {
                 <Bar label="Away" pct={probs.away || 0} color="#58a6ff" />
                 <p className="text-[11px] text-zinc-500 mt-3">{aiExplanation(match, value)}</p>
               </Card>
+              )}
 
               <Card title="Team Statistics">
                 <StatsTable home={match.homeTeam} away={match.awayTeam} hn={match.home && match.home.name} an={match.away && match.away.name} />
@@ -268,7 +325,7 @@ export default function MatchAnalysisPage() {
                 <div className="text-sm text-zinc-300 leading-relaxed">
                   Home {probs.home}% · Draw {probs.draw}% · Away {probs.away}%
                   {value.prediction && <> · Over 2.5 {value.prediction.over25}% · BTTS {value.prediction.btts_yes}% · xG {value.prediction.xg_home}–{value.prediction.xg_away}</>}
-                  {" "}· Confidence {value.confidence}% · Value score {value.valueScore}
+                  {value.confidence != null && <> · Confidence {value.confidence}% · Value score {value.valueScore}</>}
                 </div>
               </Card>
             </div>

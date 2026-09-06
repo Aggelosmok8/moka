@@ -270,3 +270,12 @@ The API-Football free plan went inactive/quota-exhausted → leagues/teams/playe
 - Team form splits: apifootball.team_statistics /teams/statistics (cached 24h) -> home/away goal splits + clean sheets feed adjust multipliers (clamped 0.85-1.18). Graceful N/A when league has no data (no fake, no 0).
 - Match team ids stored on live match (home_id/away_id) via live_values for H2H/team-stats lookups.
 - API cost: ticker 1 call/45s (all leagues); H2H+team-stats only on single match open, cached 24h.
+
+
+## Update 2026-09-06 — Direct OpenAI (Luna) + Team Compare + full Live match analysis
+- AI analysis migrated OFF Emergent: ai_analysis.py now uses direct OpenAI SDK (AsyncOpenAI, openai==1.99.9) with OPENAI_API_KEY, model gpt-5.6-luna (OPENAI_MODEL). No emergentintegrations / EMERGENT_LLM_KEY in AI flow. 24h cache kept (af._c_set). Verified cold->warm (cached). requirements.txt: added openai==1.99.9, REMOVED emergentintegrations + --extra-index-url (fixes Render build). NOTE: server.py still uses EMERGENT_LLM_KEY for a SEPARATE legacy Claude /analysis endpoint (httpx, optional, falls back to heuristic).
+- Team Compare (TeamsPage ComparePanel, football): pick 2nd team -> side-by-side (pos, points, last5, goals/game, conceded/game, clean sheets), green = better. Clean sheets via GET /api/teams/{id}/stats?league=slug (team_statistics, lazy+cached 24h).
+- Home hero: all benefit sentences as neon pills around headline (no scroll); brand XtraStats->MokaStats; ticker slowed 50s->240s across iterations.
+- LIVE matches now fully analysable (MatchesPage: red "Live" toggle chip + LIVE NOW section inside All Matches; live cards clickable). Backend matches._build_live_match resolves ANY in-play fixture on demand: reuses cached /api/live list (homeId/awayId/leagueId added to live_fixtures) + team_statistics (24h) + apifootball.live_fixture_stats /fixtures/statistics (cached 60s). evaluate_match->None (no odds) falls back to _prediction_only_value (live_only=true, prediction+possible_outcome only, no pick/EV). public_match passes through `live` (score/minute/stats). MatchAnalysisPage: live header (score+minute), hides Moka Pick/Why Moka/Available Odds/Moka-vs-Market when live, shows Live match statistics card. adaptValue exposes liveOnly. Verified end-to-end (Rosario Central live, prediction HOME WIN, live stats, AI cached).
+- Redirect fix: liveMode resets on tab change (useEffect on view + onClick on chips).
+- Credit control: live list 1 cached call/60s; per-live-match analysis pulls stats only when opened (pay-per-view).

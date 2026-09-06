@@ -110,6 +110,7 @@ def public_match(m: dict) -> dict:
         "status": m["status"],
         "commence_time": m.get("commence_time"),
         "score": m.get("score"),
+        "live": m.get("live"),
         "home": {"name": m["home"]["name"]},
         "away": {"name": m["away"]["name"]},
         "homeTeam": _stats(m["home"]),

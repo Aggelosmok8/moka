@@ -31,6 +31,7 @@ export function adaptValue(v) {
     prediction: v.prediction || null,
     possibleOutcome: v.possible_outcome || null,
     signals: v.signals || null,
+    liveOnly: v.live_only || false,
   };
 }
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
-import { Lock, Search, X, CalendarDays } from "lucide-react";
+import { Lock, Search, X, CalendarDays, ArrowRight } from "lucide-react";
 import Header from "../components/Header";
 import { fetchValueMatches } from "../lib/catalogApi";
 import { adaptValueMatches } from "../lib/valueEngine";
@@ -15,8 +15,8 @@ const VIEWS = {
   all: { title: "All Matches", sub: "Browse every available match.", levels: null },
 };
 
-const Chip = ({ to, active, children }) => (
-  <Link to={to} className={`px-3 py-1.5 rounded-full text-sm font-semibold transition-colors ${active ? "bg-[#39FF14] text-black" : "bg-white/5 text-zinc-300 hover:bg-white/10"}`}>{children}</Link>
+const Chip = ({ to, active, onClick, children }) => (
+  <Link to={to} onClick={onClick} className={`px-3 py-1.5 rounded-full text-sm font-semibold transition-colors ${active ? "bg-[#39FF14] text-black" : "bg-white/5 text-zinc-300 hover:bg-white/10"}`}>{children}</Link>
 );
 
 const Skel = () => (
@@ -27,7 +27,7 @@ const Skel = () => (
 
 function LiveMatchCard({ m }) {
   return (
-    <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-4" data-testid={`live-card-${m.id}`}>
+    <Link to={`/analysis/${m.id}`} data-testid={`live-card-${m.id}`} className="block bg-[#161b22] border border-[#30363d] rounded-xl p-4 hover:border-[#39FF14]/40 transition-all">
       <div className="flex items-center justify-between mb-3 gap-2">
         <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 truncate">{m.league}</span>
         <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/30">
@@ -45,7 +45,10 @@ function LiveMatchCard({ m }) {
           {m.awayLogo && <img src={m.awayLogo} alt="" className="w-6 h-6 object-contain shrink-0" onError={(e) => { e.currentTarget.style.display = "none"; }} />}
         </div>
       </div>
-    </div>
+      <div className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-[#39FF14]">
+        See Analysis <ArrowRight className="w-3.5 h-3.5" />
+      </div>
+    </Link>
   );
 }
 
@@ -62,6 +65,8 @@ export default function MatchesPage() {
   const [fDate, setFDate] = useState("");
   const [liveMode, setLiveMode] = useState(false);
   const { list: liveList } = useLiveScores();
+
+  useEffect(() => { setLiveMode(false); }, [view]);
 
   useEffect(() => {
     let active = true;
@@ -115,9 +120,9 @@ export default function MatchesPage() {
       <Header />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center gap-2 mb-5 flex-wrap">
-          <Chip to="/matches?view=strong" active={view === "strong" && !liveMode}>🟢 Strong</Chip>
-          <Chip to="/matches?view=watching" active={view === "watching" && !liveMode}>🟡 Worth Watching</Chip>
-          <Chip to="/matches?view=all" active={view === "all" && !liveMode}>All Matches</Chip>
+          <Chip to="/matches?view=strong" active={view === "strong" && !liveMode} onClick={() => setLiveMode(false)}>🟢 Strong</Chip>
+          <Chip to="/matches?view=watching" active={view === "watching" && !liveMode} onClick={() => setLiveMode(false)}>🟡 Worth Watching</Chip>
+          <Chip to="/matches?view=all" active={view === "all" && !liveMode} onClick={() => setLiveMode(false)}>All Matches</Chip>
           <button
             type="button"
             onClick={() => setLiveMode((v) => !v)}
@@ -156,6 +161,17 @@ export default function MatchesPage() {
                 <X className="w-3.5 h-3.5" /> Clear
               </button>
             )}
+          </div>
+        )}
+
+        {!liveMode && view === "all" && liveFiltered.length > 0 && (
+          <div className="mb-6" data-testid="all-live-section">
+            <div className="text-[11px] font-black uppercase tracking-wider text-red-400 mb-2 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> Live now ({liveFiltered.length})
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {liveFiltered.map((m) => <LiveMatchCard key={m.id} m={m} />)}
+            </div>
           </div>
         )}
 
