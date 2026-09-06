@@ -1,3 +1,4 @@
+--extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/
 fastapi==0.110.1
 uvicorn==0.25.0
 aiosqlite==0.20.0
