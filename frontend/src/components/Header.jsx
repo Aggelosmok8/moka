@@ -74,7 +74,7 @@ export const Header = () => {
             X
           </div>
           <div className="font-display font-black uppercase tracking-tight text-xl text-white">
-            Xtra<span className="text-[#39FF14]">Stats</span>
+            Moka<span className="text-[#39FF14]">Stats</span>
           </div>
         </Link>
 

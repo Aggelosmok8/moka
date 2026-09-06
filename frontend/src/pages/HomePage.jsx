@@ -1,7 +1,16 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Search, TrendingUp, BarChart3, Wallet, ChevronDown } from "lucide-react";
+import { ArrowRight, Search, TrendingUp, BarChart3, Wallet, Check } from "lucide-react";
 import Header from "../components/Header";
+
+const HERO_SENTENCES = [
+  "Find the matches worth analysing",
+  "Find the best odds for every match",
+  "See the stats of every team",
+  "See the stats of every player",
+  "Study every detail",
+  "Track your profit and losses",
+];
 
 const IMG = {
   hero: "https://images.unsplash.com/photo-1604524404499-67ba5a962db8?crop=entropy&cs=srgb&fm=jpg&q=85&w=2400",
@@ -55,17 +64,17 @@ export default function HomePage() {
       <section className="relative min-h-[92vh] flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${IMG.hero})` }} />
         <div className="absolute inset-0" style={{ background: "radial-gradient(120% 80% at 50% 20%, rgba(13,17,23,0.35) 0%, rgba(13,17,23,0.85) 55%, #0d1117 100%)" }} />
-        <div className="relative text-center px-4 sm:px-6 max-w-4xl mx-auto">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[#39FF14]/40 bg-[#39FF14]/10 text-[#39FF14] text-xs font-bold uppercase tracking-[0.2em] mb-8">
+        <div className="relative text-center px-4 sm:px-6 max-w-5xl mx-auto py-24">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[#39FF14]/40 bg-[#39FF14]/10 text-[#39FF14] text-xs font-bold uppercase tracking-[0.2em] mb-6">
             Premium Sports Intelligence
           </div>
-          <h1 className="font-display font-black uppercase tracking-tight text-white text-5xl sm:text-7xl lg:text-8xl leading-[0.9]">
+          <h1 className="font-display font-black uppercase tracking-tight text-white text-5xl sm:text-6xl lg:text-7xl leading-[0.9]">
             Moka makes<br />betting <span style={{ color: NEON }}>easier</span>.
           </h1>
-          <p className="text-zinc-300 text-lg sm:text-2xl mt-8 max-w-2xl mx-auto leading-relaxed">
+          <p className="text-zinc-300 text-base sm:text-xl mt-6 max-w-2xl mx-auto leading-relaxed">
             Everything you need to study the game, find potential opportunities and track your performance — in one place.
           </p>
-          <div className="flex flex-wrap items-center justify-center gap-4 mt-10">
+          <div className="flex flex-wrap items-center justify-center gap-4 mt-8">
             <Link to="/matches" data-testid="hero-explore-matches" className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-[#39FF14] text-black font-black uppercase tracking-wider text-sm hover:brightness-110 transition">
               Explore Matches <ArrowRight className="w-4 h-4" />
             </Link>
@@ -73,9 +82,16 @@ export default function HomePage() {
               My Portfolio
             </Link>
           </div>
-        </div>
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 text-zinc-500 animate-bounce">
-          <ChevronDown className="w-6 h-6" />
+
+          {/* All the sentences, right here around the hero — no scroll needed */}
+          <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-w-3xl mx-auto" data-testid="hero-sentences">
+            {HERO_SENTENCES.map((s, i) => (
+              <div key={i} className="flex items-center gap-2 text-left bg-white/5 border border-white/10 rounded-full px-4 py-2.5 backdrop-blur-sm hover:border-[#39FF14]/40 transition-colors">
+                <Check className="w-4 h-4 text-[#39FF14] shrink-0" />
+                <span className="text-sm text-zinc-200 font-semibold leading-tight">{s}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 

@@ -303,8 +303,14 @@ export default function TeamsPage() {
 
   useEffect(() => {
     if (league) return;
-    const wanted = wantLeague && LEAGUE_CATALOG.find((l) => l.id === wantLeague && accessibleIds.has(l.id));
-    const first = wanted || LEAGUE_CATALOG.find((l) => accessibleIds.has(l.id)) || LEAGUE_CATALOG[0];
+    // A team was requested from the standings — honour it immediately.
+    if (wantLeague && LEAGUE_CATALOG.find((l) => l.id === wantLeague)) {
+      setLeague(wantLeague);
+      return;
+    }
+    // Otherwise wait for entitlements to load before picking a default.
+    if (accessibleIds.size === 0) return;
+    const first = LEAGUE_CATALOG.find((l) => accessibleIds.has(l.id)) || LEAGUE_CATALOG[0];
     if (first) setLeague(first.id);
   }, [accessibleIds, league, wantLeague]);
 
