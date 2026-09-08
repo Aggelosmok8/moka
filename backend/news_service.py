@@ -36,6 +36,24 @@ def build_search(team: str = "", league: str = "", q: str = "") -> str:
     return " ".join(p for p in parts if p)
 
 
+async def match_news(home: str = "", away: str = "", limit: int = 3) -> list:
+    """Recent news for a specific match (either team). Cached via fetch_news."""
+    parts = [_term(p) for p in (home, away) if p and p.strip()]
+    if not parts:
+        return []
+    search = " | ".join(parts)
+    res = await fetch_news(search=search, limit=limit)
+    out = []
+    for a in res.get("articles") or []:
+        out.append({
+            "title": a.get("title"),
+            "source": a.get("source"),
+            "published": a.get("publishedAt"),
+            "snippet": (a.get("snippet") or a.get("description") or "")[:200],
+        })
+    return out
+
+
 async def fetch_news(search: str = "", published_on: str = "", page: int = 1, limit: int = 3) -> dict:
     token = _token()
     if not token:

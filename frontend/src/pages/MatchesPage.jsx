@@ -49,6 +49,7 @@ export default function MatchesPage() {
   const [fLeague, setFLeague] = useState("");
   const [fTeam, setFTeam] = useState("");
   const [fDate, setFDate] = useState("");
+  const [fSport, setFSport] = useState("");
   const [liveMode, setLiveMode] = useState(false);
   const { list: liveList } = useLiveScores();
 
@@ -78,6 +79,7 @@ export default function MatchesPage() {
 
   const filtered = useMemo(() => list.filter((e) => {
     const m = e.match;
+    if (fSport && (m.sport || "football") !== fSport) return false;
     if (fLeague && m.leagueName !== fLeague) return false;
     if (fTeam) {
       const q = fTeam.toLowerCase();
@@ -85,7 +87,7 @@ export default function MatchesPage() {
     }
     if (fDate && (m.commence_time || "").slice(0, 10) !== fDate) return false;
     return true;
-  }), [list, fLeague, fTeam, fDate]);
+  }), [list, fLeague, fTeam, fDate, fSport]);
 
   const liveFiltered = useMemo(() => liveList.filter((m) => {
     if (!m.supported) return false;
@@ -97,8 +99,8 @@ export default function MatchesPage() {
     return true;
   }), [liveList, fLeague, fTeam]);
 
-  const hasFilters = fLeague || fTeam || fDate;
-  const clearFilters = () => { setFLeague(""); setFTeam(""); setFDate(""); };
+  const hasFilters = fLeague || fTeam || fDate || fSport;
+  const clearFilters = () => { setFLeague(""); setFTeam(""); setFDate(""); setFSport(""); };
 
   const visible = isPro ? filtered : filtered.slice(0, 3);
   const lockedCount = isPro ? 0 : Math.max(0, Math.min(3, filtered.length - visible.length));
@@ -128,9 +130,17 @@ export default function MatchesPage() {
 
         {!busy && (liveMode ? liveList.length > 0 : entries.length > 0) && (
           <div className="flex flex-wrap items-center gap-2 mb-6" data-testid="matches-filters">
+            {!liveMode && (
+              <select value={fSport} onChange={(e) => setFSport(e.target.value)} data-testid="filter-sport"
+                className="bg-[#161b22] border border-[#30363d] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#39FF14]">
+                <option value="">All sports</option>
+                <option value="football">Football</option>
+                <option value="basketball">Basketball</option>
+              </select>
+            )}
             <select value={fLeague} onChange={(e) => setFLeague(e.target.value)} data-testid="filter-league"
               className="bg-[#161b22] border border-[#30363d] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#39FF14]">
-              <option value="">All leagues</option>
+              <option value="">All competitions</option>
               {leagues.map((l) => <option key={l} value={l}>{l}</option>)}
             </select>
             <div className="relative">

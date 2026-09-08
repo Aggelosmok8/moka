@@ -67,6 +67,9 @@ CATALOG = {
     "superleague":  {"name": "Super League 1 (Greece)",  "sport": "football", "league_id": 197},
     "denmark":      {"name": "Superliga (Denmark)",      "sport": "football", "league_id": 119},
     "scotland":     {"name": "Premiership (Scotland)",   "sport": "football", "league_id": 179},
+    "ucl":          {"name": "UEFA Champions League",    "sport": "football", "league_id": 2},
+    "uel":          {"name": "UEFA Europa League",       "sport": "football", "league_id": 3},
+    "uecl":         {"name": "UEFA Conference League",   "sport": "football", "league_id": 848},
     # Basketball
     "nba":          {"name": "NBA (USA)",                "sport": "basketball", "league_id": 12},
     "euroleague":   {"name": "EuroLeague",               "sport": "basketball", "league_id": 120},

@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 LIVE_LEAGUES = [
     "epl", "laliga", "seriea", "bundesliga", "ligue1",
     "eredivisie", "primeira", "championship", "superleague",
-    "denmark", "scotland",
+    "denmark", "scotland", "ucl", "uel", "uecl",
 ]
 
 STATS_TTL = 24 * 3600

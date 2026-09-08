@@ -32,6 +32,11 @@ SYSTEM = (
     "- Never present the prediction as certain. Use hedged language such as 'the "
     "data suggests', 'the model estimates', 'likely'.\n"
     "- Do NOT recalculate or override the probabilities; they are final.\n"
+    "- If 'recent_news' is present, you MAY reference a news item ONLY when it "
+    "clearly and materially affects THIS match (e.g. a confirmed key-player injury, "
+    "suspension, goalkeeper absence, manager change or confirmed lineup) and name the "
+    "player/fact from the news. Ignore speculation, transfers rumours and unrelated "
+    "stories. Never invent news and never double-count the same item.\n"
     "- Cover, as short flowing paragraphs (no headers, no bullet symbols): the home "
     "team's strengths and weaknesses, the away team's strengths and weaknesses, and "
     "an overall match outlook consistent with the model's possible outcome."
@@ -86,12 +91,14 @@ def build_input(match: dict, value: dict) -> dict:
     return _clean(data)
 
 
-async def match_analysis(match: dict, value: dict) -> dict:
+async def match_analysis(match: dict, value: dict, news: list | None = None) -> dict:
     possible = value.get("possible_outcome")
     if not value:
         return {"analysis": None, "possible_outcome": possible, "error": True}
 
     data = build_input(match, value)
+    if news:
+        data["recent_news"] = news
     raw = json.dumps(data, sort_keys=True)
     h = hashlib.sha1(raw.encode()).hexdigest()[:12]
     ck = f"ai_analysis_{match.get('id')}_{h}"

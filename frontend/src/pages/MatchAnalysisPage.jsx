@@ -120,6 +120,8 @@ export default function MatchAnalysisPage() {
   const probs = value.probabilities || {};
   const live = match.live || null;
   const isLive = match.status === "live" || value.liveOnly;
+  const lp = value.livePrediction;
+  const afterHt = !!(lp && lp.after_ht);
   const pick = value.pick;
 
   // Available odds — every bookmaker for the pick, sorted best (highest) to worst.
@@ -149,6 +151,25 @@ export default function MatchAnalysisPage() {
             </span>
           </div>
           <p className="text-[11px] text-zinc-500 mt-2">Match in play — odds and value picks do not apply live. Below is Moka's model read of the game plus the live match statistics.</p>
+        </Card>
+      )}
+
+      {isLive && value.liveAnalysis && (
+        <Card title="Live Analysis" testId="live-analysis">
+          <p className="text-sm text-zinc-300 leading-relaxed">{value.liveAnalysis}</p>
+        </Card>
+      )}
+
+      {isLive && lp && (
+        <Card title="Live Prediction" testId="live-prediction">
+          <Bar label={(match.home && match.home.name) || "Home"} pct={lp.home} color={lp.home >= Math.max(lp.home, lp.draw, lp.away) ? "#39FF14" : "#3f3f46"} hi={lp.home >= Math.max(lp.home, lp.draw, lp.away)} />
+          <Bar label="Draw" pct={lp.draw} color={lp.draw >= Math.max(lp.home, lp.draw, lp.away) ? "#39FF14" : "#3f3f46"} hi={lp.draw >= Math.max(lp.home, lp.draw, lp.away)} />
+          <Bar label={(match.away && match.away.name) || "Away"} pct={lp.away} color={lp.away >= Math.max(lp.home, lp.draw, lp.away) ? "#39FF14" : "#3f3f46"} hi={lp.away >= Math.max(lp.home, lp.draw, lp.away)} />
+          <div className="mt-2 flex items-center justify-between text-xs">
+            <span className="text-zinc-500">Live outcome</span>
+            <span className="text-[#39FF14] font-black uppercase" data-testid="live-possible-outcome">{lp.possible_outcome}</span>
+          </div>
+          <p className="text-[11px] text-zinc-500 mt-2">Recalculated from the live score{lp.minute != null ? ` (${lp.minute}')` : ""} and the remaining expected goals.{afterHt && value.possibleOutcome ? ` Pre-match view (historical): ${value.possibleOutcome}.` : ""}</p>
         </Card>
       )}
 
@@ -210,8 +231,8 @@ export default function MatchAnalysisPage() {
       )}
 
       {/* MOKA PREDICTION — basic, visible to all */}
-      {value.prediction && (
-        <Card title="Moka Prediction" testId="moka-prediction">
+      {value.prediction && !afterHt && (
+        <Card title={isLive ? "Pre-match Prediction" : "Moka Prediction"} testId="moka-prediction">
           <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
             <span className="text-[10px] uppercase tracking-wider text-zinc-500">Possible outcome</span>
             <span data-testid="possible-outcome" className="text-sm font-black uppercase px-3 py-1 rounded-full bg-[#39FF14]/15 text-[#39FF14] border border-[#39FF14]/30">

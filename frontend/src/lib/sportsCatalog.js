@@ -18,6 +18,9 @@ export const LEAGUE_CATALOG = [
   { id: "superleague", name: "Super League 1 (Greece)", sport: "football", group: "Football", pro_only: false },
   { id: "denmark", name: "Superliga (Denmark)", sport: "football", group: "Football", pro_only: false },
   { id: "scotland", name: "Premiership (Scotland)", sport: "football", group: "Football", pro_only: false },
+  { id: "ucl", name: "UEFA Champions League", sport: "football", group: "Football", pro_only: false },
+  { id: "uel", name: "UEFA Europa League", sport: "football", group: "Football", pro_only: false },
+  { id: "uecl", name: "UEFA Conference League", sport: "football", group: "Football", pro_only: false },
   { id: "nba", name: "NBA (USA)", sport: "basketball", group: "Basketball", pro_only: false },
   { id: "euroleague", name: "EuroLeague", sport: "basketball", group: "Basketball", pro_only: false },
 ];

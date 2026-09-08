@@ -130,6 +130,85 @@ async def _build_live_match(match_id: str):
     }
 
 
+def _poisson_pmf(k: int, lam: float) -> float:
+    import math
+    if lam <= 0:
+        return 1.0 if k == 0 else 0.0
+    return math.exp(-lam) * (lam ** k) / math.factorial(k)
+
+
+def _live_prediction(m: dict, value: dict) -> dict:
+    """Fresh in-play prediction from the CURRENT score + minute + model xG.
+
+    Deterministic (no AI, no randomness): projects remaining goals over the time
+    left via Poisson and adds them to the live score. Leaves the pre-match
+    prediction untouched as historical context (#7/#9)."""
+    live = m.get("live") or {}
+    minute = live.get("minute")
+    hs = live.get("homeScore") or 0
+    as_ = live.get("awayScore") or 0
+    pred = value.get("prediction") or {}
+    xgh = pred.get("xg_home") or 1.2
+    xga = pred.get("xg_away") or 1.1
+    frac = 1.0
+    if isinstance(minute, (int, float)):
+        frac = max(0.0, min(1.0, (90 - minute) / 90.0))
+    rem_h, rem_a = xgh * frac, xga * frac
+    ph = pd = pa = 0.0
+    for i in range(0, 8):
+        for j in range(0, 8):
+            p = _poisson_pmf(i, rem_h) * _poisson_pmf(j, rem_a)
+            fh, fa = hs + i, as_ + j
+            if fh > fa:
+                ph += p
+            elif fh == fa:
+                pd += p
+            else:
+                pa += p
+    tot = (ph + pd + pa) or 1.0
+    probs = {"home": ph / tot, "draw": pd / tot, "away": pa / tot}
+    after_ht = isinstance(minute, (int, float)) and minute >= 45
+    return {
+        "home": round(probs["home"] * 100), "draw": round(probs["draw"] * 100),
+        "away": round(probs["away"] * 100),
+        "possible_outcome": possible_outcome(probs),
+        "minute": minute, "after_ht": bool(after_ht), "score": f"{hs}-{as_}",
+    }
+
+
+def _live_analysis_text(m: dict, value: dict, lp: dict) -> str:
+    live = m.get("live") or {}
+    hn = (m.get("home") or {}).get("name") or "Home"
+    an = (m.get("away") or {}).get("name") or "Away"
+    hs = live.get("homeScore") or 0
+    as_ = live.get("awayScore") or 0
+    minute = lp.get("minute")
+    stats = live.get("stats") or {}
+
+    def stat(side, key):
+        return (stats.get(side) or {}).get(key)
+
+    parts = [f"{hn} {hs}–{as_} {an}" + (f" ({minute}')." if minute is not None else ".")]
+    diff = hs - as_
+    if diff != 0:
+        leader = hn if diff > 0 else an
+        parts.append(f"{leader} {'lead' if abs(diff) == 1 else 'are in command'} by {abs(diff)}.")
+    else:
+        parts.append("The match is level.")
+    if stat("home", "Ball Possession"):
+        parts.append(f"Possession {stat('home', 'Ball Possession')} vs {stat('away', 'Ball Possession')}.")
+    if stat("home", "Total Shots") is not None:
+        parts.append(f"Shots {stat('home', 'Total Shots')}–{stat('away', 'Total Shots')}"
+                     + (f" (on target {stat('home', 'Shots on Goal')}–{stat('away', 'Shots on Goal')})."
+                        if stat('home', 'Shots on Goal') is not None else "."))
+    pre, now = value.get("possible_outcome"), lp.get("possible_outcome")
+    if pre and now and pre != now:
+        parts.append(f"The live picture ({now}) now differs from the pre-match view ({pre}).")
+    elif now:
+        parts.append(f"The current state still points to {now}.")
+    return " ".join(parts)
+
+
 async def _resolve_match(match_id: str):
     m = MATCH_INDEX.get(match_id)
     if not m:
@@ -227,6 +306,13 @@ async def get_match(match_id: str):
         await _refine_prediction(m, value)
     except Exception as e:
         logger.warning("refine_prediction(%s): %s", match_id, e)
+    if m.get("status") == "live":
+        try:
+            lp = _live_prediction(m, value)
+            value["live_prediction"] = lp
+            value["live_analysis"] = _live_analysis_text(m, value, lp)
+        except Exception as e:
+            logger.warning("live_prediction(%s): %s", match_id, e)
     pm = public_match(m)
     pm["value"] = value
     return pm
@@ -240,5 +326,14 @@ async def get_match_ai_analysis(match_id: str):
         raise HTTPException(status_code=404, detail="Match not found")
     value = evaluate_match(m) or _prediction_only_value(m)
     pm = public_match(m)
+    news = []
+    try:
+        import news_service
+        news = await news_service.match_news(
+            (m.get("home") or {}).get("name") or "",
+            (m.get("away") or {}).get("name") or "",
+        )
+    except Exception as e:
+        logger.warning("match_news(%s): %s", match_id, e)
     import ai_analysis
-    return await ai_analysis.match_analysis(pm, value)
+    return await ai_analysis.match_analysis(pm, value, news=news)

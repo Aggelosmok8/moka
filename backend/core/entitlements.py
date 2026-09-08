@@ -48,6 +48,9 @@ LEAGUE_CATALOG: List[League] = [
     League("superleague", "Super League 1 (Greece)", Sport.FOOTBALL),
     League("denmark", "Superliga (Denmark)", Sport.FOOTBALL),
     League("scotland", "Premiership (Scotland)", Sport.FOOTBALL),
+    League("ucl", "UEFA Champions League", Sport.FOOTBALL),
+    League("uel", "UEFA Europa League", Sport.FOOTBALL),
+    League("uecl", "UEFA Conference League", Sport.FOOTBALL),
     League("nba", "NBA (USA)", Sport.BASKETBALL),
     League("euroleague", "EuroLeague", Sport.BASKETBALL),
 ]
