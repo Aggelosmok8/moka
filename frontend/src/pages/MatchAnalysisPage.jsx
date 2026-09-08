@@ -22,10 +22,10 @@ const Card = ({ title, children, testId }) => (
     {children}
   </section>
 );
-const Bar = ({ label, pct, color }) => (
+const Bar = ({ label, pct, color, hi }) => (
   <div className="mb-2">
     <div className="flex justify-between text-xs text-zinc-400 mb-1">
-      <span>{label}</span><span className="font-bold text-white">{pct}%</span>
+      <span>{label}</span><span className="font-bold" style={{ color: hi ? "#39FF14" : "#fff" }}>{pct}%</span>
     </div>
     <div className="h-2 rounded-full bg-[#0d1117] overflow-hidden">
       <div style={{ width: `${pct}%`, background: color }} className="h-full" />
@@ -218,9 +218,9 @@ export default function MatchAnalysisPage() {
               {value.possibleOutcome}
             </span>
           </div>
-          <Bar label={(match.home && match.home.name) || "Home"} pct={value.prediction.home} color="#39FF14" />
-          <Bar label="Draw" pct={value.prediction.draw} color="#FF9500" />
-          <Bar label={(match.away && match.away.name) || "Away"} pct={value.prediction.away} color="#58a6ff" />
+          <Bar label={(match.home && match.home.name) || "Home"} pct={value.prediction.home} color={value.prediction.home >= Math.max(value.prediction.home, value.prediction.draw, value.prediction.away) ? "#39FF14" : "#3f3f46"} hi={value.prediction.home >= Math.max(value.prediction.home, value.prediction.draw, value.prediction.away)} />
+          <Bar label="Draw" pct={value.prediction.draw} color={value.prediction.draw >= Math.max(value.prediction.home, value.prediction.draw, value.prediction.away) ? "#39FF14" : "#3f3f46"} hi={value.prediction.draw >= Math.max(value.prediction.home, value.prediction.draw, value.prediction.away)} />
+          <Bar label={(match.away && match.away.name) || "Away"} pct={value.prediction.away} color={value.prediction.away >= Math.max(value.prediction.home, value.prediction.draw, value.prediction.away) ? "#39FF14" : "#3f3f46"} hi={value.prediction.away >= Math.max(value.prediction.home, value.prediction.draw, value.prediction.away)} />
           {value.signals && value.signals.h2h && (
             <p className="text-[11px] text-zinc-500 mt-3" data-testid="prediction-h2h">
               Recent head-to-head: <b className="text-zinc-300">{value.signals.h2h.home}W</b> · {value.signals.h2h.draw}D · <b className="text-zinc-300">{value.signals.h2h.away}W</b> (adjusted into the model)
@@ -235,11 +235,11 @@ export default function MatchAnalysisPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="bg-[#0d1117] border border-[#30363d] rounded-lg p-3">
               <div className="text-[10px] uppercase text-zinc-500 mb-1.5">Over / Under 2.5</div>
-              <div className="text-sm text-zinc-300">Over <b className="text-[#39FF14] font-mono-num">{value.prediction.over25}%</b> · Under <b className="text-white font-mono-num">{value.prediction.under25}%</b></div>
+              <div className="text-sm text-zinc-300">Over <b className="font-mono-num" style={{ color: value.prediction.over25 <= value.prediction.under25 ? "#39FF14" : "#fff" }}>{value.prediction.over25}%</b> · Under <b className="font-mono-num" style={{ color: value.prediction.under25 < value.prediction.over25 ? "#39FF14" : "#fff" }}>{value.prediction.under25}%</b></div>
             </div>
             <div className="bg-[#0d1117] border border-[#30363d] rounded-lg p-3">
               <div className="text-[10px] uppercase text-zinc-500 mb-1.5">Both teams to score</div>
-              <div className="text-sm text-zinc-300">Yes <b className="text-[#39FF14] font-mono-num">{value.prediction.btts_yes}%</b> · No <b className="text-white font-mono-num">{value.prediction.btts_no}%</b></div>
+              <div className="text-sm text-zinc-300">Yes <b className="font-mono-num" style={{ color: value.prediction.btts_yes >= value.prediction.btts_no ? "#39FF14" : "#fff" }}>{value.prediction.btts_yes}%</b> · No <b className="font-mono-num" style={{ color: value.prediction.btts_no > value.prediction.btts_yes ? "#39FF14" : "#fff" }}>{value.prediction.btts_no}%</b></div>
             </div>
           </div>
           <div className="grid grid-cols-3 gap-2 mt-3 text-center">

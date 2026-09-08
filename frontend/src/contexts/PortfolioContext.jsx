@@ -105,6 +105,14 @@ export function PortfolioProvider({ children }) {
   const [bets, setBets] = useState(load);
   const [slip, setSlip] = useState(() => loadKey(SLIP_KEY));
   const [tickets, setTickets] = useState(() => loadKey(TICKETS_KEY));
+  const [newlySettled, setNewlySettled] = useState(() => {
+    const n = parseInt(localStorage.getItem("moka_newly_settled") || "0", 10);
+    return Number.isFinite(n) ? n : 0;
+  });
+  const clearNewlySettled = useCallback(() => {
+    setNewlySettled(0);
+    try { localStorage.setItem("moka_newly_settled", "0"); } catch {}
+  }, []);
 
   const persist = (next) => {
     setBets(next);
@@ -271,8 +279,28 @@ export function PortfolioProvider({ children }) {
       try { localStorage.setItem(TICKETS_KEY, JSON.stringify(next)); } catch {}
       return next;
     });
+    if (settled > 0) {
+      setNewlySettled((n) => {
+        const v = n + settled;
+        try { localStorage.setItem("moka_newly_settled", String(v)); } catch {}
+        return v;
+      });
+    }
     return { settled };
   }, [bets, tickets]);
+
+  // Run auto-settlement once app-wide (any page) so finished matches settle and
+  // the Portfolio nav shows a "new result" badge even if the user isn't on it.
+  const autoRunRef = useRef(false);
+  useEffect(() => {
+    if (autoRunRef.current) return;
+    autoRunRef.current = true;
+    const hasPending = bets.some((b) => b.status === "pending") ||
+      tickets.some((t) => t.legs.some((l) => l.status === "pending"));
+    if (!hasPending) return;
+    const t = setTimeout(() => { autoSettle(); }, 1500);
+    return () => clearTimeout(t);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pendingCount = useMemo(() => bets.filter((b) => b.status === "pending").length, [bets]);
 
@@ -316,6 +344,7 @@ export function PortfolioProvider({ children }) {
       bets, addBet, settle, updateStake, remove, clear, pendingCount, stats,
       slip, addToSlip, removeFromSlip, clearSlip, slipHas, slipCount: slip.length,
       tickets, placeTicket, settleLeg, removeTicket, clearTickets, autoSettle,
+      newlySettled, clearNewlySettled,
     }}>
       {children}
     </Ctx.Provider>

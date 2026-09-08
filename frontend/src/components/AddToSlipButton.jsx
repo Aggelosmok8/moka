@@ -1,10 +1,12 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import { Layers, Check } from "lucide-react";
 import { toast } from "sonner";
 import { usePortfolio } from "../contexts/PortfolioContext";
 
 export default function AddToSlipButton({ entry, className = "", size = "sm" }) {
   const { addToSlip, removeFromSlip, slipHas } = usePortfolio();
+  const navigate = useNavigate();
   const match = entry?.match || {};
   const value = entry?.value || {};
   const id = match.id;
@@ -22,7 +24,11 @@ export default function AddToSlipButton({ entry, className = "", size = "sm" }) 
       matchId: id, home: match.home?.name, away: match.away?.name, league: match.leagueName,
       pick: value.pick, pickName: value.pickName, odds: value.bestOdds, bookmaker: value.bookmaker,
     });
-    toast.success("Added to bet slip");
+    // Temporary confirmation with a quick "Go to slip" action (auto-dismisses).
+    toast.success("Added to bet slip", {
+      duration: 4000,
+      action: { label: "Go to slip", onClick: () => navigate("/portfolio?tab=tickets") },
+    });
   };
 
   return (

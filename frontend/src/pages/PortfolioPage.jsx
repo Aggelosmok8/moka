@@ -254,7 +254,7 @@ function TicketsView({ isPro }) {
 }
 
 export default function PortfolioPage() {
-  const { bets, settle, remove, clear, slipCount, autoSettle } = usePortfolio();
+  const { bets, settle, remove, clear, slipCount, autoSettle, clearNewlySettled } = usePortfolio();
   const { role } = useEntitlements();
   const isPro = role === "pro";
   const [filter, setFilter] = useState("all");
@@ -264,7 +264,7 @@ export default function PortfolioPage() {
   const [tab, setTab] = useState(params.get("tab") === "tickets" ? "tickets" : "bets");
 
   // On open, auto-settle finished matches from real results (one batched call).
-  useEffect(() => { autoSettle(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { (async () => { await autoSettle(); clearNewlySettled(); })(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refresh = async () => {
     setSettling(true);

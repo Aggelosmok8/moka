@@ -137,9 +137,11 @@ export default function ValueCard({ entry }) {
           </div>
           {value.prediction && (
             <div className="flex items-center justify-between text-[11px] mt-1.5 text-zinc-400">
-              <span>Home <b className="text-white">{value.prediction.home}%</b></span>
-              <span>Draw <b className="text-white">{value.prediction.draw}%</b></span>
-              <span>Away <b className="text-white">{value.prediction.away}%</b></span>
+              {(() => { const p = value.prediction; const mx = Math.max(p.home, p.draw, p.away); const c = (x) => (x >= mx ? "#39FF14" : "#fff"); return (<>
+                <span>Home <b style={{ color: c(p.home) }}>{p.home}%</b></span>
+                <span>Draw <b style={{ color: c(p.draw) }}>{p.draw}%</b></span>
+                <span>Away <b style={{ color: c(p.away) }}>{p.away}%</b></span>
+              </>); })()}
             </div>
           )}
         </div>

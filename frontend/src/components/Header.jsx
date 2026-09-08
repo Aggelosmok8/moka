@@ -45,10 +45,10 @@ export const Header = () => {
   const loc = useLocation();
   const [searchOpen, setSearchOpen] = useState(false);
   const { count: chartCount } = useChart();
-  const { pendingCount } = usePortfolio();
+  const { pendingCount, newlySettled } = usePortfolio();
   const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => { setMenuOpen(false); }, [loc.pathname]);
-  const badgeFor = (b) => (b === "chart" ? chartCount : b === "pending" ? pendingCount : 0);
+  const badgeFor = (b) => (b === "chart" ? chartCount : b === "pending" ? (newlySettled || pendingCount) : 0);
 
   useEffect(() => {
     const onKey = (e) => {

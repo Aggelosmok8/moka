@@ -280,3 +280,10 @@ The API-Football free plan went inactive/quota-exhausted → leagues/teams/playe
 - Redirect fix: liveMode resets on tab change (useEffect on view + onClick on chips).
 - Credit control: live list 1 cached call/60s; per-live-match analysis pulls stats only when opened (pay-per-view).
 - 2026-09-06 (b): Live tab/All-Matches LIVE section restricted to Moka supported leagues via new apifootball.SUPPORTED_FOOTBALL_LEAGUE_IDS + `supported` flag on live_fixtures (ticker still worldwide). Live matches now render the full ValueCard (LiveValueCard fetches /api/matches/{id} per supported live match, few = cheap). ValueCard is live-aware: hides odds/pick/Add buttons, shows possible outcome + 1X2 when value.liveOnly. League filter dropdown now only lists supported leagues (fixes 'many junk leagues').
+
+## Update 2026-09-08 — Big-spec Phase 1 (bugs) + Phase D (slip/portfolio)
+- #1 Green highlighting FIXED (dynamic): 1X2 highest=green, O/U lowest=green, BTTS highest=green (MatchAnalysisPage Bar + Goal Markets + ValueCard live line). No hardcoded values.
+- #2 Odds '14.5' INVESTIGATED = NOT a bug: real underdog decimal odds (8 bookmakers agree; range 1.09-22.0). _mw_entries correct. Longshot-pick behaviour is core EV/model (protected by #23) — left untouched.
+- #6 free sees Moka Analysis / advanced PRO-locked: already satisfied. #10 team redirect: fixed earlier.
+- Phase D: #11/#12/#13 settlement already existed (autoSettle + computeTicket). Added #14 temporary Go-to-slip toast (auto-dismiss 4s) + #15 Portfolio nav newlySettled badge with app-wide auto-settle on mount, cleared on Portfolio view.
+- Remaining big-spec phases: E (European comps CL/EL/Conference + Competition/Sport filters #18-21), a (News API+tab+filters #3/16/17), b (news->prediction + AI uses news #4/5), c (Live Analysis/Live Prediction after HT #7/8/9).
