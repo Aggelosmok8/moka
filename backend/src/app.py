@@ -5,10 +5,12 @@ from fastapi import APIRouter
 
 from .routes.matches import router as matches_router
 from .routes.value_matches import router as value_router
+from .routes.news import router as news_router
 
 
 def make_value_router() -> APIRouter:
     root = APIRouter()
     root.include_router(value_router)   # /api/value-matches
     root.include_router(matches_router)  # /api/matches, /api/matches/{id}
+    root.include_router(news_router)     # /api/news
     return root

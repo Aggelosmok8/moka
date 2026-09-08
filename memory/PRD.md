@@ -287,3 +287,9 @@ The API-Football free plan went inactive/quota-exhausted → leagues/teams/playe
 - #6 free sees Moka Analysis / advanced PRO-locked: already satisfied. #10 team redirect: fixed earlier.
 - Phase D: #11/#12/#13 settlement already existed (autoSettle + computeTicket). Added #14 temporary Go-to-slip toast (auto-dismiss 4s) + #15 Portfolio nav newlySettled badge with app-wide auto-settle on mount, cleared on Portfolio view.
 - Remaining big-spec phases: E (European comps CL/EL/Conference + Competition/Sport filters #18-21), a (News API+tab+filters #3/16/17), b (news->prediction + AI uses news #4/5), c (Live Analysis/Live Prediction after HT #7/8/9).
+
+## Update 2026-09-08 (c) — Phase A: News integration (#3/#16/#17)
+- Provider = TheNewsAPI (thenewsapi.com). Token in backend/.env THENEWSAPI_TOKEN (not hardcoded). Free tier: 100 req/day, 3 articles/req -> 30min cache via apifootball._c_get/_c_set.
+- Backend: news_service.py (fetch_news + build_search AND-combining team/league/q, categories=sports, language=en, published_on=date), src/routes/news.py GET /api/news?q&league&team&date&page, registered in src/app.py make_value_router.
+- Frontend: NewsPage.jsx (/news route in App.jsx), NEWS nav tab in Header (Newspaper icon), filters league(select)+team(debounced search)+date, news cards (image/source/date/title/desc/link). Verified: generic + team + Champions League filters return articles, 0 console errors.
+- DB: none. Remaining phases: B (news->prediction + AI uses news #4/5), C (Live Analysis/Prediction after HT #7/8/9), E (European comps + Competition/Sport filters #18-21).

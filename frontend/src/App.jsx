@@ -22,6 +22,7 @@ import TeamsPage from "./pages/TeamsPage";
 import PortfolioPage from "./pages/PortfolioPage";
 import SportsPage from "./pages/SportsPage";
 import LeagueDetailPage from "./pages/LeagueDetailPage";
+import NewsPage from "./pages/NewsPage";
 import SlipFab from "./components/SlipFab";
 import DevLoginPanel from "./components/DevLoginPanel";
 import "@/index.css";
@@ -43,6 +44,7 @@ function AppRouter() {
       <Route path="/odds" element={<Navigate to="/matches" replace />} />
       <Route path="/charts" element={<ChartsPage />} />
       <Route path="/portfolio" element={<PortfolioPage />} />
+      <Route path="/news" element={<NewsPage />} />
       <Route path="/sports" element={<SportsPage />} />
       <Route path="/teams" element={<TeamsPage />} />
       <Route path="/analysis/:id" element={<MatchAnalysisPage />} />

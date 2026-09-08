@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Activity, Flame, Trophy, BarChart3, Search, Tag, User, LineChart, Users, Wallet, Star, Dribbble, Menu, X } from "lucide-react";
+import { Activity, Flame, Trophy, BarChart3, Search, Tag, User, LineChart, Users, Wallet, Star, Dribbble, Menu, X, Newspaper } from "lucide-react";
 import LiveStatusPill from "./LiveStatusPill";
 import SearchPalette from "./SearchPalette";
 import UserMenu from "./UserMenu";
@@ -37,6 +37,7 @@ const NAV_ITEMS = [
   { to: "/sports", label: "Sports", icon: Dribbble, testId: "nav-sports", isActive: (p) => p.startsWith("/sports") },
   { to: "/charts", label: "Watchlist", icon: Star, testId: "nav-watchlist", isActive: (p) => p.startsWith("/charts"), badge: "chart" },
   { to: "/portfolio", label: "Portfolio", icon: Wallet, testId: "nav-portfolio", isActive: (p) => p.startsWith("/portfolio"), badge: "pending" },
+  { to: "/news", label: "News", icon: Newspaper, testId: "nav-news", isActive: (p) => p.startsWith("/news") },
   { to: "/pricing", label: "Pricing", icon: Tag, testId: "nav-pricing", isActive: (p) => p.startsWith("/pricing") },
   { to: "/account", label: "Account", icon: User, testId: "nav-account", isActive: (p) => p.startsWith("/account") },
 ];

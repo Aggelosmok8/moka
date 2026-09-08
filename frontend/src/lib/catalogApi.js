@@ -12,6 +12,8 @@ export const fetchResults = (ids) =>
   api.get(`/results`, { params: { ids: (ids || []).join(",") } }).then((r) => r.data.results || {});
 export const fetchMatchAi = (id) =>
   api.get(`/matches/${id}/ai-analysis`, { timeout: 90000 }).then((r) => r.data);
+export const fetchNews = (params = {}) =>
+  api.get(`/news`, { params }).then((r) => r.data);
 
 // --- Entitlements / catalog (FREE/PRO gating + league browsing) ---
 export const fetchEntitlements = () => api.get("/me/entitlements").then((r) => r.data);
