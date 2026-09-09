@@ -45,30 +45,31 @@ export function adaptValueMatches(resp) {
   return ((resp && resp.matches) || []).map(adaptEntry);
 }
 
-// Plain-language one-liner for the match card (no technical metrics).
+// Plain-language one-liner for the match card (no technical metrics, no odds).
 export function shortExplanation(match, value) {
   if (!value) return "";
-  return `${value.pickName} — recent form and the current ${value.bestOdds} odds look attractive to Moka.`;
+  const out = value.possibleOutcome || "this matchup";
+  return `Moka leans towards ${out} based on recent form and scoring numbers.`;
 }
 
-// 3–5 simple natural-language reasons for the analysis page.
+// 3–4 simple natural-language reasons, aligned to what Moka actually expects.
 export function whyMokaReasons(match, value) {
   if (!value) return [];
+  const po = (value.possibleOutcome || "").toLowerCase();
+  const home = match.home?.name || "the home side";
+  const away = match.away?.name || "the away side";
   const reasons = [];
-  if (value.pick === "home") reasons.push(`Strong recent home form for ${match.home?.name || "the home side"}`);
-  else if (value.pick === "away") reasons.push(`${match.away?.name || "The away side"} has been solid recently`);
+  if (po.includes("home")) reasons.push(`${home} have the stronger recent numbers`);
+  else if (po.includes("away")) reasons.push(`${away} have been the better side recently`);
   else reasons.push("The sides look closely matched");
-  reasons.push("Better recent attacking numbers");
-  reasons.push("Recent results favour this outcome");
-  reasons.push(`Current odds (${value.bestOdds}) look attractive vs Moka's assessment`);
+  if (po.includes("draw")) reasons.push("A tight, low-margin game looks likely");
+  reasons.push("Recent attacking and defensive form support this lean");
+  reasons.push("Scoring rates point to this outcome");
   return reasons;
 }
 
-// Technical explanation (numbers) — used only inside Advanced Statistics.
+// Short technical explanation — aligned to the model's expected outcome (no EV/odds framing).
 export function aiExplanation(match, value) {
-  return `Moka rates ${value.pickName} at ${Math.round(value.mokaProb * 100)}% to win, while the market implies ${Math.round(
-    value.bookProb * 100
-  )}% (${value.bestOdds} @ ${value.bookmaker}). That is a ${value.edge > 0 ? "+" : ""}${value.edge}pt edge and ${
-    value.ev > 0 ? "+" : ""
-  }${value.ev}% expected value.`;
+  const po = value.possibleOutcome || "no clear lean";
+  return `Based on scoring rates and recent form, Moka's model leans towards ${po}.`;
 }

@@ -4,6 +4,7 @@ import { ArrowLeft, Check, ChevronDown, ChevronUp, Lock, ExternalLink, X, Loader
 import Header from "../components/Header";
 import { UpgradeButton } from "../components/Gating";
 import AddToPortfolioButton from "../components/AddToPortfolioButton";
+import AddToChartButton from "../components/AddToChartButton";
 import AddToSlipButton from "../components/AddToSlipButton";
 import { bookmakerUrl } from "../lib/bookmakers";
 import { useEntitlements } from "../hooks/useEntitlements";
@@ -173,19 +174,18 @@ export default function MatchAnalysisPage() {
         </Card>
       )}
 
-      {/* MOKA PICK */}
+      {/* MOKA LEAN — aligned to the model's expected outcome */}
       {!isLive && (
       <Card testId="moka-pick">
-        <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Moka Pick</div>
+        <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Moka Lean</div>
         <div className="flex items-end justify-between gap-3 flex-wrap">
           <div>
-            <div className="font-display font-black text-2xl text-white">{value.pickName}</div>
-            <div className="text-sm text-zinc-400 mt-0.5">Best odds <b className="text-white font-mono-num">{value.bestOdds}</b> <span className="text-zinc-500">@ {value.bookmaker}</span></div>
+            <div className="font-display font-black text-2xl text-[#39FF14]">{value.possibleOutcome || value.pickName}</div>
+            <div className="text-sm text-zinc-400 mt-0.5">Moka's expected outcome from recent form &amp; scoring</div>
           </div>
-          <span className={`text-xs font-black uppercase px-3 py-1 rounded-full ${value.level.cls}`}>{value.level.emoji} {value.level.label}</span>
         </div>
         <div className="mt-4 grid grid-cols-2 gap-2">
-          <AddToPortfolioButton entry={{ match, value }} size="md" className="w-full" />
+          <AddToChartButton entry={{ match, value }} className="w-full justify-center" />
           <AddToSlipButton entry={{ match, value }} size="md" className="w-full" />
         </div>
       </Card>
@@ -256,7 +256,7 @@ export default function MatchAnalysisPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="bg-[#0d1117] border border-[#30363d] rounded-lg p-3">
               <div className="text-[10px] uppercase text-zinc-500 mb-1.5">Over / Under 2.5</div>
-              <div className="text-sm text-zinc-300">Over <b className="font-mono-num" style={{ color: value.prediction.over25 <= value.prediction.under25 ? "#39FF14" : "#fff" }}>{value.prediction.over25}%</b> · Under <b className="font-mono-num" style={{ color: value.prediction.under25 < value.prediction.over25 ? "#39FF14" : "#fff" }}>{value.prediction.under25}%</b></div>
+              <div className="text-sm text-zinc-300">Over <b className="font-mono-num" style={{ color: value.prediction.over25 >= value.prediction.under25 ? "#39FF14" : "#fff" }}>{value.prediction.over25}%</b> · Under <b className="font-mono-num" style={{ color: value.prediction.under25 > value.prediction.over25 ? "#39FF14" : "#fff" }}>{value.prediction.under25}%</b></div>
             </div>
             <div className="bg-[#0d1117] border border-[#30363d] rounded-lg p-3">
               <div className="text-[10px] uppercase text-zinc-500 mb-1.5">Both teams to score</div>
@@ -268,7 +268,7 @@ export default function MatchAnalysisPage() {
             <div className="bg-[#0d1117] border border-[#30363d] rounded-lg py-2"><div className="text-[10px] text-zinc-500 uppercase">xG Away</div><div className="font-display font-black text-lg text-white font-mono-num">{value.prediction.xg_away}</div></div>
             <div className="bg-[#0d1117] border border-[#30363d] rounded-lg py-2"><div className="text-[10px] text-zinc-500 uppercase">xG Total</div><div className="font-display font-black text-lg text-[#39FF14] font-mono-num">{value.prediction.xg_total}</div></div>
           </div>
-          <p className="text-[11px] text-zinc-500 mt-3">Deterministic Moka estimates (Poisson) from team scoring &amp; form — not a guarantee.</p>
+          <p className="text-[11px] text-zinc-500 mt-3">Moka's model estimate from recent scoring &amp; form — not a guarantee.</p>
         </Card>
       )}
 
@@ -323,31 +323,9 @@ export default function MatchAnalysisPage() {
 
           {showAdv && (
             <div data-testid="advanced-stats">
-              {!isLive && (
-              <Card title="Moka vs Market">
-                <div className="grid grid-cols-3 gap-2 text-center mb-3">
-                  <div className="bg-[#0d1117] border border-[#30363d] rounded-lg py-2"><div className="text-[10px] text-zinc-500 uppercase">Moka Prob.</div><div className="font-display font-black text-lg text-[#39FF14]">{Math.round(value.mokaProb * 100)}%</div></div>
-                  <div className="bg-[#0d1117] border border-[#30363d] rounded-lg py-2"><div className="text-[10px] text-zinc-500 uppercase">Market Prob.</div><div className="font-display font-black text-lg text-zinc-200">{Math.round(value.bookProb * 100)}%</div></div>
-                  <div className="bg-[#0d1117] border border-[#30363d] rounded-lg py-2"><div className="text-[10px] text-zinc-500 uppercase">Potential Value</div><div className="font-display font-black text-lg text-[#58a6ff]">{value.ev > 0 ? "+" : ""}{value.ev}%</div></div>
-                </div>
-                <Bar label="Home" pct={probs.home || 0} color="#39FF14" />
-                {probs.draw != null && <Bar label="Draw" pct={probs.draw || 0} color="#FF9500" />}
-                <Bar label="Away" pct={probs.away || 0} color="#58a6ff" />
-                <p className="text-[11px] text-zinc-500 mt-3">{aiExplanation(match, value)}</p>
-              </Card>
-              )}
-
               <Card title="Team Statistics">
                 <StatsTable home={match.homeTeam} away={match.awayTeam} hn={match.home && match.home.name} an={match.away && match.away.name} />
                 <p className="text-[11px] text-zinc-500 mt-2">Values shown as N/A are not available for this league/match.</p>
-              </Card>
-
-              <Card title="Full Model Output">
-                <div className="text-sm text-zinc-300 leading-relaxed">
-                  Home {probs.home}% · Draw {probs.draw}% · Away {probs.away}%
-                  {value.prediction && <> · Over 2.5 {value.prediction.over25}% · BTTS {value.prediction.btts_yes}% · xG {value.prediction.xg_home}–{value.prediction.xg_away}</>}
-                  {value.confidence != null && <> · Confidence {value.confidence}% · Value score {value.valueScore}</>}
-                </div>
               </Card>
             </div>
           )}

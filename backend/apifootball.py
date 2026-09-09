@@ -70,6 +70,13 @@ CATALOG = {
     "ucl":          {"name": "UEFA Champions League",    "sport": "football", "league_id": 2},
     "uel":          {"name": "UEFA Europa League",       "sport": "football", "league_id": 3},
     "uecl":         {"name": "UEFA Conference League",   "sport": "football", "league_id": 848},
+    "facup":        {"name": "FA Cup (England)",         "sport": "football", "league_id": 45},
+    "eflcup":       {"name": "EFL Cup (England)",        "sport": "football", "league_id": 48},
+    "copadelrey":   {"name": "Copa del Rey (Spain)",     "sport": "football", "league_id": 143},
+    "coppaitalia":  {"name": "Coppa Italia (Italy)",     "sport": "football", "league_id": 137},
+    "dfbpokal":     {"name": "DFB Pokal (Germany)",      "sport": "football", "league_id": 81},
+    "coupedefrance":{"name": "Coupe de France",          "sport": "football", "league_id": 66},
+    "greekcup":     {"name": "Greek Cup",                "sport": "football", "league_id": 735},
     # Basketball
     "nba":          {"name": "NBA (USA)",                "sport": "basketball", "league_id": 12},
     "euroleague":   {"name": "EuroLeague",               "sport": "basketball", "league_id": 120},

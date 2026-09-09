@@ -30,10 +30,32 @@ def _term(x: str) -> str:
     return f'+"{x}"' if " " in x else f"+{x}"
 
 
+# Disambiguate league names that collide with other countries' competitions.
+LEAGUE_SEARCH_MAP = {
+    "Super League": '+"Greek Super League" | +"Superleague Greece"',
+    "Championship": '+"EFL Championship"',
+    "Premier League": '+"Premier League" +England',
+    "Premiership (Scotland)": '+"Scottish Premiership"',
+    "Eredivisie": "+Eredivisie",
+    "Primeira Liga": '+"Primeira Liga"',
+}
+
+
 def build_search(team: str = "", league: str = "", q: str = "") -> str:
-    """AND the provided filters so they work together (#17)."""
-    parts = [_term(t) for t in (team, league, q) if t and t.strip()]
-    return " ".join(p for p in parts if p)
+    """AND the provided filters so they work together (#17). Only football/basketball
+    news is surfaced (categories=sports on the API + a sport keyword when no team)."""
+    parts = []
+    if team and team.strip():
+        parts.append(_term(team))
+    if league and league.strip():
+        parts.append(LEAGUE_SEARCH_MAP.get(league.strip(), _term(league)))
+    if q and q.strip():
+        parts.append(_term(q))
+    base = " ".join(p for p in parts if p)
+    if not base:
+        # Generic feed: keep it strictly football/basketball.
+        return "+football | +soccer | +basketball"
+    return base
 
 
 async def match_news(home: str = "", away: str = "", limit: int = 3) -> list:

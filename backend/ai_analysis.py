@@ -73,10 +73,6 @@ def build_input(match: dict, value: dict) -> dict:
             "total": pred.get("xg_total"),
         },
         "possible_outcome": value.get("possible_outcome"),
-        "moka_pick": value.get("pick_name"),
-        "best_odds": value.get("best_odds"),
-        "bookmaker": value.get("bookmaker"),
-        "potential_value_pct": value.get("ev_score"),
         "home_stats": {
             "goals_per_game": hstat.get("goalsScored"),
             "conceded_per_game": hstat.get("goalsConceded"),

@@ -31,6 +31,7 @@ LIVE_LEAGUES = [
     "epl", "laliga", "seriea", "bundesliga", "ligue1",
     "eredivisie", "primeira", "championship", "superleague",
     "denmark", "scotland", "ucl", "uel", "uecl",
+    "facup", "eflcup", "copadelrey", "coppaitalia", "dfbpokal", "coupedefrance", "greekcup",
 ]
 
 STATS_TTL = 24 * 3600
