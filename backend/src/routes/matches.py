@@ -329,8 +329,8 @@ async def get_match(match_id: str):
 
 
 @router.get("/matches/{match_id}/ai-analysis")
-async def get_match_ai_analysis(match_id: str):
-    """Natural-language Moka analysis (GPT-5.6 Luna), cached per match+data."""
+async def get_match_ai_analysis(match_id: str, lang: str = "en"):
+    """Natural-language Moka analysis (GPT-5.6 Luna), cached per match+data+lang."""
     m = await _resolve_match(match_id)
     if not m:
         raise HTTPException(status_code=404, detail="Match not found")
@@ -346,4 +346,4 @@ async def get_match_ai_analysis(match_id: str):
     except Exception as e:
         logger.warning("match_news(%s): %s", match_id, e)
     import ai_analysis
-    return await ai_analysis.match_analysis(pm, value, news=news)
+    return await ai_analysis.match_analysis(pm, value, news=news, lang=lang)

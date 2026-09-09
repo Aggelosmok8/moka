@@ -10,8 +10,8 @@ export const fetchMatchById = (id) => api.get(`/matches/${id}`).then((r) => r.da
 export const fetchLive = () => api.get(`/live`).then((r) => r.data.matches || []);
 export const fetchResults = (ids) =>
   api.get(`/results`, { params: { ids: (ids || []).join(",") } }).then((r) => r.data.results || {});
-export const fetchMatchAi = (id) =>
-  api.get(`/matches/${id}/ai-analysis`, { timeout: 90000 }).then((r) => r.data);
+export const fetchMatchAi = (id, lang = "en") =>
+  api.get(`/matches/${id}/ai-analysis`, { params: { lang }, timeout: 90000 }).then((r) => r.data);
 export const fetchNews = (params = {}) =>
   api.get(`/news`, { params }).then((r) => r.data);
 

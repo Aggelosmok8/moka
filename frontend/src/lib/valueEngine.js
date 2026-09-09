@@ -1,5 +1,6 @@
 // Display-only adapters. NO value/EV/probability computation happens here —
 // every number comes from the backend value engine.
+import { getLang } from "./i18n";
 
 const LEVELS = {
   HIGH: { label: "Strong Opportunity", emoji: "🟢", cls: "bg-[#39FF14] text-black" },
@@ -50,10 +51,15 @@ export function shortExplanation(match, value) {
   if (!value) return "";
   const mp = Math.round((value.mokaProb || 0) * 100);
   const bp = Math.round((value.bookProb || 0) * 100);
+  const el = getLang() === "el";
   if (mp && bp) {
-    return `Moka's pick is ${value.pickName} — estimated ~${mp}% vs the market's ~${bp}%.`;
+    return el
+      ? `Η επιλογή της Moka είναι ${value.pickName} — εκτίμηση ~${mp}% έναντι ~${bp}% της αγοράς.`
+      : `Moka's pick is ${value.pickName} — estimated ~${mp}% vs the market's ~${bp}%.`;
   }
-  return `Moka's pick is ${value.pickName} based on recent form and scoring numbers.`;
+  return el
+    ? `Η επιλογή της Moka είναι ${value.pickName} με βάση την πρόσφατη φόρμα.`
+    : `Moka's pick is ${value.pickName} based on recent form and scoring numbers.`;
 }
 
 // 3–4 simple reasons, all about the SAME Moka pick.
@@ -61,11 +67,19 @@ export function whyMokaReasons(match, value) {
   if (!value) return [];
   const mp = Math.round((value.mokaProb || 0) * 100);
   const bp = Math.round((value.bookProb || 0) * 100);
+  const el = getLang() === "el";
   const reasons = [];
-  reasons.push(`Moka estimates ${value.pickName} at ~${mp}%`);
-  if (bp) reasons.push(`The market price implies only ~${bp}%`);
-  if (value.edge > 0) reasons.push(`That's a +${value.edge}pt edge at ${value.bestOdds}`);
-  reasons.push("Recent scoring rates and form support this pick");
+  if (el) {
+    reasons.push(`Η Moka εκτιμά ${value.pickName} στο ~${mp}%`);
+    if (bp) reasons.push(`Η τιμή της αγοράς υπονοεί μόλις ~${bp}%`);
+    if (value.edge > 0) reasons.push(`Αυτό είναι +${value.edge} μονάδες πλεονέκτημα στο ${value.bestOdds}`);
+    reasons.push("Οι πρόσφατοι ρυθμοί σκοραρίσματος και η φόρμα στηρίζουν αυτή την επιλογή");
+  } else {
+    reasons.push(`Moka estimates ${value.pickName} at ~${mp}%`);
+    if (bp) reasons.push(`The market price implies only ~${bp}%`);
+    if (value.edge > 0) reasons.push(`That's a +${value.edge}pt edge at ${value.bestOdds}`);
+    reasons.push("Recent scoring rates and form support this pick");
+  }
   return reasons;
 }
 
@@ -74,5 +88,7 @@ export function aiExplanation(match, value) {
   if (!value) return "";
   const mp = Math.round((value.mokaProb || 0) * 100);
   const bp = Math.round((value.bookProb || 0) * 100);
-  return `Moka predicts ${value.pickName} (~${mp}%); the market implies ~${bp}% at ${value.bestOdds}.`;
+  return getLang() === "el"
+    ? `Η Moka προβλέπει ${value.pickName} (~${mp}%)· η αγορά υπονοεί ~${bp}% στο ${value.bestOdds}.`
+    : `Moka predicts ${value.pickName} (~${mp}%); the market implies ~${bp}% at ${value.bestOdds}.`;
 }

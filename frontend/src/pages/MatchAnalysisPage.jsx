@@ -10,6 +10,7 @@ import { bookmakerUrl } from "../lib/bookmakers";
 import { useEntitlements } from "../hooks/useEntitlements";
 import { fetchMatchById, fetchMatchAi } from "../lib/catalogApi";
 import { adaptValue, aiExplanation, whyMokaReasons } from "../lib/valueEngine";
+import { useLang } from "../contexts/LanguageContext";
 
 const Shell = ({ children }) => (
   <div className="min-h-screen bg-[#0d1117]">
@@ -93,6 +94,7 @@ export default function MatchAnalysisPage() {
   const [showUpsell, setShowUpsell] = useState(false);
   const [ai, setAi] = useState(null);
   const [aiLoading, setAiLoading] = useState(true);
+  const { lang } = useLang();
 
   useEffect(() => {
     let active = true;
@@ -106,12 +108,12 @@ export default function MatchAnalysisPage() {
   useEffect(() => {
     let active = true;
     setAiLoading(true); setAi(null);
-    fetchMatchAi(id)
+    fetchMatchAi(id, lang)
       .then((d) => active && setAi(d))
       .catch(() => active && setAi(null))
       .finally(() => active && setAiLoading(false));
     return () => { active = false; };
-  }, [id]);
+  }, [id, lang]);
 
   if (loading) return <Shell><div className="h-64 bg-[#161b22] border border-[#30363d] rounded-xl animate-pulse" /></Shell>;
   if (notFound || !data) return <Shell><div className="text-center py-16 text-zinc-400">Match not found.</div></Shell>;

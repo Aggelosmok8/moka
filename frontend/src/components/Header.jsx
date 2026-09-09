@@ -8,6 +8,9 @@ import TrialBanner from "./TrialBanner";
 import LiveTicker from "./LiveTicker";
 import { useChart } from "../contexts/ChartContext";
 import { usePortfolio } from "../contexts/PortfolioContext";
+import { navLabel } from "../lib/i18n";
+import { useLang } from "../contexts/LanguageContext";
+import LangToggle from "./LangToggle";
 
 const NavLink = ({ to, label, icon: Icon, active, testId, badge }) => (
   <Link
@@ -47,6 +50,7 @@ export const Header = () => {
   const [searchOpen, setSearchOpen] = useState(false);
   const { count: chartCount } = useChart();
   const { pendingCount, newlySettled, slipCount } = usePortfolio();
+  const { lang } = useLang();
   const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => { setMenuOpen(false); }, [loc.pathname]);
   const badgeFor = (b) => (b === "chart" ? chartCount : b === "pending" ? (slipCount || newlySettled || pendingCount) : 0);
@@ -67,10 +71,11 @@ export const Header = () => {
   return (
     <header
       data-testid="app-header"
+      data-lang={lang}
       className="sticky top-0 z-50 backdrop-blur-xl bg-[#0A0A0A]/75 border-b border-white/10"
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        <Link to="/" data-testid="logo-link" className="flex items-center gap-2.5 group">
+        <Link to="/" data-testid="logo-link" data-no-translate className="flex items-center gap-2.5 group">
           <div className="w-8 h-8 rounded-lg neon-bg flex items-center justify-center font-display font-black text-lg group-hover:scale-105 transition-transform">
             X
           </div>
@@ -81,7 +86,7 @@ export const Header = () => {
 
         <nav className="hidden lg:flex items-center gap-0.5">
           {NAV_ITEMS.map((it) => (
-            <NavLink key={it.to} to={it.to} label={it.label} icon={it.icon} testId={it.testId}
+            <NavLink key={it.to} to={it.to} label={navLabel(it.label)} icon={it.icon} testId={it.testId}
               active={it.isActive(loc.pathname)} badge={badgeFor(it.badge)} />
           ))}
         </nav>
@@ -105,6 +110,7 @@ export const Header = () => {
             <kbd className="ml-2 px-1.5 py-0.5 text-[10px] font-mono bg-white/5 rounded border border-white/10">/</kbd>
           </button>
           <LiveStatusPill />
+          <LangToggle />
           <UserMenu />
         </div>
       </div>
@@ -124,7 +130,7 @@ export const Header = () => {
                   active ? "text-[#39FF14] bg-[#39FF14]/10" : "text-zinc-300 hover:bg-white/5"
                 }`}
               >
-                <Icon className="w-4 h-4" /> {it.label}
+                <Icon className="w-4 h-4" /> {navLabel(it.label)}
                 {badge > 0 && (
                   <span className="ml-auto min-w-[16px] h-4 px-1 rounded-full bg-[#39FF14] text-black text-[10px] font-black flex items-center justify-center">{badge}</span>
                 )}

@@ -97,7 +97,7 @@ def build_input(match: dict, value: dict) -> dict:
     return _clean(data)
 
 
-async def match_analysis(match: dict, value: dict, news: list | None = None) -> dict:
+async def match_analysis(match: dict, value: dict, news: list | None = None, lang: str = "en") -> dict:
     possible = value.get("possible_outcome")
     if not value:
         return {"analysis": None, "possible_outcome": possible, "error": True}
@@ -106,7 +106,8 @@ async def match_analysis(match: dict, value: dict, news: list | None = None) -> 
     if news:
         data["recent_news"] = news
     raw = json.dumps(data, sort_keys=True)
-    h = hashlib.sha1(raw.encode()).hexdigest()[:12]
+    lang = "el" if str(lang).lower() == "el" else "en"
+    h = hashlib.sha1((raw + "|" + lang).encode()).hexdigest()[:12]
     ck = f"ai_analysis_{match.get('id')}_{h}"
 
     cached = af._c_get(ck)
@@ -117,13 +118,18 @@ async def match_analysis(match: dict, value: dict, news: list | None = None) -> 
     if not api_key:
         return {"analysis": None, "possible_outcome": possible, "error": "no_key"}
 
+    system = SYSTEM
+    if lang == "el":
+        system = SYSTEM + ("\n- Write the ENTIRE analysis in natural, fluent Greek "
+                           "(Ελληνικά). Keep team names, league names and numbers as-is.")
+
     try:
         from openai import AsyncOpenAI
         client = AsyncOpenAI(api_key=api_key)
         resp = await client.chat.completions.create(
             model=MODEL,
             messages=[
-                {"role": "system", "content": SYSTEM},
+                {"role": "system", "content": system},
                 {"role": "user", "content": "Match data (JSON):\n" + raw},
             ],
         )

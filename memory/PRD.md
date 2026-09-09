@@ -329,3 +329,12 @@ The API-Football free plan went inactive/quota-exhausted → leagues/teams/playe
 - AI (ai_analysis.py): build_input adds moka_pick/moka_pick_probability_pct/market_probability_pct/pick_odds/edge_pts/opportunity_level; SYSTEM centres outlook on moka_pick.
 - VERIFIED: 10 opportunity_level unit cases pass; real value-matches all picks=argmax; HIGH set 0 rule violations; PSG@1.05->LOW (was Strong@51 longshot); OFI longshot gone; analysis page fully consistent (Luna: "Freiburg 85% vs market 55% at 1.82, +30pt edge").
 - STILL OPEN: Greek (EN/EL) translation of whole app (asked scope: default lang, local dict for UI/templates=free, Luna in Greek per-lang cache, news keep source lang).
+
+## 2026-06 — Greek translation (EN default + EL toggle)
+- Default English, EL toggle in header (lucide Globe, data-testid=lang-toggle), persisted in localStorage (moka_lang).
+- NEW: lib/i18n.js (EN->EL DICT ~160 phrases + NAV map + PLACEHOLDERS), contexts/LanguageContext.jsx (useLang), components/AutoTranslate.jsx (MutationObserver DOM translator, requestAnimationFrame-batched, restores on EN), components/LangToggle.jsx.
+- AutoTranslate: swaps known English text nodes for Greek app-wide; skips [data-no-translate] subtrees (logo protected -> stays "MOKASTATS") and SCRIPT/STYLE/TEXTAREA; team names/numbers/odds untouched (not in dict); unknown phrases fall back to English.
+- Nav labels via navLabel() in Header (avoids Home nav vs Home-outcome collision).
+- Template descriptions (valueEngine.js shortExplanation/whyMokaReasons/aiExplanation) have Greek variants via getLang(); ValueCard & MatchAnalysisPage consume useLang() to re-render on toggle.
+- Luna AI: /matches/{id}/ai-analysis?lang=el -> ai_analysis.match_analysis(lang) adds Greek instruction; cache hash includes lang (1 credit per match per language, 24h cache). News stay source language (no cost).
+- VERIFIED (screenshots + curl): matches page fully Greek (nav/tabs/hero/cards/descriptions/trial/gating), logo intact, Luna returns fluent Greek. EN default unaffected.

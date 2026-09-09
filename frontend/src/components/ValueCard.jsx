@@ -7,6 +7,7 @@ import AddToChartButton from "./AddToChartButton";
 import AddToSlipButton from "./AddToSlipButton";
 import InfoTip from "./InfoTip";
 import { useLiveScores } from "../contexts/LiveScoresContext";
+import { useLang } from "../contexts/LanguageContext";
 
 function fmtKickoff(iso) {
   if (!iso) return null;
@@ -96,6 +97,7 @@ export function LockedValueCard() {
 export default function ValueCard({ entry }) {
   const { match, value } = entry;
   const live = useLiveScores().get(match.id);
+  const { lang } = useLang();
   const [adv, setAdv] = useState(false);
   const probs = value.probabilities || {};
   const isLive = value.liveOnly || match.status === "live";
@@ -109,6 +111,7 @@ export default function ValueCard({ entry }) {
     <Link
       to={`/analysis/${match.id}`}
       data-testid={`value-card-${match.id}`}
+      data-lang={lang}
       className="block bg-[#161b22] border border-[#30363d] rounded-xl p-4 hover:border-[#39FF14]/40 transition-all"
     >
       <div className="flex items-center justify-between mb-2 gap-2">

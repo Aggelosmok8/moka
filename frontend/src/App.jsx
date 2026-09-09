@@ -5,6 +5,8 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { ChartProvider } from "./contexts/ChartContext";
 import { PortfolioProvider } from "./contexts/PortfolioContext";
 import { LiveScoresProvider } from "./contexts/LiveScoresContext";
+import { LanguageProvider } from "./contexts/LanguageContext";
+import AutoTranslate from "./components/AutoTranslate";
 import HomePage from "./pages/HomePage";
 import TeamPage from "./pages/TeamPage";
 import MatchPage from "./pages/MatchPage";
@@ -62,16 +64,19 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <ChartProvider>
-          <PortfolioProvider>
-            <LiveScoresProvider>
-              <Toaster position="top-right" theme="dark" />
-              <AppRouter />
-              <SlipFab />
-              <DevLoginPanel />
-            </LiveScoresProvider>
-          </PortfolioProvider>
-        </ChartProvider>
+        <LanguageProvider>
+          <ChartProvider>
+            <PortfolioProvider>
+              <LiveScoresProvider>
+                <Toaster position="top-right" theme="dark" />
+                <AutoTranslate />
+                <AppRouter />
+                <SlipFab />
+                <DevLoginPanel />
+              </LiveScoresProvider>
+            </PortfolioProvider>
+          </ChartProvider>
+        </LanguageProvider>
       </AuthProvider>
     </BrowserRouter>
   );
