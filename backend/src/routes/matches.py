@@ -307,12 +307,22 @@ async def get_match(match_id: str):
     except Exception as e:
         logger.warning("refine_prediction(%s): %s", match_id, e)
     if m.get("status") == "live":
-        try:
-            lp = _live_prediction(m, value)
-            value["live_prediction"] = lp
-            value["live_analysis"] = _live_analysis_text(m, value, lp)
-        except Exception as e:
-            logger.warning("live_prediction(%s): %s", match_id, e)
+        # Keep the pre-match prediction for the whole first half + halftime; only
+        # from the second half (minute >= 46) do we recompute live from the current
+        # score + minute — computed at the minute the user opens/refreshes (#7/#9).
+        live = m.get("live") or {}
+        minute = live.get("minute")
+        st = str(live.get("status") or "").upper()
+        second_half = (
+            isinstance(minute, (int, float)) and minute >= 46 and st != "HT"
+        )
+        if second_half:
+            try:
+                lp = _live_prediction(m, value)
+                value["live_prediction"] = lp
+                value["live_analysis"] = _live_analysis_text(m, value, lp)
+            except Exception as e:
+                logger.warning("live_prediction(%s): %s", match_id, e)
     pm = public_match(m)
     pm["value"] = value
     return pm

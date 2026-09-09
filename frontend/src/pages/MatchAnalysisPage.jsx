@@ -304,7 +304,7 @@ export default function MatchAnalysisPage() {
             </a>
           ))}
         </div>
-        <div className="text-[11px] text-zinc-500 mt-2">Tap any bookmaker to open their site · odds for {value.pickName}, best to worst.</div>
+        <div className="text-[11px] text-zinc-500 mt-2">Tap any bookmaker to look them up · odds for {value.pickName}, best to worst.</div>
       </Card>
       )}
 
