@@ -14,8 +14,11 @@ export function LiveScoresProvider({ children }) {
 
   useEffect(() => {
     load();
-    const t = setInterval(load, 60000); // one cached backend call / minute
-    return () => clearInterval(t);
+    // Poll only while the tab is visible (no background drain), every 2 min.
+    const t = setInterval(() => { if (!document.hidden) load(); }, 120000);
+    const onVis = () => { if (!document.hidden) load(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", onVis); };
   }, [load]);
 
   const map = useMemo(() => Object.fromEntries(list.map((m) => [m.id, m])), [list]);

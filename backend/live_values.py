@@ -35,7 +35,7 @@ LIVE_LEAGUES = [
 ]
 
 STATS_TTL = 24 * 3600
-MATCHES_TTL = 30 * 60
+MATCHES_TTL = 2 * 3600  # pre-match value list changes slowly; long cache saves quota
 MAX_PER_LEAGUE = 6        # keep the real-data set reasonable
 
 _cache: dict = {}

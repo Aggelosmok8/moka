@@ -338,3 +338,9 @@ The API-Football free plan went inactive/quota-exhausted → leagues/teams/playe
 - Template descriptions (valueEngine.js shortExplanation/whyMokaReasons/aiExplanation) have Greek variants via getLang(); ValueCard & MatchAnalysisPage consume useLang() to re-render on toggle.
 - Luna AI: /matches/{id}/ai-analysis?lang=el -> ai_analysis.match_analysis(lang) adds Greek instruction; cache hash includes lang (1 credit per match per language, 24h cache). News stay source language (no cost).
 - VERIFIED (screenshots + curl): matches page fully Greek (nav/tabs/hero/cards/descriptions/trial/gating), logo intact, Luna returns fluent Greek. EN default unaffected.
+
+## 2026-06 — Live disappeared = API-Football daily quota (500/500) exhausted
+- Root cause (NOT code): production /api/status showed api_football_usage 500/500 -> /api/live returned [] -> ticker + live section gone. value-matches still worked (cached).
+- Reduced API-Football consumption: live_fixtures TTL 45s->150s (apifootball.py); live_values MATCHES_TTL 30min->2h; LiveScoresContext poll 60s->120s + pauses when document.hidden.
+- Note: today's counter resets at UTC midnight; needs redeploy to apply. 500/day plan is tight for all-day live — consider higher API-Football plan.
+- Production backend: https://moka-backend-s9fj.onrender.com ; frontend https://moka-pk4j.vercel.app (already runs latest opportunity+translation build).

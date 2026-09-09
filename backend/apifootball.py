@@ -346,7 +346,8 @@ async def fixture_results(ids: list) -> dict:
 
 async def live_fixtures() -> list:
     """ALL in-play fixtures across every league in ONE call (/fixtures?live=all).
-    Cached 45s — a single request powers the whole live ticker + live scores."""
+    Cached 150s — a single request powers the whole live ticker + live scores.
+    Longer TTL keeps daily API-Football usage well under the plan quota."""
     ck = "live_all"
     hit = _c_get(ck)
     if hit is not None:
@@ -378,7 +379,7 @@ async def live_fixtures() -> list:
             })
     except Exception as e:
         logger.warning("apifootball.live_fixtures: %s", e)
-    _c_set(ck, out, ttl=45)
+    _c_set(ck, out, ttl=150)
     return out
 
 
