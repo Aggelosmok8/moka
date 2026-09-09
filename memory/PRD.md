@@ -316,3 +316,16 @@ The API-Football free plan went inactive/quota-exhausted → leagues/teams/playe
 - SLIP -> PORTFOLIO auto-populate: PortfolioContext.autoSettle now also drains finished SLIP legs -> settled single bets in My Bets (won/lost via real result, default 10 stake), removed from slip. Mount hasPending also checks slip.length. fetchResults resolves live_af_ ids.
 - NEWS feed: news_service.fetch_feed aggregates up to 4 pages (free tier caps 3/req) -> ~12 unique articles; route /api/news uses it. Verified 12 articles returned no-filter.
 - DEPLOY NOTE: production (vercel/render) runs OLD code — needs Save to GitHub + redeploy. THENEWSAPI_TOKEN, OPENAI_API_KEY, OPENAI_MODEL=gpt-5.6-luna, DATABASE_URL required in Render env.
+
+## 2026-06 — Opportunity/Pick rework (Prediction first, Opportunity second)
+- ROOT CAUSE of "Strong @ 1.05" / longshot picks: value_engine picked max-EV outcome (EV=prob*odds-1 favours longshots) and classified Strong on that EV.
+- NEW (value_engine.py, probability model UNTOUCHED):
+  - Primary pick = model's MOST LIKELY outcome (argmax of home/draw/away), never max EV.
+  - Evaluate ONLY that outcome: market_prob=1/odds, edge=model_p-implied, EV kept for advanced only.
+  - opportunity_level(edge, odds): odds must be 1.40–3.00; edge>=8pp=HIGH(Strong), >=4pp=MEDIUM(Worth), else LOW(No Clear). edge<=0 or odds out of band = LOW.
+  - Classification uses the ROUNDED edge_pts the user sees (no 8.0-shows-MEDIUM boundary bug).
+  - rank_value_matches sorts Strong>Worth>rest then value_score.
+- FRONTEND one-source-of-truth: removed leanOdds/alignedValue remap (valueEngine.js), ValueCard + MatchAnalysisPage now show backend pick/pickName/bestOdds directly. shortExplanation/whyMokaReasons/aiExplanation reference the SAME pick (model% vs market% at odds).
+- AI (ai_analysis.py): build_input adds moka_pick/moka_pick_probability_pct/market_probability_pct/pick_odds/edge_pts/opportunity_level; SYSTEM centres outlook on moka_pick.
+- VERIFIED: 10 opportunity_level unit cases pass; real value-matches all picks=argmax; HIGH set 0 rule violations; PSG@1.05->LOW (was Strong@51 longshot); OFI longshot gone; analysis page fully consistent (Luna: "Freiburg 85% vs market 55% at 1.82, +30pt edge").
+- STILL OPEN: Greek (EN/EL) translation of whole app (asked scope: default lang, local dict for UI/templates=free, Luna in Greek per-lang cache, news keep source lang).

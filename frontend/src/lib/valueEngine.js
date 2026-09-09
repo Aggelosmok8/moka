@@ -41,67 +41,38 @@ export function adaptEntry(e) {
   return { match: e.match, value: adaptValue(e.value) };
 }
 
-// Which 1X2 key matches Moka's deterministic lean (possible outcome).
-export function outcomeKeyFromLean(value) {
-  const po = (value && value.possibleOutcome ? value.possibleOutcome : "").toLowerCase();
-  if (po.includes("home")) return "home";
-  if (po.includes("away")) return "away";
-  if (po.includes("draw")) return "draw";
-  return value && value.pick;
-}
-
-// Odds for Moka's lean (favourite ~1.40), NOT the EV longshot — sorted best first.
-export function leanOdds(match, value) {
-  const key = outcomeKeyFromLean(value);
-  const rows = ((match && match.odds) || [])
-    .map((o) => ({ bookmaker: o.bookmaker, price: (o.odds && o.odds[key]) || 0 }))
-    .filter((o) => o.price > 0)
-    .sort((a, b) => b.price - a.price);
-  const name = key === "home" ? (match && match.home && match.home.name)
-    : key === "away" ? (match && match.away && match.away.name)
-    : key === "draw" ? "Draw" : (value && value.pickName);
-  return { key, name, rows, best: rows[0] || null };
-}
-
-// A value block re-pointed at the lean, so odds/pick/slip all match what Moka expects.
-export function alignedValue(match, value) {
-  const { key, name, best } = leanOdds(match, value);
-  return {
-    ...value, pick: key, pickName: name,
-    bestOdds: best ? best.price : value.bestOdds,
-    bookmaker: best ? best.bookmaker : value.bookmaker,
-  };
-}
-
 export function adaptValueMatches(resp) {
   return ((resp && resp.matches) || []).map(adaptEntry);
 }
 
-// Plain-language one-liner for the match card (no technical metrics, no odds).
+// Plain-language one-liner for the match card — always about the Moka pick.
 export function shortExplanation(match, value) {
   if (!value) return "";
-  const out = value.possibleOutcome || "this matchup";
-  return `Moka leans towards ${out} based on recent form and scoring numbers.`;
+  const mp = Math.round((value.mokaProb || 0) * 100);
+  const bp = Math.round((value.bookProb || 0) * 100);
+  if (mp && bp) {
+    return `Moka's pick is ${value.pickName} — estimated ~${mp}% vs the market's ~${bp}%.`;
+  }
+  return `Moka's pick is ${value.pickName} based on recent form and scoring numbers.`;
 }
 
-// 3–4 simple natural-language reasons, aligned to what Moka actually expects.
+// 3–4 simple reasons, all about the SAME Moka pick.
 export function whyMokaReasons(match, value) {
   if (!value) return [];
-  const po = (value.possibleOutcome || "").toLowerCase();
-  const home = match.home?.name || "the home side";
-  const away = match.away?.name || "the away side";
+  const mp = Math.round((value.mokaProb || 0) * 100);
+  const bp = Math.round((value.bookProb || 0) * 100);
   const reasons = [];
-  if (po.includes("home")) reasons.push(`${home} have the stronger recent numbers`);
-  else if (po.includes("away")) reasons.push(`${away} have been the better side recently`);
-  else reasons.push("The sides look closely matched");
-  if (po.includes("draw")) reasons.push("A tight, low-margin game looks likely");
-  reasons.push("Recent attacking and defensive form support this lean");
-  reasons.push("Scoring rates point to this outcome");
+  reasons.push(`Moka estimates ${value.pickName} at ~${mp}%`);
+  if (bp) reasons.push(`The market price implies only ~${bp}%`);
+  if (value.edge > 0) reasons.push(`That's a +${value.edge}pt edge at ${value.bestOdds}`);
+  reasons.push("Recent scoring rates and form support this pick");
   return reasons;
 }
 
-// Short technical explanation — aligned to the model's expected outcome (no EV/odds framing).
+// Short technical explanation — same pick as everywhere else.
 export function aiExplanation(match, value) {
-  const po = value.possibleOutcome || "no clear lean";
-  return `Based on scoring rates and recent form, Moka's model leans towards ${po}.`;
+  if (!value) return "";
+  const mp = Math.round((value.mokaProb || 0) * 100);
+  const bp = Math.round((value.bookProb || 0) * 100);
+  return `Moka predicts ${value.pickName} (~${mp}%); the market implies ~${bp}% at ${value.bestOdds}.`;
 }

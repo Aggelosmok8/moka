@@ -39,7 +39,10 @@ SYSTEM = (
     "stories. Never invent news and never double-count the same item.\n"
     "- Cover, as short flowing paragraphs (no headers, no bullet symbols): the home "
     "team's strengths and weaknesses, the away team's strengths and weaknesses, and "
-    "an overall match outlook consistent with the model's possible outcome."
+    "an overall outlook. The outlook MUST centre on 'moka_pick' — explain that Moka "
+    "predicts this outcome, comparing 'moka_pick_probability_pct' with "
+    "'market_probability_pct' at 'pick_odds' when present. Refer only to that same "
+    "outcome; never argue for a different result than moka_pick."
 )
 
 
@@ -73,6 +76,13 @@ def build_input(match: dict, value: dict) -> dict:
             "total": pred.get("xg_total"),
         },
         "possible_outcome": value.get("possible_outcome"),
+        "moka_pick": value.get("pick_name"),
+        "moka_pick_probability_pct": value.get("confidence"),
+        "market_probability_pct": (round((value.get("market_prob") or 0) * 100)
+                                   if value.get("market_prob") else None),
+        "pick_odds": value.get("best_odds"),
+        "edge_pts": value.get("edge"),
+        "opportunity_level": value.get("value_level"),
         "home_stats": {
             "goals_per_game": hstat.get("goalsScored"),
             "conceded_per_game": hstat.get("goalsConceded"),

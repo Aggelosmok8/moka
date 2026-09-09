@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { Lock, ChevronDown, ChevronUp, ArrowRight, Clock } from "lucide-react";
-import { aiExplanation, shortExplanation, leanOdds, alignedValue } from "../lib/valueEngine";
+import { aiExplanation, shortExplanation } from "../lib/valueEngine";
 import { UpgradeButton } from "./Gating";
 import AddToChartButton from "./AddToChartButton";
 import AddToSlipButton from "./AddToSlipButton";
@@ -99,8 +99,6 @@ export default function ValueCard({ entry }) {
   const [adv, setAdv] = useState(false);
   const probs = value.probabilities || {};
   const isLive = value.liveOnly || match.status === "live";
-  const lean = leanOdds(match, value);
-  const alignedEntry = { match, value: alignedValue(match, value) };
   const toggle = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -149,16 +147,16 @@ export default function ValueCard({ entry }) {
         </div>
       ) : (
         <>
-          {/* Simple info — always visible (aligned to Moka's lean, not an EV longshot) */}
+          {/* Simple info — always visible (backend pick = model's prediction) */}
           <div className="flex items-center justify-between text-xs border-t border-white/5 pt-2">
             <span className="text-zinc-500">Best odds</span>
             <span className="text-white font-bold font-mono-num">
-              {lean.best ? lean.best.price : value.bestOdds} <span className="text-zinc-500 font-normal">@ {lean.best ? lean.best.bookmaker : value.bookmaker}</span>
+              {value.bestOdds} <span className="text-zinc-500 font-normal">@ {value.bookmaker}</span>
             </span>
           </div>
           <div className="flex items-center justify-between text-xs mt-1.5">
             <span className="text-zinc-500">Moka pick</span>
-            <span className="text-white font-bold truncate ml-2">{lean.name || value.pickName}</span>
+            <span className="text-white font-bold truncate ml-2">{value.pickName}</span>
           </div>
           <p className="text-xs text-zinc-400 mt-2 leading-snug">{shortExplanation(match, value)}</p>
         </>
@@ -211,8 +209,8 @@ export default function ValueCard({ entry }) {
 
       {!isLive && (
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <AddToChartButton entry={alignedEntry} className="w-full justify-center" />
-          <AddToSlipButton entry={alignedEntry} className="w-full" />
+          <AddToChartButton entry={entry} className="w-full justify-center" />
+          <AddToSlipButton entry={entry} className="w-full" />
         </div>
       )}
     </Link>

@@ -123,30 +123,15 @@ export default function MatchAnalysisPage() {
   const isLive = match.status === "live" || value.liveOnly;
   const lp = value.livePrediction;
   const afterHt = !!(lp && lp.after_ht);
-  // Show odds + slip pick for Moka's actual lean (possible outcome), NOT an EV
-  // longshot — so a favourite reads ~1.40 instead of a 14.5 underdog price.
-  const outcomeKey = (() => {
-    const po = (value.possibleOutcome || "").toLowerCase();
-    if (po.includes("home")) return "home";
-    if (po.includes("away")) return "away";
-    if (po.includes("draw")) return "draw";
-    return value.pick;
-  })();
-  const outcomeName = outcomeKey === "home" ? (match.home && match.home.name)
-    : outcomeKey === "away" ? (match.away && match.away.name)
-    : outcomeKey === "draw" ? "Draw" : value.pickName;
+  // One source of truth: the backend `pick` IS the model's prediction. Just show it.
+  const outcomeKey = value.pick;
+  const outcomeName = value.pickName;
 
-  // Available odds — every bookmaker for the lean, sorted best (highest) to worst.
+  // Available odds for the Moka pick, sorted best (highest) to worst.
   const oddsRows = (match.odds || [])
     .map((o) => ({ bookmaker: o.bookmaker, price: (o.odds && o.odds[outcomeKey]) || 0 }))
     .filter((o) => o.price > 0)
     .sort((a, b) => b.price - a.price);
-
-  const alignedValue = {
-    ...value, pick: outcomeKey, pickName: outcomeName,
-    bestOdds: oddsRows[0] ? oddsRows[0].price : value.bestOdds,
-    bookmaker: oddsRows[0] ? oddsRows[0].bookmaker : value.bookmaker,
-  };
 
   return (
     <Shell>
@@ -202,8 +187,8 @@ export default function MatchAnalysisPage() {
           </div>
         </div>
         <div className="mt-4 grid grid-cols-2 gap-2">
-          <AddToChartButton entry={{ match, value: alignedValue }} className="w-full justify-center" />
-          <AddToSlipButton entry={{ match, value: alignedValue }} size="md" className="w-full" />
+          <AddToChartButton entry={{ match, value }} className="w-full justify-center" />
+          <AddToSlipButton entry={{ match, value }} size="md" className="w-full" />
         </div>
       </Card>
       )}
