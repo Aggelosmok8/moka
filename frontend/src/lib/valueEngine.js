@@ -41,6 +41,38 @@ export function adaptEntry(e) {
   return { match: e.match, value: adaptValue(e.value) };
 }
 
+// Which 1X2 key matches Moka's deterministic lean (possible outcome).
+export function outcomeKeyFromLean(value) {
+  const po = (value && value.possibleOutcome ? value.possibleOutcome : "").toLowerCase();
+  if (po.includes("home")) return "home";
+  if (po.includes("away")) return "away";
+  if (po.includes("draw")) return "draw";
+  return value && value.pick;
+}
+
+// Odds for Moka's lean (favourite ~1.40), NOT the EV longshot — sorted best first.
+export function leanOdds(match, value) {
+  const key = outcomeKeyFromLean(value);
+  const rows = ((match && match.odds) || [])
+    .map((o) => ({ bookmaker: o.bookmaker, price: (o.odds && o.odds[key]) || 0 }))
+    .filter((o) => o.price > 0)
+    .sort((a, b) => b.price - a.price);
+  const name = key === "home" ? (match && match.home && match.home.name)
+    : key === "away" ? (match && match.away && match.away.name)
+    : key === "draw" ? "Draw" : (value && value.pickName);
+  return { key, name, rows, best: rows[0] || null };
+}
+
+// A value block re-pointed at the lean, so odds/pick/slip all match what Moka expects.
+export function alignedValue(match, value) {
+  const { key, name, best } = leanOdds(match, value);
+  return {
+    ...value, pick: key, pickName: name,
+    bestOdds: best ? best.price : value.bestOdds,
+    bookmaker: best ? best.bookmaker : value.bookmaker,
+  };
+}
+
 export function adaptValueMatches(resp) {
   return ((resp && resp.matches) || []).map(adaptEntry);
 }
