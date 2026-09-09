@@ -308,3 +308,11 @@ The API-Football free plan went inactive/quota-exhausted → leagues/teams/playe
 - NEWS relevance: build_search football/basketball only (generic feed '+football|+soccer|+basketball'), LEAGUE_SEARCH_MAP disambiguates Super League->Greek Super League, Championship->EFL Championship etc.
 - COMPETITIONS: added domestic cups FA Cup(45)/EFL Cup(48)/Copa del Rey(143)/Coppa Italia(137)/DFB Pokal(81)/Coupe de France(66)/Greek Cup(735) to CATALOG+LIVE_LEAGUES+entitlements. Verified FA/EFL/Greek Cup appear.
 - STILL OPEN (need repro): 'redirect to not-secure page' (which click?); slip 'button appeared stays' (clarify element); odds 40/50 are REAL underdog odds (multi-bookmaker) not a bug — now de-emphasised by alignment.
+
+## 2026-06 — Odds alignment, safe links, slip→portfolio, news feed
+- ODDS "14 vs 1.4" ROOT CAUSE: Available Odds card showed the EV-longshot pick's price (e.g. away @ 14.5/51). Fixed in MatchAnalysisPage.jsx — odds + Add-to-slip/watchlist now use the Moka LEAN (possible_outcome -> home/draw/away key). Verified: EV away@51 -> lean Home@1.04. The odds parsing (_mw_entries) was never wrong; 14.5 was a real underdog price.
+- SAFE REDIRECT: bookmakers.js bookmakerUrl now returns a Google search per bookmaker (safe + appropriate) instead of deep-linking gambling domains (marathonbet/1xbet/stake) that browsers flag "not safe". Removed dead MAP.
+- LIVE PREDICTION timing: _live_prediction attached only in 2nd half (minute>=46, not HT); whole 1st half + HT keeps pre-match prediction. (matches.py get_match)
+- SLIP -> PORTFOLIO auto-populate: PortfolioContext.autoSettle now also drains finished SLIP legs -> settled single bets in My Bets (won/lost via real result, default 10 stake), removed from slip. Mount hasPending also checks slip.length. fetchResults resolves live_af_ ids.
+- NEWS feed: news_service.fetch_feed aggregates up to 4 pages (free tier caps 3/req) -> ~12 unique articles; route /api/news uses it. Verified 12 articles returned no-filter.
+- DEPLOY NOTE: production (vercel/render) runs OLD code — needs Save to GitHub + redeploy. THENEWSAPI_TOKEN, OPENAI_API_KEY, OPENAI_MODEL=gpt-5.6-luna, DATABASE_URL required in Render env.

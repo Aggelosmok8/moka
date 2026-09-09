@@ -15,4 +15,4 @@ async def get_news(q: str = "", league: str = "", team: str = "", date: str = ""
     Cached 30 min to respect the news provider's free-tier limits.
     """
     search = news_service.build_search(team=team, league=league, q=q)
-    return await news_service.fetch_news(search=search, published_on=(date or ""), page=page)
+    return await news_service.fetch_feed(search=search, published_on=(date or ""), pages=4)

@@ -76,6 +76,27 @@ async def match_news(home: str = "", away: str = "", limit: int = 3) -> list:
     return out
 
 
+async def fetch_feed(search: str = "", published_on: str = "", pages: int = 4, limit: int = 3) -> dict:
+    """Aggregate several pages into one feed so the News tab shows enough
+    articles (the free tier caps each request at 3). Each page is cached
+    individually via fetch_news, so re-loads cost nothing."""
+    articles: list = []
+    seen: set = set()
+    meta: dict = {}
+    for p in range(1, max(1, pages) + 1):
+        res = await fetch_news(search=search, published_on=published_on, page=p, limit=limit)
+        meta = res.get("meta") or meta
+        page_articles = res.get("articles") or []
+        for a in page_articles:
+            key = a.get("id") or a.get("url") or a.get("title")
+            if key and key not in seen:
+                seen.add(key)
+                articles.append(a)
+        if len(page_articles) < limit:
+            break  # no more results, stop paginating
+    return {"articles": articles, "meta": meta}
+
+
 async def fetch_news(search: str = "", published_on: str = "", page: int = 1, limit: int = 3) -> dict:
     token = _token()
     if not token:

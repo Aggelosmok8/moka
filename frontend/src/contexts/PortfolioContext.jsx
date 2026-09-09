@@ -249,6 +249,7 @@ export function PortfolioProvider({ children }) {
     const ids = [
       ...bets.filter((b) => b.status === "pending" && b.matchId).map((b) => b.matchId),
       ...tickets.flatMap((t) => t.legs.filter((l) => l.status === "pending" && l.matchId).map((l) => l.matchId)),
+      ...slip.filter((l) => l.matchId).map((l) => l.matchId),
     ];
     const unique = [...new Set(ids)];
     if (!unique.length) return { settled: 0 };
@@ -269,8 +270,33 @@ export function PortfolioProvider({ children }) {
       }
       return item;
     };
+
+    // Any slip pick whose match has finished leaves the slip and becomes a
+    // settled single bet in My Bets (default 1-unit stake), so finished picks
+    // auto-populate the Portfolio as win/loss history.
+    const finishedSingles = [];
+    const remainingSlip = [];
+    slip.forEach((l) => {
+      const r = results[l.matchId];
+      if (r && r.finished && r.outcome) {
+        settled++;
+        finishedSingles.push({
+          id: uid(),
+          matchId: l.matchId, home: l.home, away: l.away, league: l.league,
+          pick: l.pick, pickName: l.pickName, odds: Number(l.odds) || 0, bookmaker: l.bookmaker || "",
+          stake: 10,
+          status: r.outcome === l.pick ? "won" : "lost",
+          finalScore: `${r.home}-${r.away}`,
+          createdAt: l.createdAt || new Date().toISOString(),
+          settledAt: new Date().toISOString(),
+        });
+      } else {
+        remainingSlip.push(l);
+      }
+    });
+
     setBets((prev) => {
-      const next = prev.map(settleLegOrBet);
+      const next = [...finishedSingles, ...prev.map(settleLegOrBet)];
       try { localStorage.setItem(KEY, JSON.stringify(next)); } catch {}
       return next;
     });
@@ -279,6 +305,10 @@ export function PortfolioProvider({ children }) {
       try { localStorage.setItem(TICKETS_KEY, JSON.stringify(next)); } catch {}
       return next;
     });
+    if (finishedSingles.length) {
+      setSlip(remainingSlip);
+      try { localStorage.setItem(SLIP_KEY, JSON.stringify(remainingSlip)); } catch {}
+    }
     if (settled > 0) {
       setNewlySettled((n) => {
         const v = n + settled;
@@ -287,7 +317,7 @@ export function PortfolioProvider({ children }) {
       });
     }
     return { settled };
-  }, [bets, tickets]);
+  }, [bets, tickets, slip]);
 
   // Run auto-settlement once app-wide (any page) so finished matches settle and
   // the Portfolio nav shows a "new result" badge even if the user isn't on it.
@@ -296,7 +326,8 @@ export function PortfolioProvider({ children }) {
     if (autoRunRef.current) return;
     autoRunRef.current = true;
     const hasPending = bets.some((b) => b.status === "pending") ||
-      tickets.some((t) => t.legs.some((l) => l.status === "pending"));
+      tickets.some((t) => t.legs.some((l) => l.status === "pending")) ||
+      slip.length > 0;
     if (!hasPending) return;
     const t = setTimeout(() => { autoSettle(); }, 1500);
     return () => clearTimeout(t);
