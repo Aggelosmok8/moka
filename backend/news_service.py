@@ -19,15 +19,86 @@ BASE = "https://api.thenewsapi.com/v1/news/all"
 GR_BASE = "https://freenewsapi.ai/v1/search"
 CACHE_TTL = 30 * 60  # 30 minutes
 
+# Dedicated Greek sports domains — articles from these are always kept.
+GR_SPORTS_HOSTS = {
+    "gazzetta.gr", "sdna.gr", "onsports.gr", "sport24.gr", "sport-fm.gr",
+    "novasports.gr", "contra.gr", "sportime.gr", "ole.gr", "goalpost.gr",
+    "sportstonoto.gr", "sportdog.gr", "redgoal.gr", "footballleague.gr",
+    "gazzetta", "sport.gr", "sportday.gr", "bwinsports.gr", "sport-news.gr",
+    "sportfm.gr", "nova.gr", "gigasport.gr", "sportfoot.gr",
+}
+
+# Betting/promo hosts we never want in the news feed.
+GR_BLOCK_HOSTS = {"hellasbet.com", "novibet.gr", "stoiximan.gr", "bet365.com"}
+
+# Sports keywords (accent-insensitive substrings). Keep an article from a
+# general site only if its text clearly concerns football/basketball.
+GR_SPORTS_KW = (
+    "ποδοσφαιρ", "μπασκετ", "γκολ", "προπονητ", "μεταγραφ", "πρωταθλημα",
+    "super league", "superleague", "euroleague", "champions league", "europa league",
+    "conference league", "μπασκετικ", "ποδοσφαιρικ", "γηπεδο", "στοιχημα",
+    "ολυμπιακ", "παναθηναικ", "παοκ", "αεκ", "οφη", "αρης ", "παναιτωλικ",
+    "λεβαδειακ", "ατρομητ", "παναθλητικ", "βολος", "καλλιθεα", "λαμια",
+    "νιου μπι", "asteras", "αστερας", "premier league", "la liga",
+    "serie a", "bundesliga", "nba", "φιλικο", "φιλικ ", "ημιχρονο",
+    "τερμα", "προημιτελ", "ημιτελ", "τελικος", "σεντερ φορ", "ρεμπαουντ",
+    "κοουτς", "εθνικη ομαδα", "φαση εργων",
+)
+
+
+def _strip_accents(s: str) -> str:
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
+
+
+# Boilerplate that marks tag/index/navigation pages rather than real articles.
+GR_JUNK_MARKERS = (
+    "διαβαστε ολα τα αρθρα",  # "read all articles about topic" tag pages
+    "ολα τα νεα για",
+    "❮",  # breadcrumb/nav pages
+    "ποδοσφαιρο μπασκετ βιντεο",  # site menu dump
+    "matchzone προγραμμα tv",
+)
+
+
+def _looks_like_junk(article: dict) -> bool:
+    title = (article.get("title") or "").strip()
+    desc = _strip_accents((article.get("description") or "").lower())
+    if not title or len(title) < 5:
+        return True
+    if any(m in desc for m in GR_JUNK_MARKERS):
+        return True
+    # Real article descriptions carry substance; tag pages are short/empty.
+    if len(desc) < 25:
+        return True
+    return False
+
+
+def _is_sports_gr(article: dict) -> bool:
+    host = (article.get("source") or article.get("host") or "").lower().replace("www.", "").strip()
+    if host in GR_BLOCK_HOSTS:
+        return False
+    if _looks_like_junk(article):
+        return False
+    if host in GR_SPORTS_HOSTS:
+        return True
+    text = _strip_accents(f"{article.get('title') or ''} {article.get('description') or ''}".lower())
+    return any(kw in text for kw in GR_SPORTS_KW)
+
 
 async def freenews_gr(query: str = "", size: int = 12) -> dict:
-    """Greek-language news from freenewsapi.ai (no key). Cached. Used for the
-    Greek News feed and as extra pre-match context (injuries/lineups in Greek)."""
+    """Greek-language news from freenewsapi.ai (no key). Cached. Filtered to
+    sports-only (sports domains or football/basketball keywords) so no general
+    news leaks into the feed. Used for the Greek News feed and as extra
+    pre-match context (injuries/lineups in Greek)."""
     ck = f"grnews_{query}_{size}"
     hit = af._c_get(ck)
     if hit is not None:
         return hit
-    params = {"country": "gr", "size": size}
+    # Fetch the latest Greek feed and filter down to sports (a sports-biased
+    # query mostly surfaces low-value tag pages, so we filter instead).
+    fetch_size = min(max(size * 8, 60), 100)
+    params = {"country": "gr", "size": fetch_size}
     if query and query.strip():
         params["q"] = query.strip()
     out = {"articles": [], "meta": {"source": "freenewsapi", "lang": "el"}}
@@ -40,7 +111,7 @@ async def freenews_gr(query: str = "", size: int = 12) -> dict:
             src = a.get("source")
             if isinstance(src, dict):
                 src = src.get("name")
-            out["articles"].append({
+            item = {
                 "id": a.get("id") or a.get("url"),
                 "title": a.get("title"),
                 "description": a.get("description"),
@@ -50,7 +121,11 @@ async def freenews_gr(query: str = "", size: int = 12) -> dict:
                 "source": src or a.get("host"),
                 "publishedAt": a.get("published_at") or a.get("date") or a.get("published"),
                 "categories": [],
-            })
+            }
+            if _is_sports_gr({**item, "host": a.get("host")}):
+                out["articles"].append(item)
+            if len(out["articles"]) >= size:
+                break
     except Exception as e:
         logger.warning("news_service.freenews_gr failed: %s", e)
         out["meta"] = {"error": True}
@@ -172,7 +247,7 @@ async def fetch_news(search: str = "", published_on: str = "", page: int = 1, li
 
     out = {"articles": [], "meta": {}}
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
             r = await client.get(BASE, params=params)
             r.raise_for_status()
             d = r.json()
