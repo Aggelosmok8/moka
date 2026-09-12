@@ -102,7 +102,7 @@ function BetRow({ b, settle, remove }) {
 const FREE_LIMIT = 5;
 
 // --- Accumulator slip builder ---
-function BetSlip({ slip, removeFromSlip, clearSlip, placeTicket }) {
+function BetSlip({ slip, removeFromSlip, updateSlipLegOdds, clearSlip, placeTicket }) {
   const [stake, setStake] = useState("10");
   const totalOdds = slip.reduce((p, l) => p * (Number(l.odds) || 1), 1);
   const potential = (Number(stake || 0) * totalOdds).toFixed(2);
@@ -129,8 +129,16 @@ function BetSlip({ slip, removeFromSlip, clearSlip, placeTicket }) {
               <div className="text-xs text-white font-semibold truncate">{l.home} <span className="text-zinc-600">vs</span> {l.away}</div>
               <div className="text-[11px] text-[#39FF14] font-bold truncate">{l.pickName}</div>
             </div>
-            <div className="flex items-center gap-3 shrink-0">
-              <span className="font-mono-num font-bold text-white text-sm">{l.odds}</span>
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="flex flex-col items-end">
+                <label className="text-[9px] text-zinc-500 uppercase leading-none mb-0.5">Your odds</label>
+                <input
+                  type="number" min="1" step="0.01" value={l.odds}
+                  onChange={(e) => updateSlipLegOdds(l.matchId, e.target.value)}
+                  data-testid={`slip-odds-${l.matchId}`}
+                  className="w-16 bg-[#161b22] border border-[#30363d] rounded px-2 py-1 text-white font-mono-num text-sm text-right focus:outline-none focus:border-[#39FF14]"
+                />
+              </div>
               <button onClick={() => removeFromSlip(l.matchId)} data-testid={`slip-remove-${l.matchId}`} className="text-zinc-500 hover:text-[#FF3B30]"><X className="w-4 h-4" /></button>
             </div>
           </div>
@@ -214,14 +222,14 @@ function TicketCard({ t, settleLeg, removeTicket }) {
 }
 
 function TicketsView({ isPro }) {
-  const { slip, removeFromSlip, clearSlip, placeTicket, tickets, settleLeg, removeTicket } = usePortfolio();
+  const { slip, removeFromSlip, updateSlipLegOdds, clearSlip, placeTicket, tickets, settleLeg, removeTicket } = usePortfolio();
   const scoped = isPro ? tickets : tickets.slice(0, FREE_LIMIT);
   const hidden = isPro ? 0 : Math.max(0, tickets.length - FREE_LIMIT);
 
   return (
     <div data-testid="portfolio-tickets-view">
       {slip.length > 0 && (
-        <BetSlip slip={slip} removeFromSlip={removeFromSlip} clearSlip={clearSlip} placeTicket={placeTicket} />
+        <BetSlip slip={slip} removeFromSlip={removeFromSlip} updateSlipLegOdds={updateSlipLegOdds} clearSlip={clearSlip} placeTicket={placeTicket} />
       )}
 
       {tickets.length === 0 && slip.length === 0 ? (
@@ -254,7 +262,7 @@ function TicketsView({ isPro }) {
 }
 
 export default function PortfolioPage() {
-  const { bets, settle, remove, clear, slipCount, autoSettle, clearNewlySettled } = usePortfolio();
+  const { bets, settle, remove, clear, slipCount, autoSettle, clearNewlySettled, tickets } = usePortfolio();
   const { role } = useEntitlements();
   const isPro = role === "pro";
   const [filter, setFilter] = useState("all");
@@ -283,13 +291,37 @@ export default function PortfolioPage() {
     () => ((isPro && period !== "all") ? scopedBets.filter((b) => inPeriod(b.settledAt || b.createdAt, period)) : scopedBets),
     [scopedBets, period, isPro]
   );
-  const stats = useMemo(() => computeStats(periodBets), [periodBets]);
   const hiddenCount = isPro ? 0 : Math.max(0, bets.length - FREE_LIMIT);
 
   const list = useMemo(() => {
     if (filter === "all") return periodBets;
     return periodBets.filter((b) => b.status === filter);
   }, [periodBets, filter]);
+
+  // Settled accumulator tickets count in the performance stats/chart too, so
+  // Portfolio reflects real betting history (tickets), not just single bets.
+  const ticketResults = useMemo(() => {
+    const scopedT = isPro ? tickets : tickets.slice(0, FREE_LIMIT);
+    return scopedT.map((t) => {
+      const info = computeTicket(t);
+      if (info.status === "pending") return null;
+      const settledAt = t.legs.reduce(
+        (mx, l) => (l.settledAt && l.settledAt > mx ? l.settledAt : mx), t.createdAt);
+      return {
+        id: t.id, home: `ACC×${t.legs.length}`, away: "", league: "Ticket", pick: "acc",
+        stake: t.stake, odds: info.totalOdds, status: info.status, settledAt, createdAt: t.createdAt,
+      };
+    }).filter(Boolean);
+  }, [tickets, isPro]);
+
+  const statsSource = useMemo(() => {
+    const t = (isPro && period !== "all")
+      ? ticketResults.filter((x) => inPeriod(x.settledAt || x.createdAt, period))
+      : ticketResults;
+    return [...periodBets, ...t];
+  }, [periodBets, ticketResults, period, isPro]);
+
+  const stats = useMemo(() => computeStats(statsSource), [statsSource]);
 
   return (
     <div className="min-h-screen bg-[#0d1117]">

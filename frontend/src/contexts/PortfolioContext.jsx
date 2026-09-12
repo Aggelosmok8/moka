@@ -196,6 +196,15 @@ export function PortfolioProvider({ children }) {
     });
   }, []);
 
+  // Let the user edit a leg's odds to the price they actually played (#3).
+  const updateSlipLegOdds = useCallback((matchId, odds) => {
+    setSlip((prev) => {
+      const next = prev.map((l) => (l.matchId === matchId ? { ...l, odds: Number(odds) || 0 } : l));
+      try { localStorage.setItem(SLIP_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+
   const clearSlip = useCallback(() => saveSlip([]), []);
   const slipHas = useCallback((matchId) => slip.some((l) => l.matchId === matchId), [slip]);
 
@@ -271,32 +280,8 @@ export function PortfolioProvider({ children }) {
       return item;
     };
 
-    // Any slip pick whose match has finished leaves the slip and becomes a
-    // settled single bet in My Bets (default 1-unit stake), so finished picks
-    // auto-populate the Portfolio as win/loss history.
-    const finishedSingles = [];
-    const remainingSlip = [];
-    slip.forEach((l) => {
-      const r = results[l.matchId];
-      if (r && r.finished && r.outcome) {
-        settled++;
-        finishedSingles.push({
-          id: uid(),
-          matchId: l.matchId, home: l.home, away: l.away, league: l.league,
-          pick: l.pick, pickName: l.pickName, odds: Number(l.odds) || 0, bookmaker: l.bookmaker || "",
-          stake: 10,
-          status: r.outcome === l.pick ? "won" : "lost",
-          finalScore: `${r.home}-${r.away}`,
-          createdAt: l.createdAt || new Date().toISOString(),
-          settledAt: new Date().toISOString(),
-        });
-      } else {
-        remainingSlip.push(l);
-      }
-    });
-
     setBets((prev) => {
-      const next = [...finishedSingles, ...prev.map(settleLegOrBet)];
+      const next = prev.map(settleLegOrBet);
       try { localStorage.setItem(KEY, JSON.stringify(next)); } catch {}
       return next;
     });
@@ -305,10 +290,6 @@ export function PortfolioProvider({ children }) {
       try { localStorage.setItem(TICKETS_KEY, JSON.stringify(next)); } catch {}
       return next;
     });
-    if (finishedSingles.length) {
-      setSlip(remainingSlip);
-      try { localStorage.setItem(SLIP_KEY, JSON.stringify(remainingSlip)); } catch {}
-    }
     if (settled > 0) {
       setNewlySettled((n) => {
         const v = n + settled;
@@ -373,7 +354,7 @@ export function PortfolioProvider({ children }) {
   return (
     <Ctx.Provider value={{
       bets, addBet, settle, updateStake, remove, clear, pendingCount, stats,
-      slip, addToSlip, removeFromSlip, clearSlip, slipHas, slipCount: slip.length,
+      slip, addToSlip, removeFromSlip, updateSlipLegOdds, clearSlip, slipHas, slipCount: slip.length,
       tickets, placeTicket, settleLeg, removeTicket, clearTickets, autoSettle,
       newlySettled, clearNewlySettled,
     }}>

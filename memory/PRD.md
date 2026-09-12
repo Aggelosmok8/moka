@@ -354,3 +354,10 @@ The API-Football free plan went inactive/quota-exhausted → leagues/teams/playe
 - #9 already satisfied by prior opportunity rework (edge>0 + odds 1.40-3.00). #10 already satisfied: xG is opponent-adjusted (home=(h_scored+a_conceded)/2), NOT a raw sum. No model change.
 - #13 backend health: preview healthy (ticker + live OK). Production earlier hit API-Football 500/500 quota; consumption already reduced (live 150s, value 2h, poll pauses when hidden).
 - NOT DONE (large / need approval, per "STOP before architectural changes"): #2-#5 Ticket->Portfolio automation + editable odds per selection + ticket-based Portfolio + performance chart; #1/#16 full responsive audit.
+
+## 2026-06 — Tickets→Portfolio rework (#2-#5)
+- #3 Editable odds per slip leg: PortfolioContext.updateSlipLegOdds(matchId, odds); BetSlip renders a "Your odds" number input per leg (default = Moka best). Total odds/return/profit use the edited odds (legs copy slip odds at placeTicket).
+- #2/#4 Ticket-based portfolio: removed the slip->singles auto-drain from autoSettle (no phantom stake-10 bets). Tickets stay in `tickets`; computeTicket derives status/profit from real leg results; autoSettle settles legs from real scores. "Place ticket" keeps legs pending (does NOT mark won/lost). My Tickets tab shows selections/odds/stake/return/status.
+- #5 Performance: PortfolioPage stats/chart now ticket-inclusive — statsSource = periodBets(singles) + settled tickets mapped to pseudo-bets (stake, totalOdds, status, settledAt). Existing StatCards (Net P/L, ROI, Win Rate) + AreaChart (cumulative P/L) now reflect tickets. Fixed a TDZ dup-declaration bug (statsSource before stats).
+- Files: contexts/PortfolioContext.jsx, pages/PortfolioPage.jsx. Verified: Portfolio renders, console clean, no errors.
+- #1 responsive: NOT fully done — screenshot tool forces 1920 viewport so mobile overflow can't be measured here; needs real-device pass. Existing responsive classes (grid-cols-1 md:.., hamburger nav, overflow-x-auto tables) in place.
