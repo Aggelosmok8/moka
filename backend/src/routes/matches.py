@@ -6,7 +6,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 
 from ..data.mock_matches import MATCH_INDEX, MOCK_MATCHES
-from ..services.value_engine import evaluate_match, public_match
+from ..services.value_engine import evaluate_match, public_match, reevaluate_pick
 from ..services.probability_engine import full_prediction, possible_outcome
 
 logger = logging.getLogger(__name__)
@@ -294,6 +294,10 @@ async def _refine_prediction(m: dict, value: dict):
     value["probabilities"] = {k: round(v * 100) for k, v in probs.items()}
     value["possible_outcome"] = possible_outcome(probs)
     value["signals"] = signals
+    # CANONICAL SOURCE: the pick + its model/market/edge/opportunity must be
+    # re-derived from these refined probs, otherwise the text (model_prob) would
+    # disagree with the displayed chart (probabilities). #8/#15.
+    reevaluate_pick(value, probs, m)
 
 
 @router.get("/matches/{match_id}")

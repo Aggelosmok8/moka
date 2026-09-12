@@ -344,3 +344,13 @@ The API-Football free plan went inactive/quota-exhausted → leagues/teams/playe
 - Reduced API-Football consumption: live_fixtures TTL 45s->150s (apifootball.py); live_values MATCHES_TTL 30min->2h; LiveScoresContext poll 60s->120s + pauses when document.hidden.
 - Note: today's counter resets at UTC midnight; needs redeploy to apply. 500/day plan is tight for all-day live — consider higher API-Football plan.
 - Production backend: https://moka-backend-s9fj.onrender.com ; frontend https://moka-pk4j.vercel.app (already runs latest opportunity+translation build).
+
+## 2026-06 — Bug batch (spec 17-point), safe subset
+- #8/#15 CANONICAL FIX (real bug): _refine_prediction (H2H/form) overwrote prediction/probabilities but NOT model_prob/edge/pick -> text said 55% while chart said 40%. Added value_engine.reevaluate_pick(value, probs, match); matches.py calls it after refine. Verified model_prob% == probabilities[pick] (40==40).
+- #7 bookmaker allowlist: bookmakers.js returns URL only for approved books (removed 1xbet/stake); MatchAnalysisPage renders non-approved odds as NON-clickable div (odds shown, no redirect). Note: "Only verified bookmakers link out to bet."
+- #6 Watchlist (ChartsPage): comparison charts now render ONLY when >=2 rows selected; else a hint. Comparison logic preserved.
+- #14 Translate button next to Moka Analysis (aiLang state, re-fetches analysis in EN/EL). Reuses per-lang Luna cache.
+- #11/#12/#8 prompt (ai_analysis SYSTEM): numbers must be exact/canonical; plain fan-friendly language (no jargon); news only when materially relevant.
+- #9 already satisfied by prior opportunity rework (edge>0 + odds 1.40-3.00). #10 already satisfied: xG is opponent-adjusted (home=(h_scored+a_conceded)/2), NOT a raw sum. No model change.
+- #13 backend health: preview healthy (ticker + live OK). Production earlier hit API-Football 500/500 quota; consumption already reduced (live 150s, value 2h, poll pauses when hidden).
+- NOT DONE (large / need approval, per "STOP before architectural changes"): #2-#5 Ticket->Portfolio automation + editable odds per selection + ticket-based Portfolio + performance chart; #1/#16 full responsive audit.

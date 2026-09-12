@@ -120,8 +120,8 @@ export default function ChartsPage() {
               </div>
               <div className="text-xs text-zinc-500" data-testid="compare-status">
                 {selected.size
-                  ? <button onClick={() => setSelected(new Set())} className="text-[#39FF14] font-bold">Comparing {selected.size} selected · show all</button>
-                  : <span>Comparing all {items.length} — tick rows then “Compare Selected”.</span>}
+                  ? <button onClick={() => setSelected(new Set())} className="text-[#39FF14] font-bold">Comparing {selected.size} selected · clear</button>
+                  : <span>Tick 2 or more matches to compare their charts.</span>}
               </div>
             </div>
 
@@ -176,7 +176,8 @@ export default function ChartsPage() {
               </table>
             </div>
 
-            {/* Comparison charts */}
+            {/* Comparison charts — only shown when the user picks 2+ to compare */}
+            {selected.size >= 2 ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <ChartCard title="Potential Value" tip="How strong each opportunity is (formerly 'EV'). Higher is better.">
                 <BarChart data={data} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
@@ -234,6 +235,11 @@ export default function ChartsPage() {
                 </BarChart>
               </ChartCard>
             </div>
+            ) : (
+              <div className="text-center py-12 text-sm text-zinc-500" data-testid="compare-hint">
+                Tick 2 or more matches above, then their stats appear here side by side.
+              </div>
+            )}
           </>
         )}
       </main>

@@ -133,6 +133,38 @@ def public_match(m: dict) -> dict:
     }
 
 
+def reevaluate_pick(value: dict, probs: dict, match: dict) -> dict:
+    """Re-derive the pick + opportunity from (possibly refined) probs so the
+    chart, the 'Why Moka' text and the AI analysis all share ONE canonical
+    source of truth. Used after H2H/form refinement changes the probabilities."""
+    odds_list = match.get("odds") or []
+    pick = max(OUTCOMES, key=lambda o: probs[o])
+    if odds_list:
+        bookmaker, odds = _best_book_for(pick, odds_list)
+    else:
+        bookmaker, odds = value.get("bookmaker"), value.get("best_odds") or 0.0
+    model_p = probs[pick]
+    implied = implied_probability(odds) if odds and odds > 0 else 0.0
+    ev = (model_p * odds - 1.0) if odds and odds > 0 else 0.0
+    edge_pts = round((model_p - implied) * 100, 1)
+    confidence = round(model_p * 100)
+    value.update({
+        "pick": pick,
+        "pick_name": (match["home"]["name"] if pick == "home"
+                      else match["away"]["name"] if pick == "away" else "Draw"),
+        "best_odds": round(odds, 2) if odds else value.get("best_odds"),
+        "bookmaker": bookmaker,
+        "model_prob": round(model_p, 4),
+        "market_prob": round(implied, 4),
+        "edge": edge_pts,
+        "ev_score": round(ev * 100, 1),
+        "confidence": confidence,
+        "value_level": opportunity_level(edge_pts / 100.0, odds) if odds and odds > 0 else "LOW",
+        "value_score": max(0, round(edge_pts * 4 + confidence * 0.2)),
+    })
+    return value
+
+
 def rank_value_matches(matches: list) -> list:
     """Evaluate every match and rank opportunities first (Strong > Worth > rest)."""
     out = []

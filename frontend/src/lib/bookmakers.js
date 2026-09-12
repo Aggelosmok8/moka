@@ -1,6 +1,7 @@
-// Maps bookmaker names to their official sports-betting site so tapping an odd
-// takes the user straight to that bookmaker to place the bet. Unknown books
-// fall back to a Google search so the link is always useful.
+// Approved-bookmaker allowlist. Odds data may contain many providers, but we
+// only ever redirect users to reputable, verified bookmaker sites. Grey-market
+// / unapproved providers (e.g. 1xBet, Stake) are intentionally NOT here: their
+// odds can still be shown, but with no "Bet Now" redirect.
 const MAP = {
   "bet365": "https://www.bet365.com/#/AS/B1/",
   "pinnacle": "https://www.pinnacle.com/en/soccer/matchups",
@@ -40,21 +41,19 @@ const MAP = {
   "caesars": "https://www.caesars.com/sportsbook-and-casino",
   "pointsbet": "https://pointsbet.com/sports/soccer",
   "betrivers": "https://www.betrivers.com/",
-  "1xbet": "https://1xbet.com/en/line/football",
-  "1xBet": "https://1xbet.com/en/line/football",
-  "stake": "https://stake.com/sports/soccer",
-  "dafabet": "https://www.dafabet.com/en/sports/football",
   "parimatch": "https://www.parimatch.com/en/sports/football",
 };
 
-// Returns the bookmaker's official football page (easy to place the bet),
-// falling back to a Google search for books we don't have mapped.
+// Official football page for an APPROVED bookmaker, or null if not approved.
+// Never fabricates URLs and never returns a link for an unapproved provider.
 export function bookmakerUrl(name) {
-  if (!name) return "https://www.google.com/search?q=sports+betting+odds";
+  if (!name) return null;
   const key = name.trim().toLowerCase();
   if (MAP[key]) return MAP[key];
   for (const k of Object.keys(MAP)) {
     if (key.includes(k) || k.includes(key)) return MAP[k];
   }
-  return `https://www.google.com/search?q=${encodeURIComponent(name + " sports betting")}`;
+  return null;
 }
+
+export const isApprovedBookmaker = (name) => !!bookmakerUrl(name);

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Check, ChevronDown, ChevronUp, Lock, ExternalLink, X, Loader2, Sparkles } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ChevronUp, Lock, ExternalLink, X, Loader2, Sparkles, Languages } from "lucide-react";
 import Header from "../components/Header";
 import { UpgradeButton } from "../components/Gating";
 import AddToPortfolioButton from "../components/AddToPortfolioButton";
@@ -95,6 +95,8 @@ export default function MatchAnalysisPage() {
   const [ai, setAi] = useState(null);
   const [aiLoading, setAiLoading] = useState(true);
   const { lang } = useLang();
+  const [aiLang, setAiLang] = useState(lang);
+  useEffect(() => { setAiLang(lang); }, [lang]);
 
   useEffect(() => {
     let active = true;
@@ -108,12 +110,12 @@ export default function MatchAnalysisPage() {
   useEffect(() => {
     let active = true;
     setAiLoading(true); setAi(null);
-    fetchMatchAi(id, lang)
+    fetchMatchAi(id, aiLang)
       .then((d) => active && setAi(d))
       .catch(() => active && setAi(null))
       .finally(() => active && setAiLoading(false));
     return () => { active = false; };
-  }, [id, lang]);
+  }, [id, aiLang]);
 
   if (loading) return <Shell><div className="h-64 bg-[#161b22] border border-[#30363d] rounded-xl animate-pulse" /></Shell>;
   if (notFound || !data) return <Shell><div className="text-center py-16 text-zinc-400">Match not found.</div></Shell>;
@@ -197,9 +199,20 @@ export default function MatchAnalysisPage() {
 
       {/* MOKA AI ANALYSIS */}
       <Card testId="ai-analysis">
-        <div className="flex items-center gap-1.5 mb-3">
-          <Sparkles className="w-4 h-4 text-[#39FF14]" />
-          <h3 className="font-display font-bold uppercase tracking-tight text-sm text-white">Moka Analysis</h3>
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-1.5">
+            <Sparkles className="w-4 h-4 text-[#39FF14]" />
+            <h3 className="font-display font-bold uppercase tracking-tight text-sm text-white">Moka Analysis</h3>
+          </div>
+          <button
+            type="button"
+            data-testid="translate-analysis-btn"
+            onClick={() => setAiLang((l) => (l === "el" ? "en" : "el"))}
+            className="flex items-center gap-1 text-[11px] font-bold text-zinc-400 hover:text-[#39FF14] border border-white/10 hover:border-[#39FF14]/40 rounded-md px-2 py-1 transition-colors"
+            title="Translate analysis"
+          >
+            <Languages className="w-3.5 h-3.5" /> {aiLang === "el" ? "EN" : "ΕΛ"}
+          </button>
         </div>
         {aiLoading ? (
           <div className="flex items-center gap-2 text-sm text-zinc-400 py-4"><Loader2 className="w-4 h-4 animate-spin" /> Writing the Moka analysis… <span className="text-zinc-600">first view takes a few seconds, then it's instant</span></div>
@@ -289,26 +302,32 @@ export default function MatchAnalysisPage() {
       <Card title="Available Odds" testId="available-odds">
         <div className="space-y-1.5">
           {oddsRows.length === 0 && <div className="text-sm text-zinc-500">No odds available.</div>}
-          {oddsRows.map((o, i) => (
-            <a
-              key={o.bookmaker}
-              href={bookmakerUrl(o.bookmaker)}
-              target="_blank"
-              rel="noopener noreferrer"
-              data-testid={`odds-link-${i}`}
-              title={`Bet with ${o.bookmaker}`}
-              className={`group flex items-center justify-between rounded-lg px-3 py-2 transition-colors ${i === 0 ? "bg-[#39FF14]/10 border border-[#39FF14]/40 hover:bg-[#39FF14]/20" : "bg-[#0d1117] border border-[#30363d] hover:border-[#39FF14]/40"}`}
-            >
+          {oddsRows.map((o, i) => {
+            const url = bookmakerUrl(o.bookmaker);
+            const base = `group flex items-center justify-between rounded-lg px-3 py-2 transition-colors ${i === 0 ? "bg-[#39FF14]/10 border border-[#39FF14]/40" : "bg-[#0d1117] border border-[#30363d]"}`;
+            const label = (
               <span className={`text-sm flex items-center gap-1.5 ${i === 0 ? "text-[#39FF14] font-bold" : "text-zinc-300"}`}>
                 {o.bookmaker}
                 {i === 0 && <span className="text-[10px] uppercase">Best</span>}
-                <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                {url && <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />}
               </span>
-              <span className={`font-mono-num font-bold ${i === 0 ? "text-[#39FF14]" : "text-white"}`}>{o.price}</span>
-            </a>
-          ))}
+            );
+            const price = <span className={`font-mono-num font-bold ${i === 0 ? "text-[#39FF14]" : "text-white"}`}>{o.price}</span>;
+            return url ? (
+              <a key={o.bookmaker} href={url} target="_blank" rel="noopener noreferrer"
+                data-testid={`odds-link-${i}`} title={`Bet with ${o.bookmaker}`}
+                className={`${base} ${i === 0 ? "hover:bg-[#39FF14]/20" : "hover:border-[#39FF14]/40"}`}>
+                {label}{price}
+              </a>
+            ) : (
+              <div key={o.bookmaker} data-testid={`odds-row-${i}`}
+                title="No verified betting link for this bookmaker" className={base}>
+                {label}{price}
+              </div>
+            );
+          })}
         </div>
-        <div className="text-[11px] text-zinc-500 mt-2">Tap any bookmaker to look them up · odds for {outcomeName}, best to worst.</div>
+        <div className="text-[11px] text-zinc-500 mt-2">Odds for {outcomeName}, best to worst. Only verified bookmakers link out to bet.</div>
       </Card>
       )}
 

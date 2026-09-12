@@ -42,7 +42,13 @@ SYSTEM = (
     "an overall outlook. The outlook MUST centre on 'moka_pick' — explain that Moka "
     "predicts this outcome, comparing 'moka_pick_probability_pct' with "
     "'market_probability_pct' at 'pick_odds' when present. Refer only to that same "
-    "outcome; never argue for a different result than moka_pick."
+    "outcome; never argue for a different result than moka_pick.\n"
+    "- NUMBERS ARE CANONICAL: when you cite any figure (probability %, expected "
+    "goals, odds, market %), use the EXACT value from the data with the same "
+    "rounding. Never state a percentage/xG/odds that differs from what is provided.\n"
+    "- Write for an ordinary fan: plain, natural, concise language. Avoid technical "
+    "or statistical jargon (do NOT say 'Poisson', 'expected value', 'variance', "
+    "'regression'); instead explain what the numbers mean in practice."
 )
 
 
