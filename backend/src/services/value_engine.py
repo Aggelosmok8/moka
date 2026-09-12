@@ -85,7 +85,11 @@ def evaluate_match(match: dict):
 
     pick_name = (match["home"]["name"] if pick == "home"
                  else match["away"]["name"] if pick == "away" else "Draw")
-    confidence = round(model_p * 100)
+    pct = pct100(probs)
+    # Display the pick % from the SAME rounded integers as the chart so the
+    # "~X%" text always matches the probability breakdown (edge/EV keep the
+    # precise float above).
+    confidence = pct[pick]
     ev_score = round(ev * 100, 1)
     value_score = max(0, round(edge_pts * 4 + confidence * 0.2))
     return {
@@ -94,16 +98,16 @@ def evaluate_match(match: dict):
         "pick_name": pick_name,
         "best_odds": round(odds, 2),
         "bookmaker": bookmaker,
-        "model_prob": round(model_p, 4),
+        "model_prob": round(pct[pick] / 100.0, 4),
         "market_prob": round(implied, 4),
         "edge": edge_pts,
         "ev_score": ev_score,
         "value_level": level,
         "confidence": confidence,
         "value_score": value_score,
-        "probabilities": pct100(probs),
+        "probabilities": pct,
         "prediction": {
-            **pct100(probs),
+            **pct,
             "over25": round(pred["over25"] * 100),
             "under25": round(pred["under25"] * 100),
             "btts_yes": round(pred["btts_yes"] * 100),
@@ -158,14 +162,15 @@ def reevaluate_pick(value: dict, probs: dict, match: dict) -> dict:
     implied = implied_probability(odds) if odds and odds > 0 else 0.0
     ev = (model_p * odds - 1.0) if odds and odds > 0 else 0.0
     edge_pts = round((model_p - implied) * 100, 1)
-    confidence = round(model_p * 100)
+    pct = pct100(probs)
+    confidence = pct[pick]  # match the chart integers (edge/EV keep the float)
     value.update({
         "pick": pick,
         "pick_name": (match["home"]["name"] if pick == "home"
                       else match["away"]["name"] if pick == "away" else "Draw"),
         "best_odds": round(odds, 2) if odds else value.get("best_odds"),
         "bookmaker": bookmaker,
-        "model_prob": round(model_p, 4),
+        "model_prob": round(pct[pick] / 100.0, 4),
         "market_prob": round(implied, 4),
         "edge": edge_pts,
         "ev_score": round(ev * 100, 1),

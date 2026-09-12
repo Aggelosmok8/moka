@@ -18,5 +18,16 @@ async def get_news(q: str = "", league: str = "", team: str = "", date: str = ""
     if str(lang).lower() == "el":
         query = " ".join(x for x in (team, league, q) if x and x.strip()).strip()
         return await news_service.freenews_gr(query=query, size=12)
+    # English feed first (priority), then Greek sports articles appended after.
     search = news_service.build_search(team=team, league=league, q=q)
-    return await news_service.fetch_feed(search=search, published_on=(date or ""), pages=4)
+    en = await news_service.fetch_feed(search=search, published_on=(date or ""), pages=4)
+    gr_query = " ".join(x for x in (team, league, q) if x and x.strip()).strip()
+    gr = await news_service.freenews_gr(query=gr_query, size=10)
+    articles = list(en.get("articles") or [])
+    seen = {a.get("id") or a.get("url") for a in articles}
+    for a in gr.get("articles") or []:
+        key = a.get("id") or a.get("url")
+        if key and key not in seen:
+            seen.add(key)
+            articles.append(a)
+    return {"articles": articles, "meta": en.get("meta") or {}}

@@ -374,3 +374,8 @@ The API-Football free plan went inactive/quota-exhausted → leagues/teams/playe
 - freenews_gr now fetches the LATEST general GR feed (size up to 100) and filters to sports — a sports-biased q surfaced mostly tag pages, so filtering beats querying. routes/news.py generic EL feed no longer forces a query.
 - Also bumped TheNewsAPI (EN feed) httpx timeout 15->30s; EN feed was intermittently timing out with the 3-term search. Verified EN=12 + EL=12 real football/basketball articles, no general news.
 - Files: news_service.py, routes/news.py. Verified via curl (generic + team=Olympiakos) + screenshot.
+
+## 2026-06 — News (EN+GR merge) + pick %/chart alignment
+- News: EN mode (/api/news) now returns English sports first (priority) THEN Greek sports articles appended & deduped. EL mode stays Greek-only. Verified EN feed = 22 (12 EN then 10 GR: onsports/sdna/madata).
+- Pick %/chart alignment: value_engine confidence + model_prob now derived from pct100(probs)[pick] (same integers as the probability breakdown chart) in BOTH evaluate_match & reevaluate_pick. edge/EV keep the precise float. Fixes "~61% text vs 62% chart" mismatch. Verified 61/61 sum==100 AND pick_text==chart (0 mismatches).
+- Files: value_engine.py, routes/news.py.
