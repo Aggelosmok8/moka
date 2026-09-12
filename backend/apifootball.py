@@ -353,6 +353,7 @@ async def live_fixtures() -> list:
     if hit is not None:
         return hit
     out: list = []
+    ok = False
     try:
         d = await _get(FOOTBALL_BASE, "/fixtures", {"live": "all"})
         for item in d.get("response") or []:
@@ -377,9 +378,22 @@ async def live_fixtures() -> list:
                 "status": st.get("short"),
                 "supported": lg.get("id") in SUPPORTED_FOOTBALL_LEAGUE_IDS,
             })
+        ok = True
     except Exception as e:
         logger.warning("apifootball.live_fixtures: %s", e)
-    _c_set(ck, out, ttl=150)
+    if ok:
+        # Real result (even an empty one = genuinely no live games). Cache it and
+        # keep a long-lived snapshot as a fallback for future failures.
+        _c_set(ck, out, ttl=150)
+        if out:
+            _c_set("live_all_last", out, ttl=6 * 3600)
+        return out
+    # API failed (timeout / rate-limit / daily quota reached): DON'T cache empty
+    # and wipe the live list. Serve the last known-good snapshot and retry soon.
+    stale = _c_get("live_all_last")
+    if stale is not None:
+        _c_set(ck, stale, ttl=30)
+        return stale
     return out
 
 

@@ -382,3 +382,11 @@ The API-Football free plan went inactive/quota-exhausted → leagues/teams/playe
 
 ## 2026-06 — News priority: Greek first (even in EN mode)
 - routes/news.py EN feed now returns Greek sports articles FIRST (priority), then English appended & deduped. Toggle default stays EN. Verified: 24 total (12 GR then 12 EN).
+
+## 2026-06 — Live stability + faster cold load (quota resilience)
+- ROOT CAUSE of "live matches suddenly disappear": apifootball.live_fixtures cached an EMPTY list for 150s whenever the API call failed (timeout / rate-limit / daily quota 500 reached). One transient error wiped live for 2.5min; quota exhaustion wiped it for the rest of the day.
+- Fix (stale-on-error): live_fixtures keeps a long-lived "live_all_last" snapshot; on API failure it serves the last known-good live list (retry in 30s) instead of caching empty. Empty is only cached when the API genuinely returns no live games. Same pattern added to live_values.build_live_matches ("live_matches_last", 12h) so the Matches page never blanks on quota/errors.
+- SLOW COLD LOAD fix: build_live_matches now builds all 21 leagues CONCURRENTLY (asyncio.gather + Semaphore(6) rate-limit cap) — cold cache load dropped ~59s -> ~1.5s. Added asyncio.Lock single-flight so startup prewarm + first visitor don't double-build (saved ~12 API calls/cold-start).
+- Verified: cold value-matches instant (prewarm+parallel), /api/live 44 (5 major), quota-exhaustion simulation serves stale for both paths, no 429s.
+- NOTE: production "backend falls" is most likely Render free/starter spin-down (cold start). These changes make recovery fast + keep data on-screen, but eliminating spin-down needs a keep-alive ping or a paid instance (hosting, not code).
+- Files: apifootball.py (live_fixtures), live_values.py.
