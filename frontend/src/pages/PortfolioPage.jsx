@@ -322,6 +322,10 @@ export default function PortfolioPage() {
   }, [periodBets, ticketResults, period, isPro]);
 
   const stats = useMemo(() => computeStats(statsSource), [statsSource]);
+  // The stats + performance graph live on the "My Bets" tab but are computed
+  // from single bets AND settled tickets. So the tab must count tickets as
+  // activity, otherwise a user who only plays tickets sees an empty portfolio.
+  const hasActivity = bets.length > 0 || ticketResults.length > 0;
 
   return (
     <div className="min-h-screen bg-[#0d1117]">
@@ -358,7 +362,7 @@ export default function PortfolioPage() {
 
         {tab === "tickets" ? (
           <TicketsView isPro={isPro} />
-        ) : bets.length === 0 ? (
+        ) : !hasActivity ? (
           <div className="text-center py-20" data-testid="portfolio-empty">
             <Wallet className="w-10 h-10 text-zinc-700 mx-auto" />
             <h3 className="font-display font-black uppercase text-xl text-white mt-4">Your portfolio is empty</h3>
@@ -427,7 +431,11 @@ export default function PortfolioPage() {
 
             {/* BETS */}
             {list.length === 0 ? (
-              <div className="text-center py-12 text-zinc-500" data-testid="portfolio-filter-empty">No bets in this category.</div>
+              <div className="text-center py-12 text-zinc-500" data-testid="portfolio-filter-empty">
+                {bets.length === 0 && ticketResults.length > 0
+                  ? <>Your stats & graph above include your settled tickets. Open <b className="text-white">My Tickets</b> to see each ticket.</>
+                  : "No bets in this category."}
+              </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3" data-testid="portfolio-bets">
                 {list.map((b) => <BetRow key={b.id} b={b} settle={settle} remove={remove} />)}

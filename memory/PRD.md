@@ -390,3 +390,9 @@ The API-Football free plan went inactive/quota-exhausted → leagues/teams/playe
 - Verified: cold value-matches instant (prewarm+parallel), /api/live 44 (5 major), quota-exhaustion simulation serves stale for both paths, no 429s.
 - NOTE: production "backend falls" is most likely Render free/starter spin-down (cold start). These changes make recovery fast + keep data on-screen, but eliminating spin-down needs a keep-alive ping or a paid instance (hosting, not code).
 - Files: apifootball.py (live_fixtures), live_values.py.
+
+## 2026-06 — Portfolio: finished tickets now show in My Bets + graph
+- BUG: user played a ticket that finished (auto-settled LOST), but the "My Bets" tab showed "Your portfolio is empty" and no performance graph. Root cause: PortfolioPage gated the whole stats+chart view on `bets.length === 0` (single bets only), ignoring settled tickets — even though statsSource/computeStats already include ticket results.
+- FIX (frontend only, PortfolioPage.jsx): added `hasActivity = bets.length>0 || ticketResults.length>0`; gate empty-state on `!hasActivity`. Stats cards + Bankroll (cumulative P/L) chart now render from single bets AND settled tickets. Friendlier note when only tickets exist ("stats & graph include your settled tickets; open My Tickets").
+- Auto-settlement itself already works: autoSettle() → /api/results (apifootball.fixture_results maps live_af_<id>→outcome) settles pending bets & ticket legs by comparing pick vs real outcome; runs on Portfolio open + app-wide once. That's why the ticket was already LOST.
+- Verified via screenshot: ticket-only portfolio now shows Net P/L -€10, ROI -100%, 0W·1L + bankroll chart.
