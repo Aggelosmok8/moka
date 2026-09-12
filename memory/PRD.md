@@ -379,3 +379,6 @@ The API-Football free plan went inactive/quota-exhausted → leagues/teams/playe
 - News: EN mode (/api/news) now returns English sports first (priority) THEN Greek sports articles appended & deduped. EL mode stays Greek-only. Verified EN feed = 22 (12 EN then 10 GR: onsports/sdna/madata).
 - Pick %/chart alignment: value_engine confidence + model_prob now derived from pct100(probs)[pick] (same integers as the probability breakdown chart) in BOTH evaluate_match & reevaluate_pick. edge/EV keep the precise float. Fixes "~61% text vs 62% chart" mismatch. Verified 61/61 sum==100 AND pick_text==chart (0 mismatches).
 - Files: value_engine.py, routes/news.py.
+
+## 2026-06 — News priority: Greek first (even in EN mode)
+- routes/news.py EN feed now returns Greek sports articles FIRST (priority), then English appended & deduped. Toggle default stays EN. Verified: 24 total (12 GR then 12 EN).
