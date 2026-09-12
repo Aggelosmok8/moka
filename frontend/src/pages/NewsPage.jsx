@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Newspaper, Search, CalendarDays, ExternalLink, X, Loader2 } from "lucide-react";
 import Header from "../components/Header";
 import { fetchNews } from "../lib/catalogApi";
+import { useLang } from "../contexts/LanguageContext";
 
 const NEWS_LEAGUES = [
   "Champions League", "Europa League", "Conference League",
@@ -46,6 +47,7 @@ function NewsCard({ a }) {
 }
 
 export default function NewsPage() {
+  const { lang } = useLang();
   const [fLeague, setFLeague] = useState("");
   const [fTeam, setFTeam] = useState("");
   const [team, setTeam] = useState("");
@@ -64,7 +66,7 @@ export default function NewsPage() {
     let active = true;
     setBusy(true);
     setErr(false);
-    fetchNews({ league: fLeague, team, date: fDate })
+    fetchNews({ league: fLeague, team, date: fDate, lang })
       .then((d) => {
         if (!active) return;
         setArticles(d.articles || []);
@@ -73,7 +75,7 @@ export default function NewsPage() {
       .catch(() => active && setErr(true))
       .finally(() => active && setBusy(false));
     return () => { active = false; };
-  }, [fLeague, team, fDate]);
+  }, [fLeague, team, fDate, lang]);
 
   const hasFilters = fLeague || fTeam || fDate;
   const clear = () => { setFLeague(""); setFTeam(""); setFDate(""); };

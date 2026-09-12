@@ -16,7 +16,46 @@ import apifootball as af
 logger = logging.getLogger("moka.news")
 
 BASE = "https://api.thenewsapi.com/v1/news/all"
+GR_BASE = "https://freenewsapi.ai/v1/search"
 CACHE_TTL = 30 * 60  # 30 minutes
+
+
+async def freenews_gr(query: str = "", size: int = 12) -> dict:
+    """Greek-language news from freenewsapi.ai (no key). Cached. Used for the
+    Greek News feed and as extra pre-match context (injuries/lineups in Greek)."""
+    ck = f"grnews_{query}_{size}"
+    hit = af._c_get(ck)
+    if hit is not None:
+        return hit
+    params = {"country": "gr", "size": size}
+    if query and query.strip():
+        params["q"] = query.strip()
+    out = {"articles": [], "meta": {"source": "freenewsapi", "lang": "el"}}
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(GR_BASE, params=params)
+            r.raise_for_status()
+            d = r.json()
+        for a in d.get("results") or []:
+            src = a.get("source")
+            if isinstance(src, dict):
+                src = src.get("name")
+            out["articles"].append({
+                "id": a.get("id") or a.get("url"),
+                "title": a.get("title"),
+                "description": a.get("description"),
+                "snippet": a.get("description"),
+                "url": a.get("url"),
+                "image": a.get("image") or a.get("image_url") or a.get("thumbnail"),
+                "source": src or a.get("host"),
+                "publishedAt": a.get("published_at") or a.get("date") or a.get("published"),
+                "categories": [],
+            })
+    except Exception as e:
+        logger.warning("news_service.freenews_gr failed: %s", e)
+        out["meta"] = {"error": True}
+    af._c_set(ck, out, ttl=CACHE_TTL)
+    return out
 
 
 def _token() -> str | None:
@@ -73,6 +112,18 @@ async def match_news(home: str = "", away: str = "", limit: int = 3) -> list:
             "published": a.get("publishedAt"),
             "snippet": (a.get("snippet") or a.get("description") or "")[:200],
         })
+    # Add Greek coverage (injuries/lineups often first in Greek press) as context.
+    try:
+        gr = await freenews_gr(query=(home or away), size=4)
+        for a in gr.get("articles") or []:
+            out.append({
+                "title": a.get("title"),
+                "source": a.get("source"),
+                "published": a.get("publishedAt"),
+                "snippet": (a.get("snippet") or a.get("description") or "")[:200],
+            })
+    except Exception as e:
+        logger.warning("match_news greek: %s", e)
     return out
 
 

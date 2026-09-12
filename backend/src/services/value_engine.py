@@ -10,6 +10,19 @@ from __future__ import annotations
 from ..utils.math import implied_probability
 from .probability_engine import full_prediction, possible_outcome
 
+
+def pct100(probs: dict) -> dict:
+    """Round the 1X2 probabilities to integers that sum to EXACTLY 100
+    (largest-remainder method), so home+draw+away never exceeds 100%."""
+    keys = ["home", "draw", "away"]
+    raw = {k: (probs.get(k, 0) or 0) * 100 for k in keys}
+    floor = {k: int(raw[k]) for k in keys}
+    rem = int(round(100 - sum(floor.values())))
+    order = sorted(keys, key=lambda k: raw[k] - floor[k], reverse=True)
+    for i in range(max(0, rem)):
+        floor[order[i % len(order)]] += 1
+    return floor
+
 OUTCOMES = ("home", "draw", "away")
 MIN_PICK_PROB = 0.12  # ignore longshot outcomes (noise) when selecting a value pick
 
@@ -88,11 +101,9 @@ def evaluate_match(match: dict):
         "value_level": level,
         "confidence": confidence,
         "value_score": value_score,
-        "probabilities": {k: round(v * 100) for k, v in probs.items()},
+        "probabilities": pct100(probs),
         "prediction": {
-            "home": round(pred["home"] * 100),
-            "draw": round(pred["draw"] * 100),
-            "away": round(pred["away"] * 100),
+            **pct100(probs),
             "over25": round(pred["over25"] * 100),
             "under25": round(pred["under25"] * 100),
             "btts_yes": round(pred["btts_yes"] * 100),

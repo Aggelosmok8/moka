@@ -610,10 +610,32 @@ async def fixtures_for_league(slug: str) -> dict:
 
 
 
+# Reputable bookmakers we are willing to surface + redirect to. Anything not
+# matching (grey-market / blocked-in-Greece operators) is dropped from odds.
+APPROVED_BOOKMAKERS = (
+    "bet365", "betano", "bwin", "unibet", "betsson", "netbet", "888sport",
+    "888 sport", "betway", "betvictor", "bet victor", "interwetten",
+    "william hill", "coolbet", "nordicbet", "10bet", "leovegas",
+)
+
+
+def _bookmaker_approved(name: str) -> bool:
+    if not name:
+        return False
+    key = name.strip().lower()
+    return any(a in key or key in a for a in APPROVED_BOOKMAKERS)
+
+
 def _mw_entries(bookmakers: list) -> list:
-    """API-Football odds -> value schema [{bookmaker, odds:{home,draw,away}}]."""
+    """API-Football odds -> value schema [{bookmaker, odds:{home,draw,away}}].
+    Only APPROVED, reputable bookmakers are kept — grey-market / operators that
+    are blocked in Greece (e.g. 1xBet, Marathonbet, Pinnacle, Stake) are dropped
+    entirely so we never surface odds that redirect to an unsafe/blacklisted site.
+    """
     entries = []
     for bk in bookmakers or []:
+        if not _bookmaker_approved(bk.get("name")):
+            continue
         mw = next((b for b in (bk.get("bets") or []) if b.get("name") == "Match Winner"), None)
         if not mw:
             continue

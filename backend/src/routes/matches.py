@@ -6,7 +6,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 
 from ..data.mock_matches import MATCH_INDEX, MOCK_MATCHES
-from ..services.value_engine import evaluate_match, public_match, reevaluate_pick
+from ..services.value_engine import evaluate_match, public_match, reevaluate_pick, pct100
 from ..services.probability_engine import full_prediction, possible_outcome
 
 logger = logging.getLogger(__name__)
@@ -286,12 +286,12 @@ async def _refine_prediction(m: dict, value: dict):
     pred = full_prediction(m["home"], m["away"], {"home_mult": home_mult, "away_mult": away_mult})
     probs = {"home": pred["home"], "draw": pred["draw"], "away": pred["away"]}
     value["prediction"] = {
-        "home": round(pred["home"] * 100), "draw": round(pred["draw"] * 100), "away": round(pred["away"] * 100),
+        **pct100(probs),
         "over25": round(pred["over25"] * 100), "under25": round(pred["under25"] * 100),
         "btts_yes": round(pred["btts_yes"] * 100), "btts_no": round(pred["btts_no"] * 100),
         "xg_home": pred["xg_home"], "xg_away": pred["xg_away"], "xg_total": pred["xg_total"],
     }
-    value["probabilities"] = {k: round(v * 100) for k, v in probs.items()}
+    value["probabilities"] = pct100(probs)
     value["possible_outcome"] = possible_outcome(probs)
     value["signals"] = signals
     # CANONICAL SOURCE: the pick + its model/market/edge/opportunity must be
