@@ -7,8 +7,56 @@ not a guarantee or 'sure win'.
 """
 from __future__ import annotations
 
+import logging
+from datetime import datetime, timezone
+
 from ..utils.math import implied_probability
 from .probability_engine import full_prediction, possible_outcome
+
+logger = logging.getLogger(__name__)
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+# Fields every servable match must carry. `home`/`away` names are checked
+# separately (nested).
+_REQUIRED_MATCH_FIELDS = ("id", "leagueId", "leagueName")
+
+
+def validate_match(match: dict, value: dict | None = None) -> tuple[bool, str]:
+    """Data-integrity gate (Priority 2 #5): confirm a match is complete AND that
+    all its parts refer to the SAME match before it is served to the frontend.
+
+    Returns (ok, reason). `reason` is 'data_mismatch' on any missing/mismatched
+    field. Live/in-play fixtures legitimately have no `commence_time`, so a
+    match_date is required only for non-live matches.
+    """
+    if not isinstance(match, dict):
+        return False, "data_mismatch"
+    mid = match.get("id")
+    if not mid:
+        return False, "data_mismatch"
+    for f in _REQUIRED_MATCH_FIELDS:
+        if match.get(f) in (None, ""):
+            return False, "data_mismatch"
+    home = (match.get("home") or {}).get("name")
+    away = (match.get("away") or {}).get("name")
+    if not home or not away:
+        return False, "data_mismatch"
+    if not match.get("commence_time") and match.get("status") != "live":
+        return False, "data_mismatch"  # missing match_date on a pre-match fixture
+    odds = match.get("odds")
+    if odds is not None and not isinstance(odds, list):
+        return False, "data_mismatch"
+    if value is not None:
+        # The prediction/odds/value block MUST belong to THIS exact match.
+        if value.get("match_id") != mid:
+            return False, "data_mismatch"
+        if not value.get("prediction") and not value.get("probabilities"):
+            return False, "data_mismatch"
+    return True, "ok"
 
 
 def pct100(probs: dict) -> dict:
@@ -182,12 +230,22 @@ def reevaluate_pick(value: dict, probs: dict, match: dict) -> dict:
 
 
 def rank_value_matches(matches: list) -> list:
-    """Evaluate every match and rank opportunities first (Strong > Worth > rest)."""
+    """Evaluate every match and rank opportunities first (Strong > Worth > rest).
+
+    Any match that fails the data-integrity gate is DROPPED (never served with
+    mismatched/partial data), not silently patched."""
     out = []
     for m in matches:
         v = evaluate_match(m)
-        if v:
-            out.append({"match": public_match(m), "value": v})
+        if not v:
+            continue
+        pm = public_match(m)
+        ok, reason = validate_match(pm, v)
+        if not ok:
+            logger.warning("[%s] dropping match %s from value list: %s",
+                           _now_iso(), m.get("id"), reason)
+            continue
+        out.append({"match": pm, "value": v})
     out.sort(
         key=lambda e: (_LEVEL_RANK.get(e["value"]["value_level"], 0), e["value"]["value_score"]),
         reverse=True,

@@ -101,7 +101,13 @@ export default function MatchAnalysisPage() {
   useEffect(() => {
     let active = true;
     fetchMatchById(id)
-      .then((d) => active && setData(d))
+      .then((d) => {
+        if (!active) return;
+        // Backend data-integrity gate can return {status:"unavailable"} — treat
+        // it as not-found so we show a message instead of rendering a broken card.
+        if (d && d.status === "unavailable") setNotFound(true);
+        else setData(d);
+      })
       .catch(() => active && setNotFound(true))
       .finally(() => active && setLoading(false));
     return () => { active = false; };

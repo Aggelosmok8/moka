@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
 
 from ..data.mock_matches import MATCH_INDEX, MOCK_MATCHES
-from ..services.value_engine import evaluate_match, public_match, reevaluate_pick, pct100
+from ..services.value_engine import (
+    evaluate_match, public_match, reevaluate_pick, pct100, validate_match,
+)
 from ..services.probability_engine import full_prediction, possible_outcome
 
 logger = logging.getLogger(__name__)
@@ -329,6 +332,13 @@ async def get_match(match_id: str):
                 logger.warning("live_prediction(%s): %s", match_id, e)
     pm = public_match(m)
     pm["value"] = value
+    # Data-integrity gate (#5): never serve a match whose identity/odds/prediction
+    # don't all refer to the same fixture.
+    ok, reason = validate_match(pm, value)
+    if not ok:
+        logger.warning("[%s] match %s failed data validation: %s",
+                       datetime.now(timezone.utc).isoformat(), match_id, reason)
+        return {"status": "unavailable", "reason": reason}
     return pm
 
 
