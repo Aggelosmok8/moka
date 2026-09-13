@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { fetchStatus, refreshCache } from "../lib/api";
+import { fetchStatus } from "../lib/api";
 import { RefreshCw, Wifi, WifiOff } from "lucide-react";
 
 function timeAgo(iso) {
@@ -29,7 +29,8 @@ export const LiveStatusPill = ({ onRefresh }) => {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await refreshCache("all");
+      // Non-destructive: just re-fetch live status. Clearing the server cache is
+      // an admin-only action (/api/admin/refresh) and must not be user-triggered.
       await load();
       if (onRefresh) onRefresh();
     } finally {

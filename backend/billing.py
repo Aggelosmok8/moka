@@ -197,9 +197,10 @@ def make_billing_router(db, current_user, current_user_optional) -> APIRouter:
 
         try:
             session = await asyncio.to_thread(stripe.checkout.Session.create, **session_args)
-        except stripe.error.StripeError as exc:
+        except stripe.error.StripeError:
+            # Never leak raw Stripe errors to the client — log full detail server-side.
             logger.exception("Stripe checkout (subscription) failed for user %s", user.user_id)
-            raise HTTPException(status_code=502, detail=f"Stripe checkout failed: {exc}") from exc
+            raise HTTPException(status_code=502, detail="Could not start checkout. Please try again.")
 
         await db.payment_transactions.insert_one({
             "session_id": session.id,
@@ -334,7 +335,10 @@ def make_webhook_router(db) -> APIRouter:
             if webhook_secret:
                 event = await asyncio.to_thread(stripe.Webhook.construct_event, body, sig, webhook_secret)
             else:
-                # No secret configured (test mode) — parse without verification
+                # No secret configured (test/preview via Emergent proxy) — parse
+                # without verification but NEVER silently: log a clear warning so
+                # this can't be mistaken for verified traffic in production.
+                logger.warning("Stripe webhook: STRIPE_WEBHOOK_SECRET not set — skipping signature validation (dev mode)")
                 import json as _json
                 event = _json.loads(body)
         except Exception as exc:

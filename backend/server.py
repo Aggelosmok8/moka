@@ -1,14 +1,19 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
+from starlette.responses import JSONResponse
 import os
+import re
+import time as _time
 import asyncio
 import logging
 import uuid
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from pydantic import BaseModel
 from typing import Optional
+from urllib.parse import unquote
 import json
 
 from database import Database, init_db
@@ -41,6 +46,7 @@ db = Database()
 auth_router = make_auth_router(db)
 current_user = auth_router.current_user
 current_user_optional = auth_router.current_user_optional
+require_admin = auth_router.require_admin
 billing_router = make_billing_router(db, current_user, current_user_optional)
 webhook_router = make_webhook_router(db)
 alerts_router = make_alerts_router(db, current_user, current_user_optional)
@@ -89,9 +95,10 @@ def _af_usage():
 
 
 @api_router.get("/debug/apifootball")
-async def debug_apifootball():
+async def debug_apifootball(admin=Depends(require_admin)):
     """Read-only diagnostic: confirms whether API-Football works on THIS server
-    (used to debug why the deployed backend falls back to mock/sample data)."""
+    (used to debug why the deployed backend falls back to mock/sample data).
+    Admin-only — it exposes partial key info and provider quota."""
     import apifootball as af
     import httpx
     key = af._key()
@@ -283,7 +290,7 @@ async def match_odds(match_id: str, user=Depends(current_user_optional)):
 
 
 @api_router.post("/admin/refresh")
-async def refresh_cache(scope: str = "all"):
+async def refresh_cache(scope: str = "all", admin=Depends(require_admin)):
     fsl_cache_clear()
     r = await fsl_get_matches(force_refresh=True)
     return {"scope": scope, "source": r["source"], "matches": r["totalCount"]}
@@ -295,7 +302,7 @@ async def fsl_status():
 
 
 @api_router.post("/fsl/refresh")
-async def fsl_refresh():
+async def fsl_refresh(admin=Depends(require_admin)):
     fsl_cache_clear()
     r = await fsl_get_matches(force_refresh=True)
     return {"cleared": True, "source": r["source"], "matches": r["totalCount"]}
@@ -375,7 +382,6 @@ def _fallback_structured(match: dict) -> StructuredAnalysis:
 
 
 def _parse_structured(raw: str) -> Optional[StructuredAnalysis]:
-    import re
     if not raw:
         return None
     m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw, re.DOTALL)
@@ -485,6 +491,59 @@ app.include_router(webhook_router)
 app.include_router(alerts_router)
 app.include_router(analytics_router)
 app.include_router(access_router)
+
+# ── Security middleware: rate limiting + input sanitization ───────────────────
+# In-memory sliding-window limiter (no Redis): max 60 requests / minute / IP.
+_RL_WINDOW = 60
+_RL_MAX = 60
+_rl_hits: dict = defaultdict(list)
+# Exempt uptime checks and the Stripe webhook (signed, may burst) from limiting.
+_RL_EXEMPT = ("/health", "/api/webhook/stripe")
+
+# Reject requests whose params carry classic SQL-injection tokens. The DB layer
+# already uses parameterized queries, so this is defense-in-depth, kept narrow to
+# avoid false positives on legitimate text (team names, Greek characters, etc.).
+_SQLI_RE = re.compile(
+    r"(?i)(\bunion\s+select\b|\bdrop\s+table\b|\binsert\s+into\b|\bdelete\s+from\b"
+    r"|\bupdate\s+.+\bset\b|--|/\*|\*/|\bor\s+1\s*=\s*1\b|'\s*or\s*'1'\s*=\s*'1)"
+)
+_MAX_BODY = 256 * 1024  # 256KB — generous for our JSON payloads; blocks oversized
+
+
+def _client_ip(request) -> str:
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+@app.middleware("http")
+async def rate_limit_middleware(request, call_next):
+    path = request.url.path
+    if request.method == "OPTIONS" or any(path.startswith(p) for p in _RL_EXEMPT):
+        return await call_next(request)
+    ip = _client_ip(request)
+    now = _time.time()
+    cutoff = now - _RL_WINDOW
+    hits = _rl_hits[ip]
+    while hits and hits[0] < cutoff:
+        hits.pop(0)
+    if len(hits) >= _RL_MAX:
+        return JSONResponse(status_code=429, content={"detail": "Too many requests"})
+    hits.append(now)
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def sanitize_middleware(request, call_next):
+    cl = request.headers.get("content-length")
+    if cl and cl.isdigit() and int(cl) > _MAX_BODY:
+        return JSONResponse(status_code=413, content={"detail": "Payload too large"})
+    qs = request.url.query or ""
+    if qs and _SQLI_RE.search(unquote(qs)):
+        return JSONResponse(status_code=400, content={"detail": "Invalid request parameters"})
+    return await call_next(request)
+
 
 # ── CORS: wildcard origin, no credentials ─────────────────────────────────────
 # Auth uses Bearer tokens (Authorization header), NOT cookies.

@@ -23,6 +23,14 @@ EMERGENT_AUTH_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/ses
 SESSION_DAYS = 7
 TRIAL_DAYS = 7
 
+# Admins are designated by email allowlist (env, comma-separated) — no DB column,
+# no migration. A user is admin iff their email is in ADMIN_EMAILS.
+ADMIN_EMAILS = [e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()]
+
+
+def is_admin(user) -> bool:
+    return bool(user) and (getattr(user, "email", "") or "").strip().lower() in ADMIN_EMAILS
+
 
 class User(BaseModel):
     user_id: str
@@ -135,6 +143,15 @@ def make_auth_router(db) -> APIRouter:
     async def current_user_optional(request: Request) -> Optional[User]:
         return await _current_user_or_none(request)
 
+    async def require_admin(request: Request) -> User:
+        """Gate for admin-only endpoints. 401 if unauthenticated, 403 if not an admin."""
+        u = await _current_user_or_none(request)
+        if not u:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        if not is_admin(u):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        return u
+
     @router.post("/session")
     async def exchange_session(request: Request):
         """Exchange Emergent session_id for a Bearer token."""
@@ -234,6 +251,7 @@ def make_auth_router(db) -> APIRouter:
 
     router.current_user = current_user
     router.current_user_optional = current_user_optional
+    router.require_admin = require_admin
     return router
 
 
