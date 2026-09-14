@@ -1,5 +1,14 @@
 # Moka — PRD / Working Notes
 
+## 2026-06 — Greek-market odds provider (odds-api.io) [READY, key pending]
+- **Why**: API-Football & The Odds API do NOT return Greece-licensed books (Stoiximan/Novibet/Pamestoixima). Added odds-api.io as an additive provider.
+- **New module** `backend/odds_api_io.py`: fetches Match-result (ML) odds for Greek books, exposes them in the existing entry schema `{bookmaker, odds:{home,draw,away}}`. Endpoints used: `/events?sport=football&status=pending` (1 call) + `/odds/multi` (batches of 10, ≤30 books). Base `https://api.odds-api.io/v3`, auth via `?apiKey=`. Cached 12h, capped 100 events → free-tier safe (100 req/hr, 500/day).
+- **Wiring**: `live_values._build_one_league` merges Greek entries into each fixture's `odds` list (fuzzy team-name match), dedup by bookmaker. Flows to `/api/value-matches` + single-match view; value engine `_best_book_for` can now surface a Greek book as best odds.
+- **FAIL-OPEN / ZERO-RISK**: entirely gated behind `ODDS_API_IO_KEY`. Key absent → returns `{}`, app behaves exactly as before (verified: value-matches 200, source live, no regression). No odds ever fabricated.
+- **Env** (documented in `.env.example`): `ODDS_API_IO_KEY=` (empty=disabled), `ODDS_API_IO_BOOKMAKERS=Stoiximan,Novibet,Pamestoixima,Betsson`.
+- **ACTION for prod**: set `ODDS_API_IO_KEY` in Render (free key from https://odds-api.io). ⚠️ Free tier = only 2 recreational books; all 3 GR books together likely need a paid plan. Verify account's real book names via `GET /bookmakers`.
+
+
 ## Context
 Moka (a.k.a. XtraStats branding in header) = AI sports value-betting app. Imported from GitHub `Aggelosmok8/moka` into this Emergent workspace and run full-stack here.
 - Backend: FastAPI + SQLite (aiosqlite, Mongo-like wrapper in `database.py`, file `moka.db`). Modules: auth (Emergent Google OAuth), billing (Stripe via Emergent proxy), core/* (entitlements, roles, cache, subscriptions, predictions, ai_summary), football_service_layer, the_odds_api, api_football, retention, analytics.

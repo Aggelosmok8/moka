@@ -24,6 +24,7 @@ import logging
 import unicodedata
 
 import apifootball as af
+import odds_api_io as oaio
 
 logger = logging.getLogger(__name__)
 
@@ -138,15 +139,24 @@ async def _build_one_league(slug: str) -> list:
         logger.warning("odds %s: %s", slug, e)
         odds_map = {}
 
+    # Greek-market odds (Stoiximan/Novibet/Pamestoixima) via odds-api.io — only
+    # when ODDS_API_IO_KEY is set; otherwise this is an empty {} (no behaviour
+    # change). Shared 12h cache means one fetch covers every league.
+    greek_idx = await oaio.greek_odds_index("football")
+
     league_matches = []
     count = 0
     for f in fixtures:
         if count >= MAX_PER_LEAGUE:
             break
-        odds = odds_map.get(f["id"])
+        home, away = f["home"], f["away"]
+        odds = list(odds_map.get(f["id"]) or [])
+        greek = oaio.lookup(greek_idx, home, away)
+        if greek:
+            have = {e["bookmaker"].strip().lower() for e in odds}
+            odds += [g for g in greek if g["bookmaker"].strip().lower() not in have]
         if not odds:                     # no odds -> skip (never show empty odds)
             continue
-        home, away = f["home"], f["away"]
         hs = _lookup(idx, home)
         as_ = _lookup(idx, away)
         league_matches.append({
