@@ -396,3 +396,22 @@ The API-Football free plan went inactive/quota-exhausted → leagues/teams/playe
 - FIX (frontend only, PortfolioPage.jsx): added `hasActivity = bets.length>0 || ticketResults.length>0`; gate empty-state on `!hasActivity`. Stats cards + Bankroll (cumulative P/L) chart now render from single bets AND settled tickets. Friendlier note when only tickets exist ("stats & graph include your settled tickets; open My Tickets").
 - Auto-settlement itself already works: autoSettle() → /api/results (apifootball.fixture_results maps live_af_<id>→outcome) settles pending bets & ticket legs by comparing pick vs real outcome; runs on Portfolio open + app-wide once. That's why the ticket was already LOST.
 - Verified via screenshot: ticket-only portfolio now shows Net P/L -€10, ROI -100%, 0W·1L + bankroll chart.
+
+## 2026-06 — Pre-launch Security & Reliability Audit (P0–P4)
+P0 Secrets: clean (no hardcoded secrets, .env gitignored+untracked, none in git history).
+P1 Security:
+- auth.py: ADMIN_EMAILS env allowlist + is_admin() + require_admin dep (401/403).
+- server.py: gated /api/admin/refresh, /api/fsl/refresh, /api/debug/apifootball (admin-only); rate-limit middleware 60/min/IP -> 429 (exempts /health + webhook); sanitize middleware (SQLi query tokens -> 400, body >256KB -> 413).
+- billing.py: webhook logs warning + proceeds when no secret (dev), enforces sig -> 400 when secret set; checkout returns generic error (no Stripe leak, rule E).
+- LiveStatusPill.jsx: refresh button no longer calls admin endpoint (was abuse vector).
+- ADMIN_EMAILS in backend/.env = promonthly@moka.test (testing); set real owner email on Render.
+P2 Data integrity:
+- value_engine.validate_match(match,value): drops/blocks matches unless id/league_id/league_name/home/away/match_date(pre-match)/odds-structure present AND value.match_id==match.id. rank_value_matches drops invalid (logged). matches/{id} -> {status:unavailable,reason:data_mismatch}. value-matches -> {status:unavailable,message:...} on hard failure. MatchAnalysisPage treats unavailable as not-found.
+P3 GDPR:
+- billing.cancel_user_subscription() best-effort Stripe cancel.
+- GET /api/privacy/data-export (auth) returns user+subscription+sessions_count+usage+alerts+portfolio (no tokens).
+- POST /api/auth/delete-account (auth) cancels sub then erases user+sessions+analysis_usage+alerts+digest+portfolio+payments+events -> {deleted:true}.
+P4 Reliability:
+- /health real DB ping: 200 {status:ok,database:ok,cache_entries:N,external_apis:unknown}; 503 {degraded,database:error} on DB failure.
+- components/ErrorBoundary.jsx wraps AppRouter -> "Something went wrong. Please refresh the page." + Refresh btn.
+All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI redesign.

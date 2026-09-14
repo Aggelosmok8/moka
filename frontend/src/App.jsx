@@ -7,6 +7,7 @@ import { PortfolioProvider } from "./contexts/PortfolioContext";
 import { LiveScoresProvider } from "./contexts/LiveScoresContext";
 import { LanguageProvider } from "./contexts/LanguageContext";
 import AutoTranslate from "./components/AutoTranslate";
+import ErrorBoundary from "./components/ErrorBoundary";
 import HomePage from "./pages/HomePage";
 import TeamPage from "./pages/TeamPage";
 import MatchPage from "./pages/MatchPage";
@@ -70,7 +71,9 @@ function App() {
               <LiveScoresProvider>
                 <Toaster position="top-right" theme="dark" />
                 <AutoTranslate />
-                <AppRouter />
+                <ErrorBoundary>
+                  <AppRouter />
+                </ErrorBoundary>
                 <SlipFab />
                 <DevLoginPanel />
               </LiveScoresProvider>

@@ -56,7 +56,33 @@ access_router = make_access_router(current_user_optional)
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok", "service": "moka-backend"}
+    """Reliability health check that actually tests dependencies (#9).
+
+    Returns 200 {status:ok} when the database responds, else 503 {status:degraded}.
+    """
+    ts = datetime.now(timezone.utc).isoformat()
+    database = "ok"
+    try:
+        await db.users.find_one({})  # lightweight DB ping
+    except Exception as e:
+        logger.error("[%s] health: database check failed: %s", ts, e)
+        database = "error"
+    cache_entries = 0
+    for mod in ("apifootball", "live_values"):
+        try:
+            import importlib
+            cache_entries += len(getattr(importlib.import_module(mod), "_cache", {}) or {})
+        except Exception:
+            pass
+    body = {
+        "status": "ok" if database == "ok" else "degraded",
+        "database": database,
+        "cache_entries": cache_entries,
+        "external_apis": "unknown",
+    }
+    if database != "ok":
+        return JSONResponse(status_code=503, content=body)
+    return body
 
 
 @api_router.get("/")
