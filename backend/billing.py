@@ -322,6 +322,30 @@ def make_billing_router(db, current_user, current_user_optional) -> APIRouter:
     return router
 
 
+async def cancel_user_subscription(db, user_id: str) -> bool:
+    """Cancel a user's active Stripe subscription (GDPR delete flow).
+
+    Best-effort and never raises: logs full error server-side, returns True iff a
+    subscription was cancelled. Handles 'already cancelled' / proxy rejection.
+    """
+    u = await db.users.find_one({"user_id": user_id}, {"_id": 0, "stripe_subscription_id": 1})
+    sub_id = (u or {}).get("stripe_subscription_id")
+    if not sub_id:
+        return False
+    try:
+        _stripe_init()
+        await asyncio.to_thread(stripe.Subscription.cancel, sub_id)
+        await db.users.update_one({"user_id": user_id}, {"$set": {"subscription_status": "canceled"}})
+        return True
+    except stripe.error.InvalidRequestError as exc:
+        # Already cancelled / not found — treat as success (nothing left to cancel).
+        logger.warning("cancel_user_subscription(%s): %s", user_id, exc)
+        return False
+    except Exception:
+        logger.exception("cancel_user_subscription failed for user %s", user_id)
+        return False
+
+
 def make_webhook_router(db) -> APIRouter:
     router = APIRouter()
 

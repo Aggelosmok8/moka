@@ -23,7 +23,7 @@ from football_service_layer import (
     generate_match_insight, _compute_value_score, _mock_matches,
 )
 from auth import make_auth_router
-from billing import make_billing_router, make_webhook_router
+from billing import make_billing_router, make_webhook_router, cancel_user_subscription
 from retention import make_alerts_router, start_digest_scheduler
 from analytics import make_analytics_router
 from mock_data import LEAGUES
@@ -172,6 +172,68 @@ async def put_portfolio(payload: dict, user=Depends(current_user)):
     else:
         await db.user_portfolios.insert_one({"user_id": user.user_id, "data": data, "updated_at": now})
     return {"ok": True}
+
+
+@api_router.get("/privacy/data-export")
+async def data_export(user=Depends(current_user)):
+    """GDPR right-to-access: return everything stored for the authenticated user."""
+    uid = user.user_id
+    doc = await db.users.find_one({"user_id": uid}, {"_id": 0}) or {}
+    # Never expose session tokens; only a count.
+    sessions_count = 0
+    async for _ in await db.user_sessions.find({"user_id": uid}):
+        sessions_count += 1
+    analysis_usage = []
+    async for r in await db.analysis_usage.find({"user_id": uid}):
+        r.pop("_id", None)
+        analysis_usage.append(r)
+    alerts = []
+    async for r in await db.goal_alert_subs.find({"user_id": uid}):
+        r.pop("_id", None)
+        alerts.append(r)
+    pf = await db.user_portfolios.find_one({"user_id": uid}, {"_id": 0})
+    return {
+        "user": {
+            "user_id": uid, "email": doc.get("email"), "name": doc.get("name"),
+            "picture": doc.get("picture"), "plan": doc.get("plan"),
+            "created_at": doc.get("created_at"), "last_login_at": doc.get("last_login_at"),
+            "trial_start_date": doc.get("trial_start_date"), "trial_end_date": doc.get("trial_end_date"),
+        },
+        "subscription": {
+            "status": doc.get("subscription_status"),
+            "pro_until": doc.get("pro_until"),
+            "plan": doc.get("plan"),
+            "stripe_subscription_id": doc.get("stripe_subscription_id"),
+            "cancel_at_period_end": doc.get("subscription_cancel_at_period_end", False),
+        },
+        "sessions_count": sessions_count,
+        "analysis_usage": analysis_usage,
+        "goal_alerts": alerts,
+        "portfolio": (pf or {}).get("data") or {},
+    }
+
+
+@api_router.post("/auth/delete-account")
+async def delete_account(user=Depends(current_user)):
+    """GDPR right-to-erasure: cancel any active Stripe subscription, then delete
+    the user and all their data. Idempotent-safe."""
+    uid = user.user_id
+    # 1) Cancel Stripe subscription first (best-effort, never blocks deletion).
+    try:
+        await cancel_user_subscription(db, uid)
+    except Exception as e:
+        logger.warning("delete-account: sub cancel failed for %s: %s", uid, e)
+    # 2) Erase all user-linked rows.
+    await db.user_sessions.delete_many({"user_id": uid})
+    await db.analysis_usage.delete_many({"user_id": uid})
+    await db.goal_alert_subs.delete_many({"user_id": uid})
+    await db.digest_log.delete_many({"user_id": uid})
+    await db.user_portfolios.delete_many({"user_id": uid})
+    await db.payment_transactions.delete_many({"user_id": uid})
+    await db.events.delete_many({"user_id": uid})
+    await db.users.delete_many({"user_id": uid})
+    logger.info("[%s] account deleted (GDPR): %s", datetime.now(timezone.utc).isoformat(), uid)
+    return {"deleted": True}
 
 
 @api_router.get("/teams")
