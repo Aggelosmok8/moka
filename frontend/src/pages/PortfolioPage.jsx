@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
-import { Wallet, TrendingUp, Target, Percent, Trash2, Check, X, Clock, Flame, CircleSlash, Lock, Layers, Receipt, Plus, RefreshCw, Loader2, Calendar } from "lucide-react";
+import { Wallet, TrendingUp, Target, Percent, Trash2, Check, X, Clock, Flame, CircleSlash, Lock, Layers, Receipt, Plus, RefreshCw, Loader2, Calendar, ArrowUpRight, ArrowDownRight, History } from "lucide-react";
 import { toast } from "sonner";
 import Header from "../components/Header";
 import { usePortfolio, computeStats, computeTicket } from "../contexts/PortfolioContext";
@@ -37,9 +37,10 @@ const FILTERS = { all: "All", pending: "Pending", won: "Won", lost: "Lost" };
 const PERIODS = { all: "All time", day: "Today", week: "This week", month: "This month", year: "This year" };
 
 function inPeriod(iso, period) {
-  if (period === "all" || !iso) return true;
+  if (period === "all") return true;
+  if (!iso) return false; // undated records never belong to a specific day/week/month
   const d = new Date(iso);
-  if (isNaN(d.getTime())) return true;
+  if (isNaN(d)) return false;
   const now = new Date();
   if (period === "day") return d.toDateString() === now.toDateString();
   if (period === "year") return d.getFullYear() === now.getFullYear();
@@ -100,6 +101,85 @@ function BetRow({ b, settle, remove }) {
 }
 
 const FREE_LIMIT = 5;
+
+const fmtWhen = (iso) => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return isNaN(d) ? "—" : d.toLocaleDateString([], { day: "2-digit", month: "short" });
+};
+
+// Individual settled-match history table (#3-#7). Shares the SAME settled
+// records that drive the stats + graph (single source of truth). Free users
+// see only the latest 5; Pro sees the full history.
+function MatchHistory({ records, isPro }) {
+  const settled = React.useMemo(() => {
+    return records
+      .filter((r) => r.status === "won" || r.status === "lost")
+      .sort((a, b) => new Date(b.settledAt || 0) - new Date(a.settledAt || 0)); // most recent first (by kickoff)
+  }, [records]);
+
+  if (settled.length === 0) return null;
+  const shown = isPro ? settled : settled.slice(0, FREE_LIMIT);
+  const hidden = isPro ? 0 : Math.max(0, settled.length - FREE_LIMIT);
+
+  const profitOf = (r) => (r.status === "won" ? r.stake * (Number(r.odds) || 0) - r.stake : -r.stake);
+
+  return (
+    <section className="mt-8" data-testid="match-history">
+      <div className="flex items-center gap-2 mb-3">
+        <History className="w-4 h-4 text-[#39FF14]" />
+        <h3 className="font-display font-black uppercase tracking-tight text-lg text-white">Match History</h3>
+        <span className="text-xs text-zinc-500">· individual settled matches</span>
+      </div>
+      <div className="overflow-x-auto rounded-xl border border-[#30363d]">
+        <table className="w-full text-sm min-w-[560px]">
+          <thead>
+            <tr className="text-[10px] uppercase tracking-wider text-zinc-500 border-b border-[#30363d]">
+              <th className="text-left font-bold px-3 py-2">Result</th>
+              <th className="text-left font-bold px-3 py-2">Match</th>
+              <th className="text-left font-bold px-3 py-2">Pick</th>
+              <th className="text-right font-bold px-3 py-2">Odds</th>
+              <th className="text-right font-bold px-3 py-2">Stake</th>
+              <th className="text-right font-bold px-3 py-2">Profit/Loss</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((r) => {
+              const pl = profitOf(r);
+              const win = r.status === "won";
+              return (
+                <tr key={r.id} className="border-b border-white/[0.04] hover:bg-white/[0.02]" data-testid={`history-row-${r.id}`}>
+                  <td className="px-3 py-2.5">
+                    <span className={`inline-flex items-center justify-center w-6 h-6 rounded-md ${win ? "bg-[#39FF14]/15" : "bg-[#FF3B30]/15"}`} title={win ? "Win" : "Loss"}>
+                      {win ? <ArrowUpRight className="w-4 h-4 text-[#39FF14]" strokeWidth={3} /> : <ArrowDownRight className="w-4 h-4 text-[#FF3B30]" strokeWidth={3} />}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 text-white">
+                    <div className="font-semibold break-words">{r.home}{r.away ? <span className="text-zinc-600"> vs </span> : ""}{r.away}</div>
+                    <div className="text-[10px] text-zinc-500">{fmtWhen(r.settledAt)} · {r.league || ""}</div>
+                  </td>
+                  <td className="px-3 py-2.5 text-[#39FF14] font-semibold break-words">{r.pickName || r.pick}</td>
+                  <td className="px-3 py-2.5 text-right text-white font-mono-num">{Number(r.odds).toFixed(2)}</td>
+                  <td className="px-3 py-2.5 text-right text-white font-mono-num">€{Number(r.stake).toFixed(2)}</td>
+                  <td className={`px-3 py-2.5 text-right font-mono-num font-bold ${pl >= 0 ? "text-[#39FF14]" : "text-[#FF3B30]"}`}>
+                    {pl >= 0 ? "+" : "-"}€{Math.abs(pl).toFixed(2)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {hidden > 0 && (
+        <div className="mt-3 flex items-center justify-center gap-3 bg-[#161b22] border border-[#30363d] rounded-xl p-4 text-center" data-testid="history-free-limit">
+          <Lock className="w-4 h-4 text-[#39FF14]" />
+          <span className="text-sm text-zinc-300">{hidden} older {hidden === 1 ? "match" : "matches"} hidden — <b className="text-white">Pro</b> unlocks your full match history.</span>
+          <Link to="/pricing" className="ml-1 bg-[#39FF14] text-black font-black uppercase text-xs px-3 py-1.5 rounded-md hover:brightness-110">Upgrade</Link>
+        </div>
+      )}
+    </section>
+  );
+}
 
 // --- Accumulator slip builder ---
 function BetSlip({ slip, removeFromSlip, updateSlipLegOdds, clearSlip, placeTicket }) {
@@ -229,8 +309,14 @@ function TicketCard({ t, settleLeg, removeTicket }) {
 
 function TicketsView({ isPro }) {
   const { slip, removeFromSlip, updateSlipLegOdds, clearSlip, placeTicket, tickets, settleLeg, removeTicket } = usePortfolio();
-  const scoped = isPro ? tickets : tickets.slice(0, FREE_LIMIT);
-  const hidden = isPro ? 0 : Math.max(0, tickets.length - FREE_LIMIT);
+  const [showHistory, setShowHistory] = useState(false);
+  // Keep the FULL ticket history for everyone (never deleted). Latest tickets are
+  // always visible; older ones collapse under HISTORY. The Free 5-limit applies
+  // only to Portfolio Match History, NOT to ticket history (#8).
+  const sorted = [...tickets].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  const RECENT = 4;
+  const recent = sorted.slice(0, RECENT);
+  const older = sorted.slice(RECENT);
 
   return (
     <div data-testid="portfolio-tickets-view">
@@ -250,18 +336,25 @@ function TicketsView({ isPro }) {
           </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 items-start" data-testid="tickets-grid">
-          {scoped.map((t) => <TicketCard key={t.id} t={t} settleLeg={settleLeg} removeTicket={removeTicket} />)}
-        </div>
-      )}
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 items-start" data-testid="tickets-grid">
+            {recent.map((t) => <TicketCard key={t.id} t={t} settleLeg={settleLeg} removeTicket={removeTicket} />)}
+          </div>
 
-      {hidden > 0 && (
-        <div className="mt-8 flex flex-col items-center gap-3 text-center bg-[#161b22] border border-[#30363d] rounded-2xl p-6" data-testid="tickets-free-limit">
-          <Lock className="w-6 h-6 text-[#39FF14]" />
-          <div className="font-display font-black uppercase tracking-tight text-white text-lg">Free plan shows your latest 5 tickets</div>
-          <p className="text-zinc-400 text-sm max-w-md">Upgrade to PRO to keep your complete ticket history ({tickets.length} tickets).</p>
-          <UpgradeButton label="Upgrade to Pro" />
-        </div>
+          {older.length > 0 && (
+            <div className="mt-6">
+              <button onClick={() => setShowHistory((s) => !s)} data-testid="tickets-history-toggle"
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-[#30363d] bg-[#161b22] text-sm font-black uppercase tracking-wider text-zinc-300 hover:text-white hover:border-[#39FF14]/40 transition-colors">
+                <History className="w-4 h-4" /> History ({older.length}) {showHistory ? "▲" : "▼"}
+              </button>
+              {showHistory && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 items-start mt-3" data-testid="tickets-history-grid">
+                  {older.map((t) => <TicketCard key={t.id} t={t} settleLeg={settleLeg} removeTicket={removeTicket} />)}
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -294,7 +387,7 @@ export default function PortfolioPage() {
   const scopedBets = useMemo(() => (isPro ? bets : bets.slice(0, FREE_LIMIT)), [bets, isPro]);
   // PRO can filter stats & history by period (day/week/month/year).
   const periodBets = useMemo(
-    () => ((isPro && period !== "all") ? scopedBets.filter((b) => inPeriod(b.settledAt || b.createdAt, period)) : scopedBets),
+    () => ((isPro && period !== "all") ? scopedBets.filter((b) => inPeriod(b.settledAt, period)) : scopedBets),
     [scopedBets, period, isPro]
   );
   const hiddenCount = isPro ? 0 : Math.max(0, bets.length - FREE_LIMIT);
@@ -315,7 +408,7 @@ export default function PortfolioPage() {
       for (const l of (t.legs || [])) {
         if (l.status === "pending" || l.status === "void") continue;
         // Portfolio dates by KICKOFF (match start), not settle time (#8).
-        const when = l.kickoff || l.commence_time || l.settledAt || t.createdAt;
+        const when = l.kickoff || l.commence_time || l.settledAt;
         out.push({
           id: `${t.id}:${l.id}`,
           home: l.home, away: l.away, league: l.league,
@@ -330,7 +423,7 @@ export default function PortfolioPage() {
 
   const statsSource = useMemo(() => {
     const t = (isPro && period !== "all")
-      ? ticketResults.filter((x) => inPeriod(x.settledAt || x.createdAt, period))
+      ? ticketResults.filter((x) => inPeriod(x.settledAt, period))
       : ticketResults;
     return [...periodBets, ...t];
   }, [periodBets, ticketResults, period, isPro]);
@@ -410,6 +503,12 @@ export default function PortfolioPage() {
               <StatCard icon={Clock} label="Pending" value={`€${stats.pendingStake.toFixed(2)}`} color="#FFD60A" sub={`could return €${stats.pendingPotential.toFixed(2)}`} />
             </section>
 
+            {isPro && period !== "all" && stats.settledCount === 0 && (
+              <div className="mb-6 bg-[#161b22] border border-[#30363d] rounded-xl p-4 text-center text-sm text-zinc-400" data-testid="portfolio-no-settled">
+                No settled matches {PERIODS[period] ? PERIODS[period].toLowerCase() : "in this period"}.
+              </div>
+            )}
+
             {/* BANKROLL CHART */}
             {stats.timeline.length > 0 && (
               <section className="bg-[#161b22] border border-[#30363d] rounded-2xl p-4 mb-6" data-testid="portfolio-chart">
@@ -447,7 +546,7 @@ export default function PortfolioPage() {
             {list.length === 0 ? (
               <div className="text-center py-12 text-zinc-500" data-testid="portfolio-filter-empty">
                 {bets.length === 0 && ticketResults.length > 0
-                  ? <>Your stats & graph above include your settled tickets. Open <b className="text-white">My Tickets</b> to see each ticket.</>
+                  ? <>Your settled matches are listed in <b className="text-white">Match History</b> below. Open <b className="text-white">My Tickets</b> for full ticket details.</>
                   : "No bets in this category."}
               </div>
             ) : (
@@ -455,6 +554,9 @@ export default function PortfolioPage() {
                 {list.map((b) => <BetRow key={b.id} b={b} settle={settle} remove={remove} />)}
               </div>
             )}
+
+            {/* MATCH HISTORY — individual settled matches (single source of truth) */}
+            <MatchHistory records={statsSource} isPro={isPro} />
 
             {hiddenCount > 0 && (
               <div className="mt-8 flex flex-col items-center gap-3 text-center bg-[#161b22] border border-[#30363d] rounded-2xl p-6" data-testid="portfolio-free-limit">

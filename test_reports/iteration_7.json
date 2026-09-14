@@ -1,0 +1,19 @@
+{
+  "summary": "Frontend-only validation of LION.STATS rebrand + Portfolio fixes. All 7 requested cases PASS. BUG #11 fixed: on /portfolio as PRO with tickets whose legs were settled 5 days ago, selecting 'Today' shows the neutral 'No settled matches today.' banner (data-testid=portfolio-no-settled), Net P/L reads €0.00 in GREEN (rgb(57,255,20), no red loss), match-history section is hidden. Switching back to 'All time' correctly reveals match-history with 3 rows for the 3 settled legs. Match History table renders per-leg rows with WIN(+odds*stake-stake)/LOSS(-stake) profit, arrows and are sorted by kickoff. Free/Pro split works: FREE=5 rows + history-free-limit CTA visible, PRO=7 rows + no CTA. My Tickets (#8): 6 tickets => 4 recent in tickets-grid + 'History (2)' collapse toggle revealing tickets-history-grid; no tickets-free-limit paywall for FREE users. Ticket progress badge shows '2/3' not 'LOST' for 2W+1L. Branding: header shows LION.STATS wordmark + /lion-logo.png, no MOKASTATS or standalone 'Moka' anywhere on Home or Portfolio pages. Leagues: NBA and EuroLeague appear under Basketball with 'COMING SOON' badge and 'Not available yet' subtitle, rendered as league-soon-nba/league-soon-euroleague (no league-open-* counterparts).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "PortfolioContext getPortfolioRemote() overwrites local moka_tickets with server data on login. Task spec says 'Portfolio ticket/bet/slip data is localStorage-only (no backend calls for portfolio)' — but /api/me/portfolio IS called and IS authoritative. Docs/spec vs implementation mismatch; either update spec or gate cloud sync. Testing had to intercept /api/me/portfolio to inject test data.",
+    "PortfolioPage.jsx is ~577 lines; consider extracting MatchHistory/TicketsView/BetSlip/TicketCard into their own files for maintainability (>700 threshold approaching).",
+    "MatchHistory sorts by settledAt in code comment says 'most recent first (by kickoff)' but the sort key is r.settledAt — since ticketResults sets settledAt = kickoff||commence_time||settledAt this is equivalent, but the comment/field naming is confusing."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "100%"},
+  "seed_data_creation": "No DB writes. Test data injected via page.route interception of GET/PUT /api/me/portfolio to return controlled tickets, plus localStorage seed for moka_session_token (test-pro-monthly-token / test-free-token).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "IMPORTANT: Portfolio tickets are pulled from /api/me/portfolio when a session token exists — setting moka_tickets in localStorage alone is NOT enough because getPortfolioRemote() overwrites it. To seed test tickets, intercept **/api/me/portfolio** with page.route and fulfill with {bets:[],tickets:[...]}. Waits of ~1500-2500ms after page load are needed for the remote sync to complete. All data-testids verified working: portfolio-period-day/all, portfolio-no-settled, match-history, history-row-*, history-free-limit, ticket-progress-<id>, tickets-grid, tickets-history-toggle, tickets-history-grid, logo-link, league-soon-nba, league-soon-euroleague.",
+  "rca_of_the_issue": "Not applicable — no bugs found. BUG #11 root cause (previously) was periodBets/ticketResults falling back to bet.createdAt (placement time = today) for period grouping; fix uses settledAt/kickoff only, plus inPeriod() returns false for undated records outside 'all'. Verified working end-to-end."
+}

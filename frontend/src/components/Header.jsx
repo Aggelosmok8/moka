@@ -76,11 +76,9 @@ export const Header = () => {
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         <Link to="/" data-testid="logo-link" data-no-translate className="flex items-center gap-2.5 group">
-          <div className="w-8 h-8 rounded-lg neon-bg flex items-center justify-center font-display font-black text-lg group-hover:scale-105 transition-transform">
-            X
-          </div>
+          <img src="/lion-logo.png" alt="LION.STATS" className="w-9 h-9 rounded-lg object-contain group-hover:scale-105 transition-transform" />
           <div className="font-display font-black uppercase tracking-tight text-xl text-white">
-            Moka<span className="text-[#39FF14]">Stats</span>
+            LION<span className="text-[#39FF14]">.STATS</span>
           </div>
         </Link>
 

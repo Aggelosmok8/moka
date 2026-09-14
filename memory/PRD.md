@@ -440,3 +440,14 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - LeagueDetailPage: active tab (standings/fixtures/results) persists in URL (?tab=), read on mount → Back restores tab. Verified (?tab=fixtures restored + tab active).
 - LeaguesPage: static grouped list, no filters → nothing to persist (left unchanged).
 - Files: pages/TeamsPage.jsx, pages/LeagueDetailPage.jsx.
+
+## 2026-06 — LION.STATS rebrand + Portfolio Match History + fixes (tested iter_7, all PASS)
+- #1 Branding: sed MOKASTATS->LION.STATS, MokaStats->LION.STATS, \bMoka\b/\bMOKA\b->LION across frontend/src (lowercase moka_ storage keys / mokaProb / api paths untouched). Header wordmark LION.STATS.
+- #2 Logo: cropped user's attached lion+crown banner -> /app/frontend/public/lion-logo.png (+lion-banner.png); Header uses <img src=/lion-logo.png>.
+- #11 BUG (no-loss-today): inPeriod() returns false for undated records outside 'all'; period dating uses settledAt/kickoff only (dropped placement createdAt fallback); neutral banner data-testid=portfolio-no-settled when Pro period has 0 settled. VERIFIED.
+- #3-7 Match History: new MatchHistory table (data-testid=match-history) of INDIVIDUAL settled matches; Result arrow (green up/red down), Match/Pick/Odds/Stake/Profit-Loss; sorted by kickoff desc; FREE=latest 5 + history-free-limit CTA, PRO=full. Shares statsSource with stats+graph (single source of truth, #19).
+- #8 My Tickets: full history kept (no free deletion/paywall); latest 4 visible + collapsible History(n) toggle (tickets-history-toggle/grid).
+- #12 Basketball: nba/euroleague coming_soon=true in sportsCatalog; LeaguesPage renders COMING SOON badge, non-clickable (league-soon-*).
+- #13 Greek bookmakers: added stoiximan, novibet, fonbet, pamestoixima to backend APPROVED_BOOKMAKERS allowlist. NOTE: API-Football (current provider) generally does NOT return Greek-only books (Pamestoixima/Fonbet/Novibet); they'll appear only if the provider actually returns them — not fabricated.
+- Already done prior (verified): #10 per-match graph, #14 slip IN SLIP sync, #15/#16 filter+scroll memory, #17 /ping keep-alive, #18 slip state.
+- Files: PortfolioPage.jsx, PortfolioContext.jsx (prior), Header.jsx, sportsCatalog.js, LeaguesPage.jsx, apifootball.py, public/lion-logo.png.

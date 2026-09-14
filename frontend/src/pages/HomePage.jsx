@@ -21,7 +21,7 @@ const IMG = {
 
 const NEON = "#39FF14";
 
-// Full-width editorial chapter for the four Moka steps.
+// Full-width editorial chapter for the four LION steps.
 function Step({ n, kicker, title, text, image, align = "left" }) {
   const right = align === "right";
   return (
@@ -69,7 +69,7 @@ export default function HomePage() {
             Premium Sports Intelligence
           </div>
           <h1 className="font-display font-black uppercase tracking-tight text-white text-5xl sm:text-6xl lg:text-7xl leading-[0.9]">
-            Moka makes<br />betting <span style={{ color: NEON }}>easier</span>.
+            LION makes<br />betting <span style={{ color: NEON }}>easier</span>.
           </h1>
           <p className="text-zinc-300 text-base sm:text-xl mt-6 max-w-2xl mx-auto leading-relaxed">
             Everything you need to study the game, find potential opportunities and track your performance — in one place.
@@ -97,11 +97,11 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* FOUR MOKA STEPS */}
+      {/* FOUR LION STEPS */}
       <Step
         n="01" kicker="Find the opportunities" image={IMG.fog}
         title="Find the matches worth analysing"
-        text="Moka analyses the available data and helps you spot the opportunities worth paying attention to"
+        text="LION analyses the available data and helps you spot the opportunities worth paying attention to"
       />
       <Step
         n="02" kicker="Find the best odds" image={IMG.arena} align="right"
@@ -180,7 +180,7 @@ export default function HomePage() {
       {/* JOURNEY: FIND -> ANALYSE -> CHOOSE -> TRACK */}
       <section className="py-24 border-t border-white/5 bg-black/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <h3 className="text-center font-display font-black uppercase tracking-[0.25em] text-zinc-500 text-sm mb-14">The Moka Journey</h3>
+          <h3 className="text-center font-display font-black uppercase tracking-[0.25em] text-zinc-500 text-sm mb-14">The LION Journey</h3>
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-8 sm:gap-4">
             {[
               { icon: Search, t: "Find", d: "Discover the matches worth watching." },
@@ -214,7 +214,7 @@ export default function HomePage() {
             Explore Matches <ArrowRight className="w-4 h-4" />
           </Link>
           <p className="text-[11px] text-zinc-600 mt-10 max-w-2xl mx-auto">
-            Moka provides data-driven insights and potential opportunities. It does not guarantee profits or winning bets.
+            LION provides data-driven insights and potential opportunities. It does not guarantee profits or winning bets.
           </p>
         </div>
       </section>

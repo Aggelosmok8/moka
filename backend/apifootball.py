@@ -630,6 +630,8 @@ APPROVED_BOOKMAKERS = (
     "bet365", "betano", "bwin", "unibet", "betsson", "netbet", "888sport",
     "888 sport", "betway", "betvictor", "bet victor", "interwetten",
     "william hill", "coolbet", "nordicbet", "10bet", "leovegas",
+    # Greek-market operators (shown when the provider actually returns them).
+    "stoiximan", "novibet", "fonbet", "pamestoixima", "pame stoixima",
 )
 
 

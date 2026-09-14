@@ -99,7 +99,7 @@ export default function PricingPage() {
         <div className="text-center mb-12 fade-up">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 mb-5 rounded-full border border-[#39FF14]/30 bg-[#39FF14]/5">
             <Sparkles className="w-3 h-3 text-[#39FF14]" />
-            <span className="text-xs font-bold uppercase tracking-[0.22em] text-[#39FF14]">Moka Pro</span>
+            <span className="text-xs font-bold uppercase tracking-[0.22em] text-[#39FF14]">LION Pro</span>
           </div>
           <h1 className="font-display font-black uppercase tracking-tight text-5xl sm:text-6xl text-white leading-none">
             Edge over the <span className="shimmer-text">crowd.</span>

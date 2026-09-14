@@ -43,7 +43,7 @@ export default function HomePicks() {
       <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, #0d1117 0%, rgba(13,17,23,0.9) 40%, #0d1117 100%)" }} />
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-[#39FF14] font-display font-black uppercase tracking-[0.25em] text-xs mb-6">Why Moka</div>
+        <div className="text-[#39FF14] font-display font-black uppercase tracking-[0.25em] text-xs mb-6">Why LION</div>
 
         <div className="space-y-3 sm:space-y-4">
           {SENTENCES.map((t, i) => (

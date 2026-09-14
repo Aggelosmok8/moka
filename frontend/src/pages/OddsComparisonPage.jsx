@@ -24,7 +24,7 @@ export default function OddsComparisonPage() {
       <Header />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <h1 className="font-display font-black uppercase tracking-tight text-3xl text-white mb-1">Odds Comparison</h1>
-        <p className="text-zinc-500 text-sm mb-6">Best available bookmaker odds vs the Moka fair price.</p>
+        <p className="text-zinc-500 text-sm mb-6">Best available bookmaker odds vs the LION fair price.</p>
         {loading ? (
           <div className="h-64 bg-[#161b22] border border-[#30363d] rounded-xl animate-pulse" />
         ) : (
@@ -37,7 +37,7 @@ export default function OddsComparisonPage() {
                   <th className="p-3">Pick</th>
                   <th className="p-3">Best Odds</th>
                   <th className="p-3">Bookmaker</th>
-                  <th className="p-3">Moka%</th>
+                  <th className="p-3">LION%</th>
                   <th className="p-3">Market%</th>
                   <th className="p-3">Value</th>
                 </tr>

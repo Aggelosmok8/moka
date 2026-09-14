@@ -21,8 +21,8 @@ export const LEAGUE_CATALOG = [
   { id: "ucl", name: "UEFA Champions League", sport: "football", group: "Football", pro_only: false },
   { id: "uel", name: "UEFA Europa League", sport: "football", group: "Football", pro_only: false },
   { id: "uecl", name: "UEFA Conference League", sport: "football", group: "Football", pro_only: false },
-  { id: "nba", name: "NBA (USA)", sport: "basketball", group: "Basketball", pro_only: false },
-  { id: "euroleague", name: "EuroLeague", sport: "basketball", group: "Basketball", pro_only: false },
+  { id: "nba", name: "NBA (USA)", sport: "basketball", group: "Basketball", pro_only: false, coming_soon: true },
+  { id: "euroleague", name: "EuroLeague", sport: "basketball", group: "Basketball", pro_only: false, coming_soon: true },
 ];
 
 export const leaguesForSport = (sport) => LEAGUE_CATALOG.filter((l) => l.sport === sport);

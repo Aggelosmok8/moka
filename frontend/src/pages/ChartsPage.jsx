@@ -135,7 +135,7 @@ export default function ChartsPage() {
                     <th className="px-3 py-2 text-left font-bold">League</th>
                     <th className="px-3 py-2 text-left font-bold">Kickoff</th>
                     <th className="px-3 py-2 text-left font-bold"><InfoTip label="Potential Value" text="Expected return on the pick (formerly EV). Higher is better." /></th>
-                    <th className="px-3 py-2 text-left font-bold"><InfoTip label="Moka Estimate" text="Our model's win chance for the pick." /></th>
+                    <th className="px-3 py-2 text-left font-bold"><InfoTip label="LION Estimate" text="Our model's win chance for the pick." /></th>
                     <th className="px-3 py-2 text-left font-bold"><InfoTip label="Market Estimate" text="Win chance implied by bookmaker odds." /></th>
                     <th className="px-3 py-2 text-left font-bold"><InfoTip label="Confidence" text="How sure the model is about this pick." /></th>
                     <th className="px-3 py-2 text-left font-bold">Best Odds</th>
@@ -191,7 +191,7 @@ export default function ChartsPage() {
                 </BarChart>
               </ChartCard>
 
-              <ChartCard title="Confidence" tip="How sure the Moka model is about each pick.">
+              <ChartCard title="Confidence" tip="How sure the LION model is about each pick.">
                 <BarChart data={data} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
                   <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
                   <XAxis dataKey="name" tick={{ fill: ZINC, fontSize: 11 }} axisLine={false} tickLine={false} />
@@ -201,14 +201,14 @@ export default function ChartsPage() {
                 </BarChart>
               </ChartCard>
 
-              <ChartCard title="Moka Estimate vs Market Estimate" tip="Moka Estimate = our model's win chance. Market Estimate = chance implied by odds. The gap is the 'Market Difference'.">
+              <ChartCard title="LION Estimate vs Market Estimate" tip="LION Estimate = our model's win chance. Market Estimate = chance implied by odds. The gap is the 'Market Difference'.">
                 <BarChart data={data} margin={{ top: 8, right: 8, left: -18, bottom: 0 }} barGap={4}>
                   <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
                   <XAxis dataKey="name" tick={{ fill: ZINC, fontSize: 11 }} axisLine={false} tickLine={false} />
                   <YAxis domain={[0, 100]} tick={{ fill: ZINC, fontSize: 10 }} axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
                   <Legend wrapperStyle={{ fontSize: 11, color: "#A1A1AA" }} />
-                  <Bar dataKey="moka" name="Moka Estimate %" fill={GREEN} radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="moka" name="LION Estimate %" fill={GREEN} radius={[4, 4, 0, 0]} />
                   <Bar dataKey="market" name="Market Estimate %" fill={BLUE} radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ChartCard>

@@ -40,22 +40,25 @@ export default function LeaguesPage() {
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {leaguesForSport(s.key).map((l) => {
-                const locked = !accessibleIds.has(l.id);
+                const soon = l.coming_soon;
+                const locked = !soon && !accessibleIds.has(l.id);
                 const inner = (
                   <div className="flex items-center justify-between bg-[#161b22] border border-[#30363d] rounded-xl p-4 hover:border-[#39FF14]/40 transition-all">
                     <div>
                       <div className="font-display font-bold text-white">{l.name}</div>
-                      <div className="text-xs text-zinc-500">{counts[l.id] || 0} value matches</div>
+                      <div className="text-xs text-zinc-500">{soon ? "Not available yet" : `${counts[l.id] || 0} value matches`}</div>
                     </div>
-                    {locked ? (
+                    {soon ? (
+                      <span className="text-[#FFD60A] text-[10px] font-black uppercase tracking-wider border border-[#FFD60A]/40 rounded-full px-2 py-0.5">Coming soon</span>
+                    ) : locked ? (
                       <span className="text-zinc-400 flex items-center gap-1 text-xs"><Lock className="w-3.5 h-3.5" /> Pro</span>
                     ) : (
                       <span className="text-[#39FF14] text-xs font-bold">Open</span>
                     )}
                   </div>
                 );
-                return locked ? (
-                  <div key={l.id} className="opacity-70" data-testid={`league-locked-${l.id}`}>{inner}</div>
+                return (soon || locked) ? (
+                  <div key={l.id} className={soon ? "opacity-80 cursor-default" : "opacity-70"} data-testid={soon ? `league-soon-${l.id}` : `league-locked-${l.id}`}>{inner}</div>
                 ) : (
                   <Link key={l.id} to={`/leagues/${l.id}`} data-testid={`league-open-${l.id}`}>{inner}</Link>
                 );

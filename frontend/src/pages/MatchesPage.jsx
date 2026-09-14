@@ -10,7 +10,7 @@ import { useEntitlements } from "../hooks/useEntitlements";
 import { useLiveScores } from "../contexts/LiveScoresContext";
 
 const VIEWS = {
-  strong: { title: "Today's Best Opportunities", sub: "The strongest opportunities Moka has identified today.", levels: ["HIGH"] },
+  strong: { title: "Today's Best Opportunities", sub: "The strongest opportunities LION has identified today.", levels: ["HIGH"] },
   watching: { title: "Worth Watching", sub: "Interesting opportunities that are not as strong as the top picks.", levels: ["MEDIUM"] },
   all: { title: "All Matches", sub: "Browse every available match.", levels: null },
 };

@@ -83,7 +83,7 @@ export function computeStats(bets) {
 
 const _r2 = (n) => Math.round(n * 100) / 100;
 
-// Moka ticket logic (per-selection, NOT all-or-nothing accumulator).
+// LION ticket logic (per-selection, NOT all-or-nothing accumulator).
 // Each selection is settled on its own: WON -> stake×odds, LOST -> 0, VOID -> refund.
 // Ticket stake is the stake PER selection, so Total Stake = stake × selections.
 export function computeTicket(t) {

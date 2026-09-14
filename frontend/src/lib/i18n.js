@@ -39,12 +39,12 @@ export function navLabel(label) {
 export const DICT = {
   // Home / hero
   "Today's Best Opportunities": "Οι κορυφαίες ευκαιρίες σήμερα",
-  "The strongest opportunities Moka has identified today.": "Οι ισχυρότερες ευκαιρίες που εντόπισε η Moka σήμερα.",
+  "The strongest opportunities LION has identified today.": "Οι ισχυρότερες ευκαιρίες που εντόπισε η LION σήμερα.",
   "Before every decision, there is data": "Πριν από κάθε απόφαση, υπάρχουν δεδομένα",
   "Make them your tool": "Κάν' τα εργαλείο σου",
   "Make your own decision": "Πάρε τη δική σου απόφαση",
   "Study every detail": "Μελέτησε κάθε λεπτομέρεια",
-  "The Moka Journey": "Το ταξίδι της Moka",
+  "The LION Journey": "Το ταξίδι της LION",
   "See the opportunities": "Δες τις ευκαιρίες",
   "Ready to see today's opportunities?": "Έτοιμος να δεις τις σημερινές ευκαιρίες;",
   // Tabs / filters
@@ -78,15 +78,15 @@ export const DICT = {
   "Best Odds": "Καλύτερες αποδόσεις",
   "Best odds": "Καλύτερες αποδόσεις",
   "Available Odds": "Διαθέσιμες αποδόσεις",
-  "Moka pick": "Επιλογή Moka",
-  "Moka Lean": "Κλίση Moka",
-  "Moka Analysis": "Ανάλυση Moka",
-  "Moka Prediction": "Πρόβλεψη Moka",
+  "LION pick": "Επιλογή LION",
+  "LION Lean": "Κλίση LION",
+  "LION Analysis": "Ανάλυση LION",
+  "LION Prediction": "Πρόβλεψη LION",
   "AI Match Analysis": "Ανάλυση αγώνα με AI",
   "AI Summary": "Σύνοψη AI",
   "Quick AI Summary": "Γρήγορη σύνοψη AI",
-  "Why Moka": "Γιατί η Moka",
-  "Why Moka likes it": "Γιατί την προτιμά η Moka",
+  "Why LION": "Γιατί η LION",
+  "Why LION likes it": "Γιατί την προτιμά η LION",
   "Possible outcome": "Πιθανό αποτέλεσμα",
   "Live outcome": "Ζωντανό αποτέλεσμα",
   "Live Analysis": "Ζωντανή ανάλυση",
@@ -114,8 +114,8 @@ export const DICT = {
   "Odds Comparison": "Σύγκριση αποδόσεων",
   "Bookmaker": "Στοιχηματική",
   "No odds available.": "Δεν υπάρχουν διαθέσιμες αποδόσεις.",
-  "AI analysis is temporarily unavailable — the Moka model prediction is shown below.":
-    "Η ανάλυση AI δεν είναι προσωρινά διαθέσιμη — παρακάτω φαίνεται η πρόβλεψη του μοντέλου Moka.",
+  "AI analysis is temporarily unavailable — the LION model prediction is shown below.":
+    "Η ανάλυση AI δεν είναι προσωρινά διαθέσιμη — παρακάτω φαίνεται η πρόβλεψη του μοντέλου LION.",
   // Outcomes (1X2) — used as short labels
   "Home": "Έδρα",
   "Draw": "Ισοπαλία",
@@ -187,7 +187,7 @@ export const DICT = {
   "No news found for these filters.": "Δεν βρέθηκαν ειδήσεις για αυτά τα φίλτρα.",
   // Pricing / plan
   "Current plan": "Τρέχον πλάνο",
-  "Moka Pro": "Moka Pro",
+  "LION Pro": "LION Pro",
   "Free": "Δωρεάν",
   "Pro active": "Ενεργό Pro",
   "Upgrade to Pro": "Αναβάθμιση σε Pro",
