@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, useSearchParams, Link } from "react-router-dom";
 import { ArrowLeft, Trophy, CalendarDays, ListChecks, Loader2 } from "lucide-react";
 import Header from "../components/Header";
 import { fetchLeagueDetail } from "../lib/api";
@@ -37,9 +37,17 @@ const TABS = [
 
 export default function LeagueDetailPage() {
   const { slug } = useParams();
+  const [params, setParams] = useSearchParams();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState("standings");
+  // Active tab persists in the URL so Back restores it (#15).
+  const [tab, setTab] = useState(params.get("tab") || "standings");
+
+  useEffect(() => {
+    const next = new URLSearchParams(params);
+    next.set("tab", tab);
+    setParams(next, { replace: true });
+  }, [tab]); // eslint-disable-line
 
   useEffect(() => {
     setLoading(true);

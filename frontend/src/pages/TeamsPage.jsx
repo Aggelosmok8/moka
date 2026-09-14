@@ -389,13 +389,21 @@ function TeamDetail({ team, teams, league, onBack }) {
 
 export default function TeamsPage() {
   const { accessibleIds } = useEntitlements();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const wantLeague = searchParams.get("league");
   const [pendingTeam, setPendingTeam] = useState(searchParams.get("team"));
   const [league, setLeague] = useState(null);
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(false);
   const [team, setTeam] = useState(null);
+
+  // Persist the selected league + open team in the URL so Back restores them (#15).
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (league) next.set("league", league);
+    if (team) next.set("team", String(team.id));
+    setSearchParams(next, { replace: true });
+  }, [league, team, setSearchParams]);
 
   const groups = useMemo(() => {
     return LEAGUE_CATALOG.reduce((acc, l) => {

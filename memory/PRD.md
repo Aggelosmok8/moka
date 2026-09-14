@@ -434,3 +434,9 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - #15: MatchesPage filters (sport/league/team/date/live) + view now persist in URL query (setParams replace); initialise from URL so Back restores them. Verified URL ?view=all&sport=football&team=a restored after Back.
 - #16: scroll position saved to sessionStorage on unmount, restored after load. Best-effort.
 - Files: components/AddToSlipButton.jsx, pages/MatchesPage.jsx.
+
+## 2026-06 — Filter memory extended to Teams & Leagues
+- TeamsPage: selected league + open team now persist in URL (?league=&team=), read on mount → Back restores exact selection + open team detail. Verified (?league=epl&team=42 restored after nav away+Back).
+- LeagueDetailPage: active tab (standings/fixtures/results) persists in URL (?tab=), read on mount → Back restores tab. Verified (?tab=fixtures restored + tab active).
+- LeaguesPage: static grouped list, no filters → nothing to persist (left unchanged).
+- Files: pages/TeamsPage.jsx, pages/LeagueDetailPage.jsx.
