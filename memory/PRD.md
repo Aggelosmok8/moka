@@ -428,3 +428,9 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - #17 keep-alive: added trivial GET /ping (no DB/API/prediction work), rate-limit exempt. Needs EXTERNAL cron (cron-job.org/UptimeRobot) every ~10-14min; a self-ping cannot wake a sleeping Render free instance.
 - DEFERRED (not yet done): #14 "IN SLIP" button state sync on Matches/Match Analysis; #15 back-nav filter/search preservation; #16 scroll restoration.
 - Files: contexts/PortfolioContext.jsx, pages/PortfolioPage.jsx, backend/server.py (/ping).
+
+## 2026-06 — Slip sync (#14) + Filter memory (#15/#16)
+- #14: AddToSlipButton already toggles "In slip"/"Add to slip" from slipHas() (context+localStorage) — synced across Matches/Analysis/refresh/back. Added kickoff capture to its addToSlip call (for Portfolio dating). Verified: button flips on click, stays "In slip" after navigating to match + Back; BET SLIP + Portfolio badges update.
+- #15: MatchesPage filters (sport/league/team/date/live) + view now persist in URL query (setParams replace); initialise from URL so Back restores them. Verified URL ?view=all&sport=football&team=a restored after Back.
+- #16: scroll position saved to sessionStorage on unmount, restored after load. Best-effort.
+- Files: components/AddToSlipButton.jsx, pages/MatchesPage.jsx.

@@ -39,21 +39,32 @@ function LiveValueCard({ id }) {
 }
 
 export default function MatchesPage() {
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const view = VIEWS[params.get("view")] ? params.get("view") : "strong";
   const cfg = VIEWS[view];
   const { role, loading: entLoading } = useEntitlements();
   const isPro = role === "pro";
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [fLeague, setFLeague] = useState("");
-  const [fTeam, setFTeam] = useState("");
-  const [fDate, setFDate] = useState("");
-  const [fSport, setFSport] = useState("");
-  const [liveMode, setLiveMode] = useState(false);
+  // Filters initialise from the URL so returning via Back restores them (#15).
+  const [fLeague, setFLeague] = useState(params.get("league") || "");
+  const [fTeam, setFTeam] = useState(params.get("team") || "");
+  const [fDate, setFDate] = useState(params.get("date") || "");
+  const [fSport, setFSport] = useState(params.get("sport") || "");
+  const [liveMode, setLiveMode] = useState(params.get("live") === "1");
   const { list: liveList } = useLiveScores();
 
-  useEffect(() => { setLiveMode(false); }, [view]);
+  // Keep the URL in sync with the active filters (replace = no history spam).
+  useEffect(() => {
+    const next = new URLSearchParams();
+    next.set("view", view);
+    if (fSport) next.set("sport", fSport);
+    if (fLeague) next.set("league", fLeague);
+    if (fTeam) next.set("team", fTeam);
+    if (fDate) next.set("date", fDate);
+    if (liveMode) next.set("live", "1");
+    setParams(next, { replace: true });
+  }, [view, fSport, fLeague, fTeam, fDate, liveMode, setParams]);
 
   useEffect(() => {
     let active = true;
@@ -64,6 +75,19 @@ export default function MatchesPage() {
       .finally(() => active && setLoading(false));
     return () => { active = false; };
   }, []);
+
+  // Scroll restoration (#16): remember position when leaving, restore on return.
+  useEffect(() => {
+    return () => sessionStorage.setItem("matches_scroll", String(window.scrollY));
+  }, []);
+  useEffect(() => {
+    if (loading) return;
+    const y = sessionStorage.getItem("matches_scroll");
+    if (y != null) {
+      requestAnimationFrame(() => window.scrollTo(0, parseInt(y, 10) || 0));
+      sessionStorage.removeItem("matches_scroll");
+    }
+  }, [loading]);
 
   const list = useMemo(() => {
     if (!cfg.levels) return entries;

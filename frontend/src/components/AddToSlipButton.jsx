@@ -23,6 +23,7 @@ export default function AddToSlipButton({ entry, className = "", size = "sm" }) 
     addToSlip({
       matchId: id, home: match.home?.name, away: match.away?.name, league: match.leagueName,
       pick: value.pick, pickName: value.pickName, odds: value.bestOdds, bookmaker: value.bookmaker,
+      kickoff: match.commence_time || match.kickoff || null,
     });
     // Temporary confirmation with a quick "Go to slip" action (auto-dismisses).
     toast.success("Added to bet slip", {
