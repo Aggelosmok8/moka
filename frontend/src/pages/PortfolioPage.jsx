@@ -104,8 +104,9 @@ const FREE_LIMIT = 5;
 // --- Accumulator slip builder ---
 function BetSlip({ slip, removeFromSlip, updateSlipLegOdds, clearSlip, placeTicket }) {
   const [stake, setStake] = useState("10");
-  const totalOdds = slip.reduce((p, l) => p * (Number(l.odds) || 1), 1);
-  const potential = (Number(stake || 0) * totalOdds).toFixed(2);
+  const per = Number(stake || 0);
+  const totalStake = per * slip.length;
+  const potential = slip.reduce((s, l) => s + per * (Number(l.odds) || 0), 0).toFixed(2);
 
   const place = () => {
     const amt = Number(stake);
@@ -125,9 +126,9 @@ function BetSlip({ slip, removeFromSlip, updateSlipLegOdds, clearSlip, placeTick
       <div className="space-y-2 mb-4">
         {slip.map((l) => (
           <div key={l.matchId} className="flex items-center justify-between gap-2 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2" data-testid={`slip-leg-${l.matchId}`}>
-            <div className="min-w-0">
-              <div className="text-xs text-white font-semibold truncate">{l.home} <span className="text-zinc-600">vs</span> {l.away}</div>
-              <div className="text-[11px] text-[#39FF14] font-bold truncate">{l.pickName}</div>
+            <div className="min-w-0 flex-1">
+              <div className="text-xs text-white font-semibold break-words">{l.home} <span className="text-zinc-600">vs</span> {l.away}</div>
+              <div className="text-[11px] text-[#39FF14] font-bold break-words">{l.pickName}</div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <div className="flex flex-col items-end">
@@ -144,19 +145,17 @@ function BetSlip({ slip, removeFromSlip, updateSlipLegOdds, clearSlip, placeTick
           </div>
         ))}
       </div>
-      <div className="grid grid-cols-2 gap-3 items-end">
-        <div>
-          <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">Stake (€)</label>
-          <input type="number" min="0" step="1" value={stake} onChange={(e) => setStake(e.target.value)} data-testid="slip-stake-input"
-            className="mt-1 w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white font-mono-num focus:outline-none focus:border-[#39FF14]" />
-        </div>
-        <div className="text-right">
-          <div className="text-[10px] text-zinc-500 uppercase">Total odds</div>
-          <div className="font-display font-black text-2xl text-white font-mono-num">{Math.round(totalOdds * 100) / 100}</div>
-        </div>
+      <div>
+        <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">Stake per selection (€)</label>
+        <input type="number" min="0" step="1" value={stake} onChange={(e) => setStake(e.target.value)} data-testid="slip-stake-input"
+          className="mt-1 w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white font-mono-num focus:outline-none focus:border-[#39FF14]" />
       </div>
       <div className="flex items-center justify-between mt-3 text-sm">
-        <span className="text-zinc-400">Potential return</span>
+        <span className="text-zinc-400">Total stake ({slip.length} × €{per.toFixed(2)})</span>
+        <span className="font-mono-num font-bold text-white">€{totalStake.toFixed(2)}</span>
+      </div>
+      <div className="flex items-center justify-between mt-1 text-sm">
+        <span className="text-zinc-400">Potential return (all win)</span>
         <span className="font-mono-num font-bold text-[#39FF14]">€{potential}</span>
       </div>
       <button onClick={place} data-testid="slip-place-ticket"
@@ -169,48 +168,55 @@ function BetSlip({ slip, removeFromSlip, updateSlipLegOdds, clearSlip, placeTick
 
 function TicketCard({ t, settleLeg, removeTicket }) {
   const info = computeTicket(t);
-  const st = STATUS[info.status] || STATUS.pending;
+  // Progress badge: WON / TOTAL selections (never all-or-nothing).
+  const badgeCls = info.status === "pending"
+    ? "bg-[#FFD60A]/15 text-[#FFD60A] border border-[#FFD60A]/40"
+    : info.profit >= 0 ? "bg-[#39FF14] text-black" : "bg-[#FF3B30]/15 text-[#FF3B30] border border-[#FF3B30]/40";
   return (
-    <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-4" data-testid={`ticket-${t.id}`}>
+    <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-4 h-fit" data-testid={`ticket-${t.id}`}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-zinc-400">
-          <Receipt className="w-4 h-4" /> Accumulator · {t.legs.length} legs
+          <Receipt className="w-4 h-4" /> Ticket · {info.total} {info.total === 1 ? "selection" : "selections"}
         </div>
-        <span className={`inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${st.cls}`}>
-          <st.icon className="w-3 h-3" /> {st.label}
+        <span className={`inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${badgeCls}`} data-testid={`ticket-progress-${t.id}`}>
+          <Check className="w-3 h-3" /> {info.progress}
         </span>
       </div>
 
       <div className="space-y-2 mb-3">
         {t.legs.map((l) => {
           const lst = STATUS[l.status] || STATUS.pending;
+          const finished = l.status === "won" || l.status === "lost";  // finished legs lock (#10)
           return (
             <div key={l.id} className="bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2" data-testid={`ticket-leg-${l.id}`}>
               <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="text-xs text-white font-semibold truncate">{l.home} <span className="text-zinc-600">vs</span> {l.away}</div>
-                  <div className="text-[11px] text-[#39FF14] font-bold truncate">{l.pickName} · <span className="text-white font-mono-num">{l.odds}</span></div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs text-white font-semibold break-words">{l.home} <span className="text-zinc-600">vs</span> {l.away}</div>
+                  <div className="text-[11px] text-[#39FF14] font-bold break-words">{l.pickName} · <span className="text-white font-mono-num">{l.odds}</span></div>
                 </div>
                 <span className={`shrink-0 inline-flex items-center gap-1 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full ${lst.cls}`}><lst.icon className="w-2.5 h-2.5" /> {lst.label}</span>
               </div>
-              <div className="flex items-center gap-1.5 mt-2">
-                <button onClick={() => settleLeg(t.id, l.id, "won")} data-testid={`leg-won-${l.id}`} className="flex-1 py-1 rounded text-[10px] font-bold bg-[#39FF14]/15 text-[#39FF14] border border-[#39FF14]/30 hover:bg-[#39FF14]/25">Won</button>
-                <button onClick={() => settleLeg(t.id, l.id, "lost")} data-testid={`leg-lost-${l.id}`} className="flex-1 py-1 rounded text-[10px] font-bold bg-[#FF3B30]/15 text-[#FF3B30] border border-[#FF3B30]/30 hover:bg-[#FF3B30]/25">Lost</button>
-                <button onClick={() => settleLeg(t.id, l.id, "void")} data-testid={`leg-void-${l.id}`} className="py-1 px-2 rounded text-[10px] font-bold bg-white/5 text-zinc-400 border border-white/10 hover:bg-white/10">Void</button>
-                <button onClick={() => settleLeg(t.id, l.id, "pending")} data-testid={`leg-reset-${l.id}`} className="py-1 px-2 rounded text-[10px] font-bold bg-white/5 text-zinc-400 border border-white/10 hover:bg-white/10" title="Reset"><Clock className="w-3 h-3" /></button>
-              </div>
+              {finished ? (
+                <div className="mt-2 flex items-center gap-1 text-[10px] text-zinc-500"><Lock className="w-3 h-3" /> Settled — locked</div>
+              ) : (
+                <div className="flex items-center gap-1.5 mt-2">
+                  <button onClick={() => settleLeg(t.id, l.id, "won")} data-testid={`leg-won-${l.id}`} className="flex-1 py-1 rounded text-[10px] font-bold bg-[#39FF14]/15 text-[#39FF14] border border-[#39FF14]/30 hover:bg-[#39FF14]/25">Won</button>
+                  <button onClick={() => settleLeg(t.id, l.id, "lost")} data-testid={`leg-lost-${l.id}`} className="flex-1 py-1 rounded text-[10px] font-bold bg-[#FF3B30]/15 text-[#FF3B30] border border-[#FF3B30]/30 hover:bg-[#FF3B30]/25">Lost</button>
+                  <button onClick={() => settleLeg(t.id, l.id, "void")} data-testid={`leg-void-${l.id}`} className="py-1 px-2 rounded text-[10px] font-bold bg-white/5 text-zinc-400 border border-white/10 hover:bg-white/10">Remove</button>
+                </div>
+              )}
             </div>
           );
         })}
       </div>
 
       <div className="grid grid-cols-3 gap-2 text-center border-t border-white/5 pt-3">
-        <div><div className="text-[10px] text-zinc-500 uppercase">Total odds</div><div className="text-sm font-bold text-white font-mono-num">{info.totalOdds}</div></div>
-        <div><div className="text-[10px] text-zinc-500 uppercase">Stake</div><div className="text-sm font-bold text-white font-mono-num">€{t.stake.toFixed(2)}</div></div>
+        <div><div className="text-[10px] text-zinc-500 uppercase">Total stake</div><div className="text-sm font-bold text-white font-mono-num">€{info.totalStake.toFixed(2)}</div></div>
+        <div><div className="text-[10px] text-zinc-500 uppercase">{info.status === "pending" ? "Potential" : "Returned"}</div><div className="text-sm font-bold text-white font-mono-num">€{(info.status === "pending" ? info.potentialReturn : info.totalReturn).toFixed(2)}</div></div>
         <div>
-          <div className="text-[10px] text-zinc-500 uppercase">{info.status === "pending" ? "To return" : "Profit"}</div>
+          <div className="text-[10px] text-zinc-500 uppercase">Profit</div>
           <div className={`text-sm font-bold font-mono-num ${info.profit == null ? "text-zinc-300" : info.profit >= 0 ? "text-[#39FF14]" : "text-[#FF3B30]"}`}>
-            {info.profit == null ? `€${info.potentialReturn.toFixed(2)}` : `${info.profit >= 0 ? "+" : "-"}€${Math.abs(info.profit).toFixed(2)}`}
+            {info.profit == null ? "—" : `${info.profit >= 0 ? "+" : "-"}€${Math.abs(info.profit).toFixed(2)}`}
           </div>
         </div>
       </div>
@@ -244,7 +250,7 @@ function TicketsView({ isPro }) {
           </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3" data-testid="tickets-grid">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 items-start" data-testid="tickets-grid">
           {scoped.map((t) => <TicketCard key={t.id} t={t} settleLeg={settleLeg} removeTicket={removeTicket} />)}
         </div>
       )}
@@ -298,20 +304,28 @@ export default function PortfolioPage() {
     return periodBets.filter((b) => b.status === filter);
   }, [periodBets, filter]);
 
-  // Settled accumulator tickets count in the performance stats/chart too, so
-  // Portfolio reflects real betting history (tickets), not just single bets.
+  // Every SETTLED selection of every ticket becomes its own Portfolio record
+  // (per-match, not one accumulator event) so the graph/stats move per match.
+  // `id` is stable (ticketId:legId) so re-runs are idempotent — no double counting.
   const ticketResults = useMemo(() => {
     const scopedT = isPro ? tickets : tickets.slice(0, FREE_LIMIT);
-    return scopedT.map((t) => {
-      const info = computeTicket(t);
-      if (info.status === "pending") return null;
-      const settledAt = t.legs.reduce(
-        (mx, l) => (l.settledAt && l.settledAt > mx ? l.settledAt : mx), t.createdAt);
-      return {
-        id: t.id, home: `ACC×${t.legs.length}`, away: "", league: "Ticket", pick: "acc",
-        stake: t.stake, odds: info.totalOdds, status: info.status, settledAt, createdAt: t.createdAt,
-      };
-    }).filter(Boolean);
+    const out = [];
+    for (const t of scopedT) {
+      const stakePer = Number(t.stake) || 0;
+      for (const l of (t.legs || [])) {
+        if (l.status === "pending" || l.status === "void") continue;
+        // Portfolio dates by KICKOFF (match start), not settle time (#8).
+        const when = l.kickoff || l.commence_time || l.settledAt || t.createdAt;
+        out.push({
+          id: `${t.id}:${l.id}`,
+          home: l.home, away: l.away, league: l.league,
+          pick: l.pick, pickName: l.pickName,
+          odds: Number(l.odds) || 0, stake: stakePer, status: l.status,
+          settledAt: when, createdAt: when,
+        });
+      }
+    }
+    return out;
   }, [tickets, isPro]);
 
   const statsSource = useMemo(() => {

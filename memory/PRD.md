@@ -415,3 +415,16 @@ P4 Reliability:
 - /health real DB ping: 200 {status:ok,database:ok,cache_entries:N,external_apis:unknown}; 503 {degraded,database:error} on DB failure.
 - components/ErrorBoundary.jsx wraps AppRouter -> "Something went wrong. Please refresh the page." + Refresh btn.
 All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI redesign.
+
+## 2026-06 — Ticket/Portfolio per-selection (Moka) settlement rework
+- computeTicket() rewritten: PER-SELECTION, not all-or-nothing. Ticket stake = stake PER selection; Total Stake = stake×selections; Total Return = Σ(stake×odds) of WON legs; Profit = return − settledStake. Status shown as X/Y (won/total), never "LOST" for one loss. (items #2,#3,#4)
+- Legs capture kickoff (addToSlip) so Portfolio dates by MATCH START, not settle time (#8).
+- PortfolioPage.ticketResults now emits ONE entry PER settled leg (id `ticketId:legId`, idempotent) → stats + cumulative bankroll graph move per-match (#5,#6,#7). Free tier still limited to latest 5 tickets.
+- TicketCard: X/Y progress badge, per-selection legs, Total Stake/Returned/Profit; finished legs show "Settled — locked" (#10). Sizing: tickets-grid items-start + card h-fit + break-words → 1 vs many selections & long names render clean, no stretch/overflow (#1).
+- BetSlip: removed misleading multiplied "Total odds"; shows "Stake per selection", Total stake, Potential return (#4).
+- Verified (screenshots): Case A 1/1, Case B 5/6 (stake€60/ret€94/profit+€34), Case D math, Case E graph +5→+15→+5 (Net€5, WinRate67%).
+- #11 odds preserve: user-edited slip odds freeze into ticket legs; autoSettle only sets status/settledAt, never overwrites odds — already satisfied.
+- #12 Greece bookmaker allowlist + #13 odds mapping: already implemented in prior sessions (APPROVED_BOOKMAKERS in apifootball.py) — unchanged.
+- #17 keep-alive: added trivial GET /ping (no DB/API/prediction work), rate-limit exempt. Needs EXTERNAL cron (cron-job.org/UptimeRobot) every ~10-14min; a self-ping cannot wake a sleeping Render free instance.
+- DEFERRED (not yet done): #14 "IN SLIP" button state sync on Matches/Match Analysis; #15 back-nav filter/search preservation; #16 scroll restoration.
+- Files: contexts/PortfolioContext.jsx, pages/PortfolioPage.jsx, backend/server.py (/ping).

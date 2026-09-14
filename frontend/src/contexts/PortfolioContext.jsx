@@ -81,23 +81,41 @@ export function computeStats(bets) {
   };
 }
 
-// Derived numbers for an accumulator ticket.
+const _r2 = (n) => Math.round(n * 100) / 100;
+
+// Moka ticket logic (per-selection, NOT all-or-nothing accumulator).
+// Each selection is settled on its own: WON -> stake×odds, LOST -> 0, VOID -> refund.
+// Ticket stake is the stake PER selection, so Total Stake = stake × selections.
 export function computeTicket(t) {
-  const active = t.legs.filter((l) => l.status !== "void");
-  const totalOdds = active.reduce((p, l) => p * (Number(l.odds) || 1), 1);
-  const potentialReturn = t.stake * totalOdds;
-  const anyLost = t.legs.some((l) => l.status === "lost");
-  const anyPending = t.legs.some((l) => l.status === "pending");
-  let status = "pending";
-  if (anyLost) status = "lost";
-  else if (!anyPending) status = active.length ? "won" : "void";
-  const profit =
-    status === "won" ? potentialReturn - t.stake : status === "lost" ? -t.stake : status === "void" ? 0 : null;
+  const legs = t.legs || [];
+  const stakePer = Number(t.stake) || 0;
+  const counted = legs.filter((l) => l.status !== "void");     // void = removed/cancelled
+  const won = counted.filter((l) => l.status === "won");
+  const lost = counted.filter((l) => l.status === "lost");
+  const pending = counted.filter((l) => l.status === "pending");
+  const total = counted.length;
+  const decided = won.length + lost.length;
+
+  const totalStake = stakePer * total;
+  const totalReturn = won.reduce((s, l) => s + stakePer * (Number(l.odds) || 0), 0);
+  const settledStake = decided * stakePer;
+  // Realized P/L on the selections that have already settled.
+  const profit = decided === 0 ? null : totalReturn - settledStake;
+  // Potential return if all current selections win (for the still-active view).
+  const potentialReturn = counted.reduce((s, l) => s + stakePer * (Number(l.odds) || 0), 0);
+
+  const status = pending.length > 0 ? "pending" : total === 0 ? "void" : "settled";
   return {
-    totalOdds: Math.round(totalOdds * 100) / 100,
-    potentialReturn: Math.round(potentialReturn * 100) / 100,
+    total,
+    wonCount: won.length,
+    lostCount: lost.length,
+    pendingCount: pending.length,
+    progress: `${won.length}/${total}`,          // e.g. 9/10 — never all-or-nothing
+    totalStake: _r2(totalStake),
+    totalReturn: _r2(totalReturn),
+    potentialReturn: _r2(potentialReturn),
+    profit: profit == null ? null : _r2(profit),
     status,
-    profit: profit == null ? null : Math.round(profit * 100) / 100,
   };
 }
 
@@ -182,6 +200,8 @@ export function PortfolioProvider({ children }) {
       const next = [...prev, {
         matchId: leg.matchId, home: leg.home, away: leg.away, league: leg.league,
         pick: leg.pick, pickName: leg.pickName, odds: Number(leg.odds) || 0, bookmaker: leg.bookmaker || "",
+        // Match start time — Portfolio dates performance by KICKOFF, not settle time (#8).
+        kickoff: leg.kickoff || leg.commence_time || null,
       }];
       try { localStorage.setItem(SLIP_KEY, JSON.stringify(next)); } catch {}
       return next;

@@ -54,6 +54,15 @@ analytics_router = make_analytics_router(db, current_user_optional)
 access_router = make_access_router(current_user_optional)
 
 
+@app.get("/ping")
+async def ping():
+    """Ultra-light keep-alive target for an EXTERNAL uptime pinger (cron-job.org /
+    UptimeRobot / Render Cron). Does NO DB / API / prediction work — it only keeps
+    a warm Render instance from idling. It cannot wake an already-sleeping free
+    instance; that needs an external scheduler hitting this on a ~10-14min cadence."""
+    return {"ok": True}
+
+
 @app.get("/health")
 async def health_check():
     """Reliability health check that actually tests dependencies (#9).
@@ -586,7 +595,7 @@ _RL_WINDOW = 60
 _RL_MAX = 60
 _rl_hits: dict = defaultdict(list)
 # Exempt uptime checks and the Stripe webhook (signed, may burst) from limiting.
-_RL_EXEMPT = ("/health", "/api/webhook/stripe")
+_RL_EXEMPT = ("/health", "/ping", "/api/webhook/stripe")
 
 # Reject requests whose params carry classic SQL-injection tokens. The DB layer
 # already uses parameterized queries, so this is defense-in-depth, kept narrow to
