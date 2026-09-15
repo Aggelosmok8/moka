@@ -1,5 +1,13 @@
 # Moka — PRD / Working Notes
 
+## 2026-06 — BUGFIX: per-user Portfolio isolation (cross-account leak) [DONE, tested]
+- **Symptom**: a logged-in user saw bets/tickets played by a DIFFERENT (test) user on the same browser.
+- **Root cause (client-side)**: portfolio lived in globally-keyed localStorage (`moka_portfolio_bets`/`moka_tickets`/`moka_bet_slip`). On login, if the new user's server copy was empty, the previous user's leftover localStorage was PUSHED into the new account and shown. Backend `/api/me/portfolio` was already correctly per-`user_id`.
+- **Fix** (`frontend/src/contexts/PortfolioContext.jsx`): added `OWNER_KEY='moka_portfolio_owner'`. On login, local data is claimed only if owner is null/"guest"/current `user_id`; otherwise it's discarded before anything renders (never pushed to remote). Added `_wipeLocal()` on logout (user set→null) to clear the previous user's footprint.
+- **Also** (`frontend/src/pages/PortfolioPage.jsx`): "Clear All" now resets BOTH bets and tickets behind a confirm, shown on both tabs — lets a user wipe any pre-existing (previously contaminated) server data in one click.
+- **Verified**: testing agent iteration_8 — 5/5 PASS, 100%. Cross-user isolation confirmed via token swap + reload; free 5-bet limit regression intact. (Minor: rapid PUT /api/me/portfolio can 429; not a blocker.)
+
+
 ## 2026-06 — Greek-market odds provider (odds-api.io) [READY, key pending]
 - **Why**: API-Football & The Odds API do NOT return Greece-licensed books (Stoiximan/Novibet/Pamestoixima). Added odds-api.io as an additive provider.
 - **New module** `backend/odds_api_io.py`: fetches Match-result (ML) odds for Greek books, exposes them in the existing entry schema `{bookmaker, odds:{home,draw,away}}`. Endpoints used: `/events?sport=football&status=pending` (1 call) + `/odds/multi` (batches of 10, ≤30 books). Base `https://api.odds-api.io/v3`, auth via `?apiKey=`. Cached 12h, capped 100 events → free-tier safe (100 req/hr, 500/day).

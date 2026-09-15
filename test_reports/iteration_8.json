@@ -1,0 +1,26 @@
+{
+  "summary": "Focused frontend regression on cross-user Portfolio isolation (bug fix verification). All 5 scenarios in the review request PASS. User A's distinctive bet (ZZZ_USER_A_SPECIAL_TEAM) is correctly hidden when switching to User B on the same browser (localStorage token swap + reload). LocalStorage keys moka_portfolio_bets/moka_tickets are wiped when the owner-guard detects a different user_id, and moka_portfolio_owner is rewritten to the current user. Returning to User A still shows only A's data. Clear All (behind window.confirm) resets both bets and tickets; empty state persists across reload (server sync verified). Free-user 5-bet limit regression intact: after seeding 7 bets for user B, UI shows only 5 (indexes 0-4) plus the 'YOUR FREE PORTFOLIO INCLUDES YOUR LATEST 5 MATCHES' upgrade hint.",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "PUT /api/me/portfolio", "issue": "Aggressive rate limiting (429) triggered after ~5-6 rapid PUTs; may impact heavy UI users but not a blocker for isolation fix. Recovered after ~30s."}
+  ]},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "PortfolioContext.jsx owner-guard implementation (lines 347-408) is correct: uses user_id||email as meId, discards local state when owner!==meId before showing anything, and only claims data when owner is null/guest/self.",
+    "_wipeLocal on logout transition (prevUserRef !== null -> null) covers the second half of the bug (leftover data after logout).",
+    "Consider also removing moka_bet_slip on owner mismatch — currently SLIP_KEY is removed only inside _wipeLocal (logout) and in the mismatch branch it IS removed too (line 387). Confirmed OK."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "User A (Pro/admin): moka_session_token=test-pro-monthly-token; User B (Free): moka_session_token=test-free-token",
+  "seed_data_creation": "Seeded distinct bet {home: ZZZ_USER_A_SPECIAL_TEAM} for User A and 7 sequential bets (TeamZ0A..TeamZ6A) for User B via PUT /api/me/portfolio. Cleared User A and User B server portfolios via PUT empty during the run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Isolation bug fix verified end-to-end. Portfolio owner-guard (moka_portfolio_owner) working. Rate-limit 429 on rapid /api/me/portfolio PUTs — add small delays or bulk seed via a single PUT. Test data may still be present on user B server portfolio (7 bets TeamZ*). If cleanup is desired, PUT {bets:[],tickets:[]} for both tokens.",
+  "rca of the issue": "Original: portfolio localStorage was keyed globally per-browser, not per-user, so on token switch the new user's context inherited the previous user's bets. Fix: moka_portfolio_owner key stores the last owner; on user change, if owner!==currentUserId the local caches are cleared before any remote merge, and on logout _wipeLocal empties everything. Verified via token swap + reload: previous user's distinctive bet no longer appears; localStorage bets/tickets are null after switch."
+}
