@@ -47,6 +47,9 @@ class User(BaseModel):
 
 def _is_pro_now(user_doc: dict) -> bool:
     doc = user_doc or {}
+    # Admins (email allowlist) always have full Pro access.
+    if (doc.get("email") or "").strip().lower() in ADMIN_EMAILS:
+        return True
     sub = doc.get("subscription_status")
     if sub == "active":
         return True
@@ -69,6 +72,9 @@ def _effective_status(user_doc: dict) -> tuple[str, int]:
     effective_status in: active | trial | expired | free
     """
     doc = user_doc or {}
+    # Admins (email allowlist) are shown as active Pro.
+    if (doc.get("email") or "").strip().lower() in ADMIN_EMAILS:
+        return "active", 0
     if doc.get("subscription_status") == "active":
         return "active", 0
     trial_end = doc.get("trial_end_date") or doc.get("pro_until")
