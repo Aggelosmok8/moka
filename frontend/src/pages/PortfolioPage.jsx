@@ -361,7 +361,7 @@ function TicketsView({ isPro }) {
 }
 
 export default function PortfolioPage() {
-  const { bets, settle, remove, clear, slipCount, autoSettle, clearNewlySettled, tickets } = usePortfolio();
+  const { bets, settle, remove, clear, clearTickets, slipCount, autoSettle, clearNewlySettled, tickets } = usePortfolio();
   const { role } = useEntitlements();
   const isPro = role === "pro";
   const [filter, setFilter] = useState("all");
@@ -447,8 +447,8 @@ export default function PortfolioPage() {
             <button onClick={refresh} disabled={settling} data-testid="portfolio-refresh" className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-300 hover:text-[#39FF14] border border-white/10 rounded-md px-3 py-1.5 disabled:opacity-50">
               {settling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} Refresh results
             </button>
-            {tab === "bets" && bets.length > 0 && (
-              <button onClick={clear} data-testid="portfolio-clear" className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-400 hover:text-[#FF3B30] border border-white/10 rounded-md px-3 py-1.5">
+            {(bets.length > 0 || tickets.length > 0) && (
+              <button onClick={() => { if (window.confirm("Clear ALL your bets and tickets? This cannot be undone.")) { clear(); clearTickets(); } }} data-testid="portfolio-clear" className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-400 hover:text-[#FF3B30] border border-white/10 rounded-md px-3 py-1.5">
                 <Trash2 className="w-3.5 h-3.5" /> Clear All
               </button>
             )}

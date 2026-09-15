@@ -6,6 +6,7 @@ import { fetchResults } from "../lib/catalogApi";
 const KEY = "moka_portfolio_bets";
 const SLIP_KEY = "moka_bet_slip";
 const TICKETS_KEY = "moka_tickets";
+const OWNER_KEY = "moka_portfolio_owner";  // who the local data belongs to (userId | "guest")
 const Ctx = createContext(null);
 
 const uid = () => {
@@ -340,14 +341,52 @@ export function PortfolioProvider({ children }) {
 
   // --- Cloud sync (logged-in users) ------------------------------------------
   // Guests use localStorage only. When a user logs in, we pull their server copy
-  // (source of truth); if the server is empty we push the local data up. After
-  // that, every change is debounced-saved to Supabase via the backend.
+  // (source of truth). CRITICAL (per-user isolation): local data is only claimed
+  // into an account if it already belongs to THIS user or to a guest session —
+  // never data left behind by a DIFFERENT user on the same browser.
   const { user } = useAuth() || {};
   const syncedRef = useRef(false);
+  const prevUserRef = useRef(undefined);
+
+  const _wipeLocal = useCallback(() => {
+    setBets([]); setTickets([]); setSlip([]);
+    try {
+      localStorage.removeItem(KEY);
+      localStorage.removeItem(TICKETS_KEY);
+      localStorage.removeItem(SLIP_KEY);
+      localStorage.removeItem("moka_newly_settled");
+      localStorage.removeItem(OWNER_KEY);
+    } catch {}
+    setNewlySettled(0);
+  }, []);
+
+  // Detect logout (had a user -> now null): clear this user's footprint so the
+  // next person on this browser starts from a clean slate.
+  useEffect(() => {
+    const prevId = prevUserRef.current;
+    const curId = user?.user_id || user?.email || null;
+    if (prevId && !curId) _wipeLocal();
+    prevUserRef.current = curId;
+  }, [user, _wipeLocal]);
 
   useEffect(() => {
     if (!user) { syncedRef.current = false; return; }
     let active = true;
+    const meId = user.user_id || user.email;
+    const owner = (() => { try { return localStorage.getItem(OWNER_KEY); } catch { return null; } })();
+    // Local data is claimable only if it's already ours or from a guest session.
+    const claimable = !owner || owner === "guest" || owner === meId;
+    const localBets = claimable ? bets : [];
+    const localTickets = claimable ? tickets : [];
+    if (!claimable) {
+      // Stale data from a different user — discard before showing anything.
+      setBets([]); setTickets([]); setSlip([]);
+      try {
+        localStorage.removeItem(KEY);
+        localStorage.removeItem(TICKETS_KEY);
+        localStorage.removeItem(SLIP_KEY);
+      } catch {}
+    }
     getPortfolioRemote()
       .then((remote) => {
         if (!active) return;
@@ -356,12 +395,15 @@ export function PortfolioProvider({ children }) {
         if (remoteBets.length || remoteTickets.length) {
           setBets(remoteBets); try { localStorage.setItem(KEY, JSON.stringify(remoteBets)); } catch {}
           setTickets(remoteTickets); try { localStorage.setItem(TICKETS_KEY, JSON.stringify(remoteTickets)); } catch {}
-        } else if (bets.length || tickets.length) {
-          putPortfolioRemote({ bets, tickets }).catch(() => {});
+        } else if (localBets.length || localTickets.length) {
+          setBets(localBets); try { localStorage.setItem(KEY, JSON.stringify(localBets)); } catch {}
+          setTickets(localTickets); try { localStorage.setItem(TICKETS_KEY, JSON.stringify(localTickets)); } catch {}
+          putPortfolioRemote({ bets: localBets, tickets: localTickets }).catch(() => {});
         }
+        try { localStorage.setItem(OWNER_KEY, meId); } catch {}
         syncedRef.current = true;
       })
-      .catch(() => { syncedRef.current = true; });
+      .catch(() => { try { localStorage.setItem(OWNER_KEY, meId); } catch {} syncedRef.current = true; });
     return () => { active = false; };
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
