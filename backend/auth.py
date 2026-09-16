@@ -251,7 +251,10 @@ def make_auth_router(db) -> APIRouter:
     @router.post("/logout")
     async def logout(request: Request):
         tok = await _resolve_token(request)
-        if tok:
+        # Never destroy the shared, long-lived QA/test tokens (test-*): they are
+        # reused across sessions, so deleting one would permanently lock that
+        # seeded test user out until re-seeded.
+        if tok and not tok.startswith("test-"):
             await db.user_sessions.delete_one({"session_token": tok})
         return {"ok": True}
 

@@ -1,5 +1,12 @@
 # Moka — PRD / Working Notes
 
+## 2026-06 — BUGFIX: test users can't log in + portfolio contamination (DB) [DONE, verified]
+- **Root cause 1 (logout destroyed shared tokens)**: `/api/auth/logout` did `delete_one({session_token})`. Test users share long-lived tokens (`test-*`). Logging out as a test user (via header menu) PERMANENTLY deleted that shared session → `test-pro-monthly-token`/`test-pro-annual-token` sessions were gone, so those users couldn't log in / switch. FIX (`backend/auth.py` logout): skip deletion when `tok.startswith("test-")`.
+- **Root cause 2 (server-side portfolio contamination)**: old client bug had pushed one browser's localStorage into multiple accounts — `test_free`/`test_pro_monthly`/`test_pro_annual` all held the SAME 17 tickets, and the personal account (`aggelosmok8@gmail.com`) held 4 foreign tickets. FIX: reset all `user_portfolios.data` to `{bets:[],tickets:[]}` (one-off cleanup) + re-ran `seed_test_users.py` to restore all 4 test users/sessions. Client owner-guard (previous fix) prevents recurrence.
+- **DB**: Supabase Postgres (DATABASE_URL), shared by preview AND production. Cleanup/reseed already applied to that DB. Verified: all 4 test tokens resolve, portfolios empty, logout preserves test tokens.
+- **⚠️ Redeploy needed**: the logout guard + client owner-guard are code changes — production keeps the old buggy behavior until Save to GitHub + redeploy.
+
+
 ## 2026-06 — BUGFIX: per-user Portfolio isolation (cross-account leak) [DONE, tested]
 - **Symptom**: a logged-in user saw bets/tickets played by a DIFFERENT (test) user on the same browser.
 - **Root cause (client-side)**: portfolio lived in globally-keyed localStorage (`moka_portfolio_bets`/`moka_tickets`/`moka_bet_slip`). On login, if the new user's server copy was empty, the previous user's leftover localStorage was PUSHED into the new account and shown. Backend `/api/me/portfolio` was already correctly per-`user_id`.
