@@ -475,3 +475,10 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - #13 Greek bookmakers: added stoiximan, novibet, fonbet, pamestoixima to backend APPROVED_BOOKMAKERS allowlist. NOTE: API-Football (current provider) generally does NOT return Greek-only books (Pamestoixima/Fonbet/Novibet); they'll appear only if the provider actually returns them — not fabricated.
 - Already done prior (verified): #10 per-match graph, #14 slip IN SLIP sync, #15/#16 filter+scroll memory, #17 /ping keep-alive, #18 slip state.
 - Files: PortfolioPage.jsx, PortfolioContext.jsx (prior), Header.jsx, sportsCatalog.js, LeaguesPage.jsx, apifootball.py, public/lion-logo.png.
+
+## 2026-06 Targeted UI fixes
+- Top nav: removed LEAGUES & TEAMS tabs (Header.jsx); still reachable via Sports card links.
+- Sports -> Football: removed league-name chip list (league data/functionality untouched).
+- Sports -> Basketball: rendered inactive with "COMING SOON".
+- News: removed Greek-articles-first prioritisation in backend/src/routes/news.py (default feed order for lang!=el; lang=el feed unchanged).
+- Verified: vite build passes, /sports screenshot confirms all four changes.

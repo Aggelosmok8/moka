@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Activity, Flame, Trophy, BarChart3, Search, Tag, User, LineChart, Users, Wallet, Star, Dribbble, Menu, X, Newspaper } from "lucide-react";
+import { Activity, Flame, BarChart3, Search, Tag, User, LineChart, Wallet, Star, Dribbble, Menu, X, Newspaper } from "lucide-react";
 import LiveStatusPill from "./LiveStatusPill";
 import SearchPalette from "./SearchPalette";
 import UserMenu from "./UserMenu";
@@ -35,8 +35,6 @@ const NavLink = ({ to, label, icon: Icon, active, testId, badge }) => (
 const NAV_ITEMS = [
   { to: "/", label: "Home", icon: Activity, testId: "nav-home", isActive: (p) => p === "/" },
   { to: "/matches", label: "Matches", icon: Flame, testId: "nav-matches", isActive: (p) => p.startsWith("/matches") || p.startsWith("/analysis") || p.startsWith("/value") },
-  { to: "/leagues", label: "Leagues", icon: Trophy, testId: "nav-leagues", isActive: (p) => p.startsWith("/leagues") },
-  { to: "/teams", label: "Teams", icon: Users, testId: "nav-teams", isActive: (p) => p.startsWith("/teams") || p.startsWith("/team/") },
   { to: "/sports", label: "Sports", icon: Dribbble, testId: "nav-sports", isActive: (p) => p.startsWith("/sports") },
   { to: "/charts", label: "Watchlist", icon: Star, testId: "nav-watchlist", isActive: (p) => p.startsWith("/charts"), badge: "chart" },
   { to: "/portfolio", label: "Portfolio", icon: Wallet, testId: "nav-portfolio", isActive: (p) => p.startsWith("/portfolio"), badge: "pending" },

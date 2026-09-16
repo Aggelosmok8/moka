@@ -21,11 +21,12 @@ export default function SportsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {SPORTS.map((s) => {
             const leagues = LEAGUE_CATALOG.filter((l) => l.sport === s.key);
+            const active = s.available && s.key !== "basketball";
             return (
               <div
                 key={s.key}
                 data-testid={`sport-card-${s.key}`}
-                className={`relative rounded-2xl border p-6 overflow-hidden ${s.available ? "bg-[#161b22] border-[#30363d]" : "bg-[#0f1319] border-white/5"}`}
+                className={`relative rounded-2xl border p-6 overflow-hidden ${active ? "bg-[#161b22] border-[#30363d]" : "bg-[#0f1319] border-white/5"}`}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -33,26 +34,19 @@ export default function SportsPage() {
                     <div>
                       <h2 className="font-display font-black uppercase tracking-tight text-2xl text-white">{s.label}</h2>
                       <div className="text-xs text-zinc-500">
-                        {s.available ? `${leagues.length} leagues available` : "Coming soon"}
+                        {active ? `${leagues.length} leagues available` : "COMING SOON"}
                       </div>
                     </div>
                   </div>
-                  {!s.available && (
+                  {!active && (
                     <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-1 rounded-full bg-[#FFD60A]/15 text-[#FFD60A] border border-[#FFD60A]/40">
                       <Clock className="w-3 h-3" /> Soon
                     </span>
                   )}
                 </div>
 
-                {s.available ? (
+                {active ? (
                   <>
-                    <div className="flex flex-wrap gap-2 mt-5">
-                      {leagues.map((l) => (
-                        <span key={l.id} className="text-xs font-semibold text-zinc-300 bg-white/5 border border-white/10 rounded-full px-3 py-1">
-                          {l.name}
-                        </span>
-                      ))}
-                    </div>
                     <div className="grid grid-cols-3 gap-2 mt-6">
                       {LINKS.map((lnk) => (
                         <Link key={lnk.to} to={lnk.to} data-testid={`sport-${s.key}-${lnk.label.toLowerCase()}`}
@@ -67,8 +61,8 @@ export default function SportsPage() {
                     </Link>
                   </>
                 ) : (
-                  <p className="text-sm text-zinc-500 mt-5">
-                    {s.label} coverage is on the way — matches, odds and team data will appear here soon.
+                  <p className="text-sm text-zinc-500 mt-5" data-testid={`sport-${s.key}-coming-soon`}>
+                    COMING SOON — {s.label} coverage is on the way.
                   </p>
                 )}
               </div>
