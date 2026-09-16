@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { fetchStatus } from "../lib/api";
-import { RefreshCw, Wifi, WifiOff } from "lucide-react";
+import { WifiOff } from "lucide-react";
 
 function timeAgo(iso) {
   if (!iso) return "never";
@@ -49,30 +49,18 @@ export const LiveStatusPill = ({ onRefresh }) => {
   return (
     <div
       data-testid="live-status-pill"
-      className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/10 bg-white/[0.02] text-xs whitespace-nowrap shrink-0"
+      title={live ? `Live data · updated ${timeAgo(lastUpdate)}` : "Mock data"}
+      className="hidden md:flex items-center gap-1.5 whitespace-nowrap shrink-0"
     >
       {live ? (
         <span className="flex items-center gap-1.5 text-[#39FF14] font-bold uppercase tracking-wider text-[10px]">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#39FF14] live-dot" />
-          <Wifi className="w-3 h-3" />
-          Live
+          <span className="w-2 h-2 rounded-full bg-[#39FF14] live-dot" /> Live
         </span>
       ) : (
         <span className="flex items-center gap-1.5 text-zinc-500 font-bold uppercase tracking-wider text-[10px]">
           <WifiOff className="w-3 h-3" /> Mock
         </span>
       )}
-      <span className="text-zinc-500 hidden lg:inline">·</span>
-      <span className="text-zinc-400 font-medium hidden lg:inline">{timeAgo(lastUpdate)}</span>
-      <button
-        onClick={handleRefresh}
-        disabled={refreshing}
-        data-testid="refresh-btn"
-        className="ml-1 p-1 rounded hover:bg-white/5 transition-colors text-zinc-400 hover:text-white"
-        title="Refresh live data"
-      >
-        <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
-      </button>
     </div>
   );
 };

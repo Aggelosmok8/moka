@@ -482,3 +482,10 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - Sports -> Basketball: rendered inactive with "COMING SOON".
 - News: removed Greek-articles-first prioritisation in backend/src/routes/news.py (default feed order for lang!=el; lang=el feed unchanged).
 - Verified: vite build passes, /sports screenshot confirms all four changes.
+
+## 2026-06 Header/Account/News batch
+- Header: Account tab removed; Search is now an icon-only magnifier after Pricing; LIVE pill reduced to a blinking dot + LIVE (no timestamp/refresh); nav centered (no overlap with logo), no horizontal scroll.
+- UserMenu (round avatar) = "MY ACCOUNT": email, "Pro active until <date>" (or Upgrade to Pro), Account details, My Portfolio, Sign out, Delete account (POST /api/auth/delete-account, existing endpoint).
+- News: Greek articles prioritised again (news.py). Fixed freenews_gr: provider country feed is general news, so a Greek sports query ("ποδόσφαιρο" default) is now always sent — previously 0 Greek articles were returned.
+- Portfolio data-loss guard: if GET /me/portfolio fails, syncedRef stays false so an empty local state can never overwrite the saved server copy.
+- NOTE: tickets lost by the owner were removed during the earlier cross-user contamination cleanup; not recoverable.

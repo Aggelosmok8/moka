@@ -98,9 +98,9 @@ async def freenews_gr(query: str = "", size: int = 12) -> dict:
     # Fetch the latest Greek feed and filter down to sports (a sports-biased
     # query mostly surfaces low-value tag pages, so we filter instead).
     fetch_size = min(max(size * 8, 60), 100)
-    params = {"country": "gr", "size": fetch_size}
-    if query and query.strip():
-        params["q"] = query.strip()
+    # The provider's country feed is general news; a sports query is required to
+    # surface Greek sports articles (default: football).
+    params = {"country": "gr", "size": fetch_size, "q": (query or "").strip() or "ποδόσφαιρο"}
     out = {"articles": [], "meta": {"source": "freenewsapi", "lang": "el"}}
     try:
         async with httpx.AsyncClient(timeout=15) as client:

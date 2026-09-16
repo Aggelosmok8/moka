@@ -39,7 +39,6 @@ const NAV_ITEMS = [
   { to: "/portfolio", label: "Portfolio", icon: Wallet, testId: "nav-portfolio", isActive: (p) => p.startsWith("/portfolio"), badge: "pending" },
   { to: "/news", label: "News", icon: Newspaper, testId: "nav-news", isActive: (p) => p.startsWith("/news") },
   { to: "/pricing", label: "Pricing", icon: Tag, testId: "nav-pricing", isActive: (p) => p.startsWith("/pricing") },
-  { to: "/account", label: "Account", icon: User, testId: "nav-account", isActive: (p) => p.startsWith("/account") },
 ];
 
 export const Header = () => {
@@ -84,6 +83,15 @@ export const Header = () => {
             <NavLink key={it.to} to={it.to} label={navLabel(it.label)} icon={it.icon} testId={it.testId}
               active={it.isActive(loc.pathname)} badge={badgeFor(it.badge)} />
           ))}
+          <button
+            data-testid="search-button"
+            onClick={() => setSearchOpen(true)}
+            title="Search"
+            aria-label="Search"
+            className="ml-1 flex items-center justify-center w-9 h-9 rounded-md text-zinc-400 hover:text-white hover:bg-white/5 transition-colors"
+          >
+            <Search className="w-4 h-4" />
+          </button>
         </nav>
 
         <div className="flex items-center gap-2 shrink-0">
@@ -96,13 +104,12 @@ export const Header = () => {
             {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
           <button
-            data-testid="search-button"
+            data-testid="search-button-mobile"
             onClick={() => setSearchOpen(true)}
-            className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-zinc-400 border border-white/10 hover:border-white/20 hover:text-white transition-colors"
+            aria-label="Search"
+            className="lg:hidden flex items-center justify-center w-9 h-9 rounded-md text-zinc-400 hover:text-white hover:bg-white/5 transition-colors"
           >
             <Search className="w-4 h-4" />
-            <span className="hidden lg:inline">Search</span>
-            <kbd className="ml-2 px-1.5 py-0.5 text-[10px] font-mono bg-white/5 rounded border border-white/10">/</kbd>
           </button>
           <LiveStatusPill />
           <LangToggle />

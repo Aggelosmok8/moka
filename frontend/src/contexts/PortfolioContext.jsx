@@ -403,7 +403,9 @@ export function PortfolioProvider({ children }) {
         try { localStorage.setItem(OWNER_KEY, meId); } catch {}
         syncedRef.current = true;
       })
-      .catch(() => { try { localStorage.setItem(OWNER_KEY, meId); } catch {} syncedRef.current = true; });
+      // If the server copy can't be read, DO NOT enable upload — otherwise an
+      // empty local state would overwrite (and lose) the user's saved tickets.
+      .catch(() => { syncedRef.current = false; });
     return () => { active = false; };
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 

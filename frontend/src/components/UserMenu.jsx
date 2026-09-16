@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { LogOut, User as UserIcon, Sparkles } from "lucide-react";
+import { api } from "../lib/api";
+import { LogOut, User as UserIcon, Sparkles, Trash2, Wallet } from "lucide-react";
 
 // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
 const startLogin = () => {
@@ -12,6 +13,18 @@ const startLogin = () => {
 export const UserMenu = () => {
   const { user, loading, logout } = useAuth();
   const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const onDelete = async () => {
+    if (!window.confirm("Delete your account and all your data? This cannot be undone.")) return;
+    setBusy(true);
+    try {
+      await api.post("/auth/delete-account");
+      logout();
+    } finally {
+      setBusy(false);
+    }
+  };
 
   if (loading) {
     return <div className="w-8 h-8 rounded-full bg-white/5 animate-pulse" data-testid="auth-loading" />;
@@ -61,8 +74,8 @@ export const UserMenu = () => {
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div className="absolute right-0 mt-2 w-64 surface rounded-lg p-3 z-50 shadow-2xl" data-testid="user-menu">
             <div className="px-2 py-1.5 mb-1">
-              <div className="font-display font-bold text-white truncate">{user.name}</div>
-              <div className="text-xs text-zinc-500 truncate">{user.email}</div>
+              <div className="font-display font-black uppercase tracking-tight text-white">My Account</div>
+              <div className="text-xs text-zinc-500 truncate mt-0.5">{user.email}</div>
             </div>
             <div className="border-t border-white/5 my-1.5" />
             {!user.is_pro ? (
@@ -75,17 +88,42 @@ export const UserMenu = () => {
                 <Sparkles className="w-4 h-4" /> Upgrade to Pro
               </Link>
             ) : (
-              <div className="flex items-center gap-2 px-2 py-2 text-xs text-zinc-400">
+              <div className="flex items-center gap-2 px-2 py-2 text-xs text-zinc-400" data-testid="pro-status">
                 <Sparkles className="w-4 h-4 text-[#39FF14]" />
                 Pro active{user.pro_until ? ` until ${new Date(user.pro_until).toLocaleDateString()}` : ""}
               </div>
             )}
+            <Link
+              to="/account"
+              onClick={() => setOpen(false)}
+              data-testid="account-details-link"
+              className="flex items-center gap-2 px-2 py-2 rounded text-sm text-zinc-300 hover:bg-white/5"
+            >
+              <UserIcon className="w-4 h-4" /> Account details
+            </Link>
+            <Link
+              to="/portfolio"
+              onClick={() => setOpen(false)}
+              data-testid="menu-portfolio-link"
+              className="flex items-center gap-2 px-2 py-2 rounded text-sm text-zinc-300 hover:bg-white/5"
+            >
+              <Wallet className="w-4 h-4" /> My Portfolio
+            </Link>
             <button
               onClick={() => { setOpen(false); logout(); }}
               data-testid="logout-btn"
               className="w-full text-left flex items-center gap-2 px-2 py-2 rounded text-sm text-zinc-300 hover:bg-white/5"
             >
               <LogOut className="w-4 h-4" /> Sign out
+            </button>
+            <div className="border-t border-white/5 my-1.5" />
+            <button
+              onClick={onDelete}
+              disabled={busy}
+              data-testid="delete-account-btn"
+              className="w-full text-left flex items-center gap-2 px-2 py-2 rounded text-sm text-[#FF3B30] hover:bg-[#FF3B30]/10 disabled:opacity-50"
+            >
+              <Trash2 className="w-4 h-4" /> {busy ? "Deleting…" : "Delete account"}
             </button>
           </div>
         </>
