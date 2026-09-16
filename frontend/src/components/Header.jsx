@@ -16,7 +16,7 @@ const NavLink = ({ to, label, icon: Icon, active, testId, badge }) => (
   <Link
     to={to}
     data-testid={testId}
-    className={`relative flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-semibold transition-colors duration-200 ${
+    className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-semibold whitespace-nowrap transition-colors duration-200 ${
       active
         ? "text-[#39FF14] bg-[#39FF14]/10"
         : "text-zinc-400 hover:text-white hover:bg-white/5"
@@ -71,22 +71,22 @@ export const Header = () => {
       data-lang={lang}
       className="sticky top-0 z-50 backdrop-blur-xl bg-[#0A0A0A]/75 border-b border-white/10"
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        <Link to="/" data-testid="logo-link" data-no-translate className="flex items-center gap-2.5 group">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+        <Link to="/" data-testid="logo-link" data-no-translate className="flex items-center gap-2.5 group shrink-0">
           <img src="/lion-logo.png" alt="LION.STATS" className="w-9 h-9 rounded-lg object-contain group-hover:scale-105 transition-transform" />
           <div className="font-display font-black uppercase tracking-tight text-xl text-white">
             LION<span className="text-[#39FF14]">.STATS</span>
           </div>
         </Link>
 
-        <nav className="hidden lg:flex items-center gap-0.5">
+        <nav className="hidden lg:flex items-center justify-center gap-0.5 flex-1 min-w-0">
           {NAV_ITEMS.map((it) => (
             <NavLink key={it.to} to={it.to} label={navLabel(it.label)} icon={it.icon} testId={it.testId}
               active={it.isActive(loc.pathname)} badge={badgeFor(it.badge)} />
           ))}
         </nav>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             data-testid="mobile-menu-toggle"
             onClick={() => setMenuOpen((v) => !v)}

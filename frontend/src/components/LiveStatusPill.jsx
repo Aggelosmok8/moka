@@ -49,7 +49,7 @@ export const LiveStatusPill = ({ onRefresh }) => {
   return (
     <div
       data-testid="live-status-pill"
-      className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/10 bg-white/[0.02] text-xs"
+      className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/10 bg-white/[0.02] text-xs whitespace-nowrap shrink-0"
     >
       {live ? (
         <span className="flex items-center gap-1.5 text-[#39FF14] font-bold uppercase tracking-wider text-[10px]">
