@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Users, User, Sparkles, Loader2, GitCompare } from "lucide-react";
+import { Users, User, Sparkles, Loader2, GitCompare, Languages } from "lucide-react";
 import {
   Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, Legend,
@@ -7,6 +7,7 @@ import {
 import Header from "../components/Header";
 import { fetchTeams, fetchPlayers, fetchPlayer, fetchCompareAi } from "../lib/api";
 import { LEAGUE_CATALOG } from "../lib/sportsCatalog";
+import { useLang } from "../contexts/LanguageContext";
 
 const FOOTBALL_LEAGUES = LEAGUE_CATALOG.filter((l) => l.sport === "football" && !l.coming_soon);
 const A_COLOR = "#39FF14";
@@ -105,6 +106,9 @@ export default function ComparePage() {
   const [pA, setPA] = useState(null);
   const [pB, setPB] = useState(null);
   const [ai, setAi] = useState({ text: null, busy: false });
+  const { lang } = useLang();
+  const [aiLang, setAiLang] = useState(lang);
+  useEffect(() => { setAiLang(lang); }, [lang]);
 
   // Player stats (lazy, only when a player is picked)
   useEffect(() => {
@@ -177,15 +181,22 @@ export default function ComparePage() {
     ];
   }, [ready, mode, A.team, B.team, pA, pB, nameA, nameB]);
 
-  const runAi = () => {
+  const runAi = (langOverride) => {
     if (!ready) return;
+    const l = langOverride || aiLang;
     setAi({ text: null, busy: true });
     const payload = mode === "teams"
-      ? { kind: "teams", a: { name: nameA, ...A.team }, b: { name: nameB, ...B.team } }
-      : { kind: "players", a: pA, b: pB };
+      ? { kind: "teams", lang: l, a: { name: nameA, ...A.team }, b: { name: nameB, ...B.team } }
+      : { kind: "players", lang: l, a: pA, b: pB };
     fetchCompareAi(payload)
-      .then((d) => setAi({ text: d.text || "AI verdict is unavailable right now.", busy: false }))
-      .catch(() => setAi({ text: "AI verdict is unavailable right now.", busy: false }));
+      .then((d) => setAi({ text: d.text || "LION Analysis is unavailable right now.", busy: false }))
+      .catch(() => setAi({ text: "LION Analysis is unavailable right now.", busy: false }));
+  };
+
+  const toggleLang = () => {
+    const next = aiLang === "el" ? "en" : "el";
+    setAiLang(next);
+    if (ai.text || ai.busy) runAi(next);
   };
 
   useEffect(() => { setAi({ text: null, busy: false }); }, [mode, A.teamId, B.teamId, A.playerId, B.playerId]);
@@ -280,18 +291,25 @@ export default function ComparePage() {
             <div className="rounded-2xl border border-[#39FF14]/25 bg-[#39FF14]/[0.04] p-6" data-testid="compare-ai">
               <div className="flex items-center justify-between gap-4 mb-3">
                 <div className="font-display font-black uppercase tracking-tight text-white flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-[#39FF14]" /> AI verdict
+                  <Sparkles className="w-5 h-5 text-[#39FF14]" /> LION Analysis
                 </div>
-                {!ai.text && (
-                  <button onClick={runAi} disabled={ai.busy} data-testid="compare-ai-btn"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#39FF14] text-black text-xs font-black uppercase tracking-wider disabled:opacity-60">
-                    {ai.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                    {ai.busy ? "Analysing…" : "Generate"}
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={toggleLang} data-testid="translate-compare-btn"
+                    title="Translate analysis"
+                    className="flex items-center gap-1 text-[11px] font-bold text-zinc-400 hover:text-[#39FF14] border border-white/10 hover:border-[#39FF14]/40 rounded-md px-2 py-1 transition-colors">
+                    <Languages className="w-3.5 h-3.5" /> {aiLang === "el" ? "EN" : "ΕΛ"}
                   </button>
-                )}
+                  {!ai.text && (
+                    <button onClick={() => runAi()} disabled={ai.busy} data-testid="compare-ai-btn"
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#39FF14] text-black text-xs font-black uppercase tracking-wider disabled:opacity-60">
+                      {ai.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                      {ai.busy ? "Analysing…" : "Generate"}
+                    </button>
+                  )}
+                </div>
               </div>
               <p className="text-zinc-300 text-sm leading-relaxed whitespace-pre-line">
-                {ai.text || (ai.busy ? "Reading the numbers…" : "Generate a short read on both sides — strengths, weaknesses and who the data favours.")}
+                {ai.text || (ai.busy ? "Reading the numbers…" : "Generate a short LION read on both sides — strengths, weaknesses and who the data favours.")}
               </p>
             </div>
           </div>

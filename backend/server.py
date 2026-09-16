@@ -281,11 +281,12 @@ async def compare_ai(payload: dict):
     import hashlib, json as _json
     import apifootball as af
     kind = "players" if str(payload.get("kind")) == "players" else "teams"
+    lang = "el" if str(payload.get("lang", "en")).lower() == "el" else "en"
     a, b = payload.get("a") or {}, payload.get("b") or {}
     if not a or not b:
         raise HTTPException(status_code=400, detail="Both sides are required")
     raw = _json.dumps({"kind": kind, "a": a, "b": b}, sort_keys=True, ensure_ascii=False)
-    ck = f"compare_ai_{hashlib.sha1(raw.encode()).hexdigest()[:14]}"
+    ck = f"compare_ai_{lang}_{hashlib.sha1(raw.encode()).hexdigest()[:14]}"
     cached = af._c_get(ck)
     if cached is not None:
         return {"text": cached, "cached": True}
@@ -302,6 +303,9 @@ async def compare_ai(payload: dict):
         "- Finish with one hedged sentence on who the data favours and in what role/context.\n"
         "- No headers, no bullet points, no jargon. Plain flowing text."
     )
+    if lang == "el":
+        system += ("\n- Write the ENTIRE text in natural, fluent Greek (Ελληνικά). "
+                   "Keep team names, player names and numbers as-is.")
     try:
         from openai import AsyncOpenAI
         client = AsyncOpenAI(api_key=api_key)
