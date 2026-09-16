@@ -8,6 +8,7 @@ import ValueCard, { LockedValueCard } from "../components/ValueCard";
 import { UpgradeButton } from "../components/Gating";
 import { useEntitlements } from "../hooks/useEntitlements";
 import { useLiveScores } from "../contexts/LiveScoresContext";
+import { LEAGUE_CATALOG } from "../lib/sportsCatalog";
 
 const VIEWS = {
   strong: { title: "Today's Best Opportunities", sub: "The strongest opportunities LION has identified today.", levels: ["HIGH"] },
@@ -94,11 +95,14 @@ export default function MatchesPage() {
     return entries.filter((e) => cfg.levels.includes(e.value?.valueLevel));
   }, [entries, cfg]);
 
+  // Every competition is always selectable (catalog), even if it has no match
+  // in the current window — plus anything present in the live/value lists.
   const leagues = useMemo(() => {
     const src = liveMode
       ? liveList.filter((m) => m.supported).map((m) => m.league)
       : entries.map((e) => e.match.leagueName);
-    return [...new Set(src.filter(Boolean))].sort();
+    const catalog = LEAGUE_CATALOG.filter((l) => l.sport === "football" && !l.coming_soon).map((l) => l.name);
+    return [...new Set([...catalog, ...src.filter(Boolean)])].sort();
   }, [entries, liveList, liveMode]);
 
   const filtered = useMemo(() => list.filter((e) => {

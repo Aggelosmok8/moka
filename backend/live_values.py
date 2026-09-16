@@ -34,11 +34,12 @@ LIVE_LEAGUES = [
     "eredivisie", "primeira", "championship", "superleague",
     "denmark", "scotland", "ucl", "uel", "uecl",
     "facup", "eflcup", "copadelrey", "coppaitalia", "dfbpokal", "coupedefrance", "greekcup",
+    "portugalcup", "knvbbeker", "scottishcup", "danishcup",
 ]
 
 STATS_TTL = 24 * 3600
 MATCHES_TTL = 2 * 3600  # pre-match value list changes slowly; long cache saves quota
-MAX_PER_LEAGUE = 6        # keep the real-data set reasonable
+MAX_PER_LEAGUE = 14      # full matchday per competition (was 6 -> matches were lost)
 _BUILD_CONCURRENCY = 6    # cap simultaneous league builds (API rate-limit safety)
 
 _cache: dict = {}
@@ -134,7 +135,7 @@ async def _build_one_league(slug: str) -> list:
         if dd and dd not in dates:
             dates.append(dd)
     try:
-        odds_map = await af.odds_for_dates(slug, dates[:2])
+        odds_map = await af.odds_for_dates(slug, dates[:3])
     except Exception as e:
         logger.warning("odds %s: %s", slug, e)
         odds_map = {}

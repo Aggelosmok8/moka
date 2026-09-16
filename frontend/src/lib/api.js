@@ -34,4 +34,7 @@ export const fetchStatus          = () => api.get("/status").then(r => r.data);
 export const refreshCache         = (scope = "all") => api.post(`/admin/refresh?scope=${scope}`).then(r => r.data);
 export const fetchLeagueDetail    = (slug) => api.get(`/leagues/${slug}`).then(r => r.data);
 export const getPortfolioRemote   = () => api.get("/me/portfolio").then(r => r.data);
+export const fetchPlayers         = (teamId) => api.get(`/teams/${teamId}/players`).then(r => r.data.players || []);
+export const fetchPlayer          = (id, teamId) => api.get(`/players/${id}`, { params: teamId ? { team: teamId } : {} }).then(r => r.data);
+export const fetchCompareAi       = (payload) => api.post("/compare/ai", payload, { timeout: 90000 }).then(r => r.data);
 export const putPortfolioRemote   = (data) => api.put("/me/portfolio", data).then(r => r.data);

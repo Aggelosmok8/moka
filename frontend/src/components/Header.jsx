@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Flame, BarChart3, Search, Tag, User, LineChart, Wallet, Star, Dribbble, Menu, X, Newspaper } from "lucide-react";
+import { Flame, BarChart3, Search, Tag, User, LineChart, Wallet, Star, Dribbble, Menu, X, Newspaper, GitCompare } from "lucide-react";
 import LiveStatusPill from "./LiveStatusPill";
 import SearchPalette from "./SearchPalette";
 import UserMenu from "./UserMenu";
@@ -39,6 +39,7 @@ const NAV_ITEMS = [
   { to: "/portfolio", label: "Portfolio", icon: Wallet, testId: "nav-portfolio", isActive: (p) => p.startsWith("/portfolio"), badge: "pending" },
   { to: "/news", label: "News", icon: Newspaper, testId: "nav-news", isActive: (p) => p.startsWith("/news") },
   { to: "/pricing", label: "Pricing", icon: Tag, testId: "nav-pricing", isActive: (p) => p.startsWith("/pricing") },
+  { to: "/compare", label: "Compare", icon: GitCompare, testId: "nav-compare", isActive: (p) => p.startsWith("/compare") },
 ];
 
 export const Header = () => {

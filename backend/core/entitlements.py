@@ -59,6 +59,10 @@ LEAGUE_CATALOG: List[League] = [
     League("dfbpokal", "DFB Pokal (Germany)", Sport.FOOTBALL),
     League("coupedefrance", "Coupe de France", Sport.FOOTBALL),
     League("greekcup", "Greek Cup", Sport.FOOTBALL),
+    League("portugalcup", "Taça de Portugal", Sport.FOOTBALL),
+    League("knvbbeker", "KNVB Beker (Netherlands)", Sport.FOOTBALL),
+    League("scottishcup", "Scottish Cup", Sport.FOOTBALL),
+    League("danishcup", "DBU Pokalen (Denmark)", Sport.FOOTBALL),
     League("nba", "NBA (USA)", Sport.BASKETBALL),
     League("euroleague", "EuroLeague", Sport.BASKETBALL),
 ]

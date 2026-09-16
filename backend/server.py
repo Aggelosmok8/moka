@@ -271,6 +271,54 @@ async def delete_account(user=Depends(current_user)):
     return {"deleted": True}
 
 
+@api_router.post("/compare/ai")
+async def compare_ai(payload: dict):
+    """Short AI verdict for a Compare (players or teams) card.
+
+    The numbers come from the frontend (already fetched from our own stats
+    endpoints); the model only narrates strengths/weaknesses. Cached by payload
+    hash so repeated comparisons cost nothing."""
+    import hashlib, json as _json
+    import apifootball as af
+    kind = "players" if str(payload.get("kind")) == "players" else "teams"
+    a, b = payload.get("a") or {}, payload.get("b") or {}
+    if not a or not b:
+        raise HTTPException(status_code=400, detail="Both sides are required")
+    raw = _json.dumps({"kind": kind, "a": a, "b": b}, sort_keys=True, ensure_ascii=False)
+    ck = f"compare_ai_{hashlib.sha1(raw.encode()).hexdigest()[:14]}"
+    cached = af._c_get(ck)
+    if cached is not None:
+        return {"text": cached, "cached": True}
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return {"text": None, "error": "no_key"}
+    system = (
+        f"You are LION, a football analyst. You receive statistics for TWO {kind} and "
+        "write a comparison of 70-110 words in plain English.\n"
+        "RULES:\n"
+        "- Use ONLY the numbers provided; never invent stats, injuries or transfers.\n"
+        "- For EACH side state one or two clear strengths AND one or two weaknesses, "
+        "based strictly on the numbers.\n"
+        "- Finish with one hedged sentence on who the data favours and in what role/context.\n"
+        "- No headers, no bullet points, no jargon. Plain flowing text."
+    )
+    try:
+        from openai import AsyncOpenAI
+        client = AsyncOpenAI(api_key=api_key)
+        resp = await client.chat.completions.create(
+            model=os.environ.get("OPENAI_MODEL", "gpt-5.6-luna"),
+            messages=[{"role": "system", "content": system},
+                      {"role": "user", "content": f"Data (JSON):\n{raw}"}],
+        )
+        text = (resp.choices[0].message.content or "").strip()
+    except Exception as e:
+        logger.warning("compare_ai failed: %s", e)
+        return {"text": None, "error": True}
+    if text:
+        af._c_set(ck, text, ttl=24 * 3600)
+    return {"text": text or None, "cached": False}
+
+
 @api_router.get("/teams")
 async def list_teams(league: Optional[str] = None, limit: Optional[int] = None):
     try:

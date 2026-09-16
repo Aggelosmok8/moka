@@ -76,7 +76,11 @@ CATALOG = {
     "coppaitalia":  {"name": "Coppa Italia (Italy)",     "sport": "football", "league_id": 137},
     "dfbpokal":     {"name": "DFB Pokal (Germany)",      "sport": "football", "league_id": 81},
     "coupedefrance":{"name": "Coupe de France",          "sport": "football", "league_id": 66},
-    "greekcup":     {"name": "Greek Cup",                "sport": "football", "league_id": 735},
+    "greekcup":     {"name": "Greek Cup",                "sport": "football", "league_id": 199},
+    "portugalcup":  {"name": "Taça de Portugal",         "sport": "football", "league_id": 96},
+    "knvbbeker":    {"name": "KNVB Beker (Netherlands)", "sport": "football", "league_id": 90},
+    "scottishcup":  {"name": "Scottish Cup",             "sport": "football", "league_id": 181},
+    "danishcup":    {"name": "DBU Pokalen (Denmark)",    "sport": "football", "league_id": 121},
     # Basketball
     "nba":          {"name": "NBA (USA)",                "sport": "basketball", "league_id": 12},
     "euroleague":   {"name": "EuroLeague",               "sport": "basketball", "league_id": 120},
