@@ -1,0 +1,24 @@
+{
+  "summary": "Iteration 9: full-stack verification of Olympiacos/UEL match preservation, expanded league catalog (portugalcup/knvbbeker/scottishcup/danishcup/greekcup-199), MAX_PER_LEAGUE=14, new /api/compare/ai endpoint, and the new Compare page (Teams + Players modes). 10/10 backend pytest cases pass (test_review_iter9.py). Frontend Matches, Compare, Sports, News and UserMenu all render and behave per spec. No functional regressions detected.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_review_iter9.py",
+    "/app/test_reports/pytest/iter9.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py /api/compare/ai defaults OPENAI_MODEL to 'gpt-5.6-luna' which is a non-standard model id — verify env override is set in production so calls don't 500-silent (currently returns {error:true} which is handled gracefully).",
+    "/api/teams silently returns [] for unknown league slug instead of 400/404 — acceptable but consider explicit validation for observability.",
+    "live_values._build_one_league skips fixtures with no odds; UCL currently has none priced so its filter option legitimately shows an empty state — matches spec.",
+    "Compare AI endpoint caches by SHA1(payload) for 24h — good; note that cache_key includes any client-side reordering of keys due to sort_keys=True, so stable."
+  ],
+  "updated_files": ["/app/backend/tests/test_review_iter9.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Pro Monthly: localStorage.moka_session_token=test-pro-monthly-token",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend regression file at /app/backend/tests/test_review_iter9.py covers: leagues catalog (new cups + greekcup id=199), MAX_PER_LEAGUE=14, Olympiakos vs Jagiellonia present in /api/value-matches (payload shape is {match:{home:{name},away:{name},leagueName}, value}), /api/teams for epl + portugalcup, /api/teams/{id}/players, /api/players/{id}?team=, and /api/compare/ai (400 without both sides, teams & players with text). Compare page selectors: compare-A-league/team/player, compare-B-league/team/player, compare-mode-players, compare-results, compare-stat-table, compare-radar, compare-bars, compare-pie, compare-ai-btn, compare-ai. Filter-league on Matches lists all 26 competitions including cups + UCL. Sports Football has no chip list, Basketball 'COMING SOON'. News shows Greek (.gr) articles first. UserMenu shows MY ACCOUNT, Pro active until <date>, Account details, My Portfolio, Sign out, Delete account. No horizontal scroll. Note: 'All Matches' tab hides the competition filter (by design).",
+  "rca of the issue": "N/A — no bugs found."
+}

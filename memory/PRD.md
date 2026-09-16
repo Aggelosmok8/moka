@@ -489,3 +489,10 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - News: Greek articles prioritised again (news.py). Fixed freenews_gr: provider country feed is general news, so a Greek sports query ("ποδόσφαιρο" default) is now always sent — previously 0 Greek articles were returned.
 - Portfolio data-loss guard: if GET /me/portfolio fails, syncedRef stays false so an empty local state can never overwrite the saved server copy.
 - NOTE: tickets lost by the owner were removed during the earlier cross-user contamination cleanup; not recoverable.
+
+## 2026-06 Matches coverage + Compare tab
+- Fixed lost matches: MAX_PER_LEAGUE 6 -> 14 and odds dates[:2] -> [:3] in live_values.py (Olympiakos Piraeus vs Jagiellonia now served; UEL 6 -> 14 fixtures).
+- Competitions filter on Matches now always lists every football competition from LEAGUE_CATALOG (UCL included even when no priced odds exist).
+- Cups added: Taça de Portugal (96), KNVB Beker (90), Scottish Cup (181), DBU Pokalen (121); Greek Cup id corrected 735 -> 199. Added in apifootball.CATALOG, core/entitlements.py, frontend sportsCatalog.js, live_values.LIVE_LEAGUES.
+- NEW /compare page + Compare nav tab: Teams or Players mode, league -> team (-> player) pickers per side, stat table, radar/bar/pie charts (recharts) and AI verdict via new POST /api/compare/ai (OpenAI, cached 24h by payload hash).
+- Verified by testing agent iteration_9.json: backend 100% (10/10 pytest), frontend 100%, no regressions.
