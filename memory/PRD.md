@@ -510,3 +510,8 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - Period chips available to every user + new From/To date pickers (custom range, clear button). Filters by match kickoff.
 - Records are dated by KICKOFF: addBet stores `kickoff` (AddToPortfolioButton passes match.commence_time), dateOf() prefers kickoff, timeline sorted by kickoff.
 - Matches page: every view (Strong / Worth Watching / All) now sorts by soonest kickoff first.
+
+## 2026-06 European stats blend
+- live_values.py: for UCL/UEL/UECL matches, team stats are now blended 70% domestic (all league/cup tables we cover, cached index `domestic_stats_idx`) + 30% competition table (`_blend_stats`, `_domestic_index`, EURO_SLUGS, DOMESTIC_WEIGHT=0.7). Form blended the same way via `formNum` used by `_team_obj`.
+- Prevents defaults (1.2/1.1) or tiny 1-3 game European samples from driving xG. Verified: Celtic in UEL now uses 2.33/0.5 (domestic) instead of neutral defaults; Olympiakos blend 0.75/2.0 -> 1.12.
+- Prediction/EV model itself unchanged — only the inputs are better sampled.

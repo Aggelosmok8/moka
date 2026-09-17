@@ -75,13 +75,61 @@ def _form_num(form_list) -> float:
 
 def _team_obj(name: str, st: dict) -> dict:
     st = st or {}
+    form = st.get("formNum")
     return {
         "name": name,
-        "form": _form_num(st.get("form")),
+        "form": form if form is not None else _form_num(st.get("form")),
         "goalsScored": st.get("goalsPerGame") or 1.2,
         "goalsConceded": st.get("concededPerGame") or 1.1,
         "possession": None,
     }
+
+
+# European competitions: a club's scoring level is mostly set by its domestic
+# season (bigger sample), so stats are blended 70% domestic / 30% competition.
+EURO_SLUGS = {"ucl", "uel", "uecl"}
+DOMESTIC_WEIGHT = 0.7
+
+
+def _blend_stats(dom: dict, comp: dict) -> dict:
+    """70% domestic (league/cup table) + 30% European-competition numbers."""
+    if not dom:
+        return comp
+    if not comp:
+        return dom
+    out = dict(comp)
+    w = DOMESTIC_WEIGHT
+    for k in ("goalsPerGame", "concededPerGame"):
+        a, b = dom.get(k), comp.get(k)
+        if a is not None and b is not None:
+            out[k] = round(a * w + b * (1 - w), 2)
+        elif a is not None:
+            out[k] = a
+    out["formNum"] = round(_form_num(dom.get("form")) * w + _form_num(comp.get("form")) * (1 - w), 1)
+    return out
+
+
+async def _domestic_index() -> dict:
+    """Normalised team name -> stats across every domestic league/cup we cover."""
+    ck = "domestic_stats_idx"
+    hit = _cache_get(ck)
+    if hit is not None:
+        return hit
+    idx = {}
+    for slug in LIVE_LEAGUES:
+        if slug in EURO_SLUGS:
+            continue
+        try:
+            teams = await af.teams_for_league(slug)
+        except Exception as e:
+            logger.warning("domestic idx %s: %s", slug, e)
+            continue
+        for t in teams or []:
+            k = _norm(t.get("name"))
+            if k and k not in idx:
+                idx[k] = t
+    _cache_set(ck, idx, STATS_TTL)
+    return idx
 
 
 async def _stats_index(slug: str) -> dict:
@@ -119,6 +167,7 @@ async def _build_one_league(slug: str) -> list:
     lid, lname = slug, c.get("name", slug)
 
     idx = await _stats_index(slug)
+    dom_idx = await _domestic_index() if slug in EURO_SLUGS else None
 
     try:
         fixtures = await af.upcoming_fixtures_raw(slug, MAX_PER_LEAGUE * 2)
@@ -160,6 +209,9 @@ async def _build_one_league(slug: str) -> list:
             continue
         hs = _lookup(idx, home)
         as_ = _lookup(idx, away)
+        if dom_idx is not None:
+            hs = _blend_stats(_lookup(dom_idx, home), hs)
+            as_ = _blend_stats(_lookup(dom_idx, away), as_)
         league_matches.append({
             "id": f"live_af_{f['id']}",
             "leagueId": lid,
