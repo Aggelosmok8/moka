@@ -32,6 +32,7 @@ export default function AddToPortfolioButton({ entry, className = "", size = "sm
   const leg = {
     matchId: match.id, home: match.home?.name, away: match.away?.name, league: match.leagueName,
     pick: value.pick, pickName: value.pickName, odds, bookmaker: value.bookmaker,
+    kickoff: match.commence_time || null,
   };
 
   const confirmSingle = (e) => {

@@ -503,3 +503,10 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - LION Prediction bars kept; Goal Markets now uses donut pies for Over/Under 2.5 and BTTS + xG tiles.
 - New team cards (form badges, W/D/L, win-rate donut, goals scored/conceded bars of last matches, xG, goals/game, clean sheets) and Match History tables — data from GET /api/leagues/{slug} (standings + results), no backend change.
 - Live sections, Why LION likes it, Pro advanced-stats gating and all existing data-testids preserved. AI system prompt rebranded Moka -> LION.
+
+## 2026-06 Portfolio + Matches ordering fixes
+- Removed the "Your settled matches are listed in Match History…" note; Match History now sits directly under the filter chips, single bet cards moved below it.
+- All / Pending / Won / Lost chips now filter the stats, the bankroll graph AND Match History (one viewSource).
+- Period chips available to every user + new From/To date pickers (custom range, clear button). Filters by match kickoff.
+- Records are dated by KICKOFF: addBet stores `kickoff` (AddToPortfolioButton passes match.commence_time), dateOf() prefers kickoff, timeline sorted by kickoff.
+- Matches page: every view (Strong / Worth Watching / All) now sorts by soonest kickoff first.

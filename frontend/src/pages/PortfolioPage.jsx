@@ -36,6 +36,10 @@ const STATUS = {
 const FILTERS = { all: "All", pending: "Pending", won: "Won", lost: "Lost" };
 const PERIODS = { all: "All time", day: "Today", week: "This week", month: "This month", year: "This year" };
 
+// A record is dated by the match KICKOFF (start time), falling back to the
+// settle/created time for older records that have no kickoff stored.
+const dateOf = (r) => r?.kickoff || r?.settledAt || r?.createdAt || null;
+
 function inPeriod(iso, period) {
   if (period === "all") return true;
   if (!iso) return false; // undated records never belong to a specific day/week/month
@@ -51,6 +55,16 @@ function inPeriod(iso, period) {
     s.setHours(0, 0, 0, 0);
     return d >= s;
   }
+  return true;
+}
+
+function inRange(iso, from, to) {
+  if (!from && !to) return true;
+  if (!iso) return false;
+  const d = new Date(iso);
+  if (isNaN(d)) return false;
+  if (from && d < new Date(`${from}T00:00:00`)) return false;
+  if (to && d > new Date(`${to}T23:59:59`)) return false;
   return true;
 }
 
@@ -115,7 +129,7 @@ function MatchHistory({ records, isPro }) {
   const settled = React.useMemo(() => {
     return records
       .filter((r) => r.status === "won" || r.status === "lost")
-      .sort((a, b) => new Date(b.settledAt || 0) - new Date(a.settledAt || 0)); // most recent first (by kickoff)
+      .sort((a, b) => new Date(dateOf(b) || 0) - new Date(dateOf(a) || 0)); // most recent kickoff first
   }, [records]);
 
   if (settled.length === 0) return null;
@@ -156,7 +170,7 @@ function MatchHistory({ records, isPro }) {
                   </td>
                   <td className="px-3 py-2.5 text-white">
                     <div className="font-semibold break-words">{r.home}{r.away ? <span className="text-zinc-600"> vs </span> : ""}{r.away}</div>
-                    <div className="text-[10px] text-zinc-500">{fmtWhen(r.settledAt)} · {r.league || ""}</div>
+                    <div className="text-[10px] text-zinc-500">{fmtWhen(dateOf(r))} · {r.league || ""}</div>
                   </td>
                   <td className="px-3 py-2.5 text-[#39FF14] font-semibold break-words">{r.pickName || r.pick}</td>
                   <td className="px-3 py-2.5 text-right text-white font-mono-num">{Number(r.odds).toFixed(2)}</td>
@@ -366,6 +380,8 @@ export default function PortfolioPage() {
   const isPro = role === "pro";
   const [filter, setFilter] = useState("all");
   const [period, setPeriod] = useState("all");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [settling, setSettling] = useState(false);
   const [params] = useSearchParams();
   const [tab, setTab] = useState(params.get("tab") === "tickets" ? "tickets" : "bets");
@@ -385,10 +401,10 @@ export default function PortfolioPage() {
 
   // Free users only see (and are scored on) their latest 5 bets.
   const scopedBets = useMemo(() => (isPro ? bets : bets.slice(0, FREE_LIMIT)), [bets, isPro]);
-  // PRO can filter stats & history by period (day/week/month/year).
+  // Period / custom date range filter (available to every user).
   const periodBets = useMemo(
-    () => ((isPro && period !== "all") ? scopedBets.filter((b) => inPeriod(b.settledAt, period)) : scopedBets),
-    [scopedBets, period, isPro]
+    () => scopedBets.filter((b) => inPeriod(dateOf(b), period) && inRange(dateOf(b), from, to)),
+    [scopedBets, period, from, to]
   );
   const hiddenCount = isPro ? 0 : Math.max(0, bets.length - FREE_LIMIT);
 
@@ -414,6 +430,7 @@ export default function PortfolioPage() {
           home: l.home, away: l.away, league: l.league,
           pick: l.pick, pickName: l.pickName,
           odds: Number(l.odds) || 0, stake: stakePer, status: l.status,
+          kickoff: l.kickoff || l.commence_time || null,
           settledAt: when, createdAt: when,
         });
       }
@@ -422,13 +439,18 @@ export default function PortfolioPage() {
   }, [tickets, isPro]);
 
   const statsSource = useMemo(() => {
-    const t = (isPro && period !== "all")
-      ? ticketResults.filter((x) => inPeriod(x.settledAt, period))
-      : ticketResults;
+    const t = ticketResults.filter((x) => inPeriod(dateOf(x), period) && inRange(dateOf(x), from, to));
     return [...periodBets, ...t];
-  }, [periodBets, ticketResults, period, isPro]);
+  }, [periodBets, ticketResults, period, from, to]);
 
-  const stats = useMemo(() => computeStats(statsSource), [statsSource]);
+  // The All / Pending / Won / Lost chips drive the stats, the graph AND the
+  // match history — one filtered source of truth.
+  const viewSource = useMemo(
+    () => (filter === "all" ? statsSource : statsSource.filter((r) => r.status === filter)),
+    [statsSource, filter]
+  );
+
+  const stats = useMemo(() => computeStats(viewSource), [viewSource]);
   // The stats + performance graph live on the "My Bets" tab but are computed
   // from single bets AND settled tickets. So the tab must count tickets as
   // activity, otherwise a user who only plays tickets sees an empty portfolio.
@@ -482,18 +504,29 @@ export default function PortfolioPage() {
           </div>
         ) : (
           <>
-            {/* PERIOD FILTER — Pro only */}
-            {isPro && (
-              <div className="flex items-center gap-1.5 mb-4 flex-wrap" data-testid="portfolio-period">
-                <span className="text-[10px] uppercase tracking-wider text-zinc-500 mr-1 flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> Period</span>
-                {Object.entries(PERIODS).map(([k, label]) => (
-                  <button key={k} onClick={() => setPeriod(k)} data-testid={`portfolio-period-${k}`}
-                    className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${period === k ? "bg-[#39FF14] text-black" : "bg-white/5 text-zinc-300 hover:bg-white/10"}`}>
-                    {label}
+            {/* PERIOD + CUSTOM DATE RANGE */}
+            <div className="flex items-center gap-1.5 mb-4 flex-wrap" data-testid="portfolio-period">
+              <span className="text-[10px] uppercase tracking-wider text-zinc-500 mr-1 flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> Period</span>
+              {Object.entries(PERIODS).map(([k, label]) => (
+                <button key={k} onClick={() => { setPeriod(k); setFrom(""); setTo(""); }} data-testid={`portfolio-period-${k}`}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${period === k && !from && !to ? "bg-[#39FF14] text-black" : "bg-white/5 text-zinc-300 hover:bg-white/10"}`}>
+                  {label}
+                </button>
+              ))}
+              <div className="flex items-center gap-1.5 ml-1 bg-[#161b22] border border-[#30363d] rounded-lg px-2 py-1">
+                <span className="text-[10px] uppercase tracking-wider text-zinc-500">From</span>
+                <input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPeriod("all"); }} data-testid="portfolio-date-from"
+                  className="bg-transparent text-xs text-white focus:outline-none [color-scheme:dark]" />
+                <span className="text-[10px] uppercase tracking-wider text-zinc-500">To</span>
+                <input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPeriod("all"); }} data-testid="portfolio-date-to"
+                  className="bg-transparent text-xs text-white focus:outline-none [color-scheme:dark]" />
+                {(from || to) && (
+                  <button onClick={() => { setFrom(""); setTo(""); }} data-testid="portfolio-date-clear" className="text-zinc-500 hover:text-[#FF3B30]">
+                    <X className="w-3.5 h-3.5" />
                   </button>
-                ))}
+                )}
               </div>
-            )}
+            </div>
 
             {/* STATS */}
             <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6" data-testid="portfolio-stats">
@@ -503,7 +536,7 @@ export default function PortfolioPage() {
               <StatCard icon={Clock} label="Pending" value={`€${stats.pendingStake.toFixed(2)}`} color="#FFD60A" sub={`could return €${stats.pendingPotential.toFixed(2)}`} />
             </section>
 
-            {isPro && period !== "all" && stats.settledCount === 0 && (
+            {period !== "all" && stats.settledCount === 0 && !from && !to && (
               <div className="mb-6 bg-[#161b22] border border-[#30363d] rounded-xl p-4 text-center text-sm text-zinc-400" data-testid="portfolio-no-settled">
                 No settled matches {PERIODS[period] ? PERIODS[period].toLowerCase() : "in this period"}.
               </div>
@@ -542,21 +575,18 @@ export default function PortfolioPage() {
               ))}
             </div>
 
-            {/* BETS */}
-            {list.length === 0 ? (
-              <div className="text-center py-12 text-zinc-500" data-testid="portfolio-filter-empty">
-                {bets.length === 0 && ticketResults.length > 0
-                  ? <>Your settled matches are listed in <b className="text-white">Match History</b> below. Open <b className="text-white">My Tickets</b> for full ticket details.</>
-                  : "No bets in this category."}
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3" data-testid="portfolio-bets">
+            {/* MATCH HISTORY — individual settled matches (single source of truth) */}
+            <MatchHistory records={viewSource} isPro={isPro} />
+
+            {/* SINGLE BETS */}
+            {list.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-8" data-testid="portfolio-bets">
                 {list.map((b) => <BetRow key={b.id} b={b} settle={settle} remove={remove} />)}
               </div>
             )}
-
-            {/* MATCH HISTORY — individual settled matches (single source of truth) */}
-            <MatchHistory records={statsSource} isPro={isPro} />
+            {list.length === 0 && viewSource.length === 0 && (
+              <div className="text-center py-12 text-zinc-500" data-testid="portfolio-filter-empty">No bets in this category.</div>
+            )}
 
             {hiddenCount > 0 && (
               <div className="mt-8 flex flex-col items-center gap-3 text-center bg-[#161b22] border border-[#30363d] rounded-2xl p-6" data-testid="portfolio-free-limit">

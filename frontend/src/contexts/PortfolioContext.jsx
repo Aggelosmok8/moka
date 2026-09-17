@@ -57,7 +57,7 @@ export function computeStats(bets) {
   const pendingPotential = pending.reduce((s, b) => s + b.stake * b.odds, 0);
 
   const timeline = [...settled]
-    .sort((a, b) => (Date.parse(a.settledAt) || 0) - (Date.parse(b.settledAt) || 0))
+    .sort((a, b) => (Date.parse(a.kickoff || a.settledAt) || 0) - (Date.parse(b.kickoff || b.settledAt) || 0))
     .reduce((acc, b) => {
       const delta = betReturn(b) - b.stake;
       const running = (acc.length ? acc[acc.length - 1].pl : 0) + delta;
@@ -151,6 +151,8 @@ export function PortfolioProvider({ children }) {
       bookmaker: bet.bookmaker || "",
       stake: Number(bet.stake) || 0,
       status: "pending",
+      // Portfolio dates a bet by KICKOFF (match start), not by settle time.
+      kickoff: bet.kickoff || bet.commence_time || null,
       createdAt: new Date().toISOString(),
       settledAt: null,
     };

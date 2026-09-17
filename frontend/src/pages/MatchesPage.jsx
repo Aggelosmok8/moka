@@ -115,7 +115,8 @@ export default function MatchesPage() {
     }
     if (fDate && (m.commence_time || "").slice(0, 10) !== fDate) return false;
     return true;
-  }), [list, fLeague, fTeam, fDate, fSport]);
+  }).sort((a, b) => (Date.parse(a.match.commence_time) || Infinity) - (Date.parse(b.match.commence_time) || Infinity)),
+  [list, fLeague, fTeam, fDate, fSport]);
 
   const liveFiltered = useMemo(() => liveList.filter((m) => {
     if (!m.supported) return false;
