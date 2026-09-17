@@ -33,7 +33,7 @@ const STATUS = {
   void: { label: "Void", cls: "bg-white/5 text-zinc-400 border border-white/10", icon: CircleSlash },
 };
 
-const FILTERS = { all: "All", pending: "Pending", won: "Won", lost: "Lost" };
+const FILTERS = { all: "All", won: "Won", lost: "Lost" };
 const PERIODS = { all: "All time", day: "Today", week: "This week", month: "This month", year: "This year" };
 
 // A record is dated by the match KICKOFF (start time), falling back to the
