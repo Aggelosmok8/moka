@@ -496,3 +496,10 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - Cups added: Taça de Portugal (96), KNVB Beker (90), Scottish Cup (181), DBU Pokalen (121); Greek Cup id corrected 735 -> 199. Added in apifootball.CATALOG, core/entitlements.py, frontend sportsCatalog.js, live_values.LIVE_LEAGUES.
 - NEW /compare page + Compare nav tab: Teams or Players mode, league -> team (-> player) pickers per side, stat table, radar/bar/pie charts (recharts) and AI verdict via new POST /api/compare/ai (OpenAI, cached 24h by payload hash).
 - Verified by testing agent iteration_9.json: backend 100% (10/10 pytest), frontend 100%, no regressions.
+
+## 2026-06 Match Analysis redesign
+- /analysis/:id rebuilt to the layout the user sent: hero card (logos, date/time, league + standings positions, stadium backdrop) | Match Analysis card (LION AI text + translate + 3 KPI tiles: pick % vs market, confidence /10, potential value).
+- Best-odds strip (bookmaker cards, best highlighted, view-all toggle) + Add to slip / watchlist / portfolio.
+- LION Prediction bars kept; Goal Markets now uses donut pies for Over/Under 2.5 and BTTS + xG tiles.
+- New team cards (form badges, W/D/L, win-rate donut, goals scored/conceded bars of last matches, xG, goals/game, clean sheets) and Match History tables — data from GET /api/leagues/{slug} (standings + results), no backend change.
+- Live sections, Why LION likes it, Pro advanced-stats gating and all existing data-testids preserved. AI system prompt rebranded Moka -> LION.
