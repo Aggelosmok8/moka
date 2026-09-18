@@ -4,7 +4,7 @@ import { ArrowRight, Target, BarChart3, Wallet, ShieldCheck, Sparkles } from "lu
 import Header from "../components/Header";
 
 const NEON = "#39FF14";
-const HERO_IMG = "https://images.unsplash.com/photo-1679391029864-d46f366a456b?crop=entropy&cs=srgb&fm=jpg&w=2000&q=80";
+const HERO_IMG = "https://images.unsplash.com/photo-1604524404499-67ba5a962db8?crop=entropy&cs=srgb&fm=jpg&q=85&w=2400";
 
 const PILLARS = [
   {
@@ -30,8 +30,8 @@ export default function HomePage() {
       <Header />
 
       <main className="relative flex-1 flex items-center overflow-hidden">
-        <img src={HERO_IMG} alt="" className="absolute inset-0 w-full h-full object-cover opacity-30" />
-        <div className="absolute inset-0" style={{ background: "radial-gradient(130% 90% at 50% 0%, rgba(10,10,10,0.35) 0%, rgba(10,10,10,0.88) 55%, #0A0A0A 100%)" }} />
+        <img src={HERO_IMG} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        <div className="absolute inset-0" style={{ background: "radial-gradient(120% 80% at 50% 20%, rgba(13,17,23,0.35) 0%, rgba(13,17,23,0.85) 55%, #0d1117 100%)" }} />
         <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[900px] h-[900px] rounded-full pointer-events-none"
           style={{ background: "radial-gradient(circle, rgba(57,255,20,0.12) 0%, transparent 62%)" }} />
 
