@@ -35,11 +35,14 @@ export default function HomePage() {
         <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[900px] h-[900px] rounded-full pointer-events-none"
           style={{ background: "radial-gradient(circle, rgba(57,255,20,0.12) 0%, transparent 62%)" }} />
 
-        <div className="relative w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-6">
+        <div className="relative w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-4">
           {/* BRAND + HEADLINE */}
           <div className="text-center">
-            <img src="/lion-logo-full.png" alt="LION.STATS"
-              className="mx-auto h-20 sm:h-24 lg:h-28 w-auto object-contain drop-shadow-[0_0_40px_rgba(57,255,20,0.25)]"
+            <img src="/lion-crest.png" alt=""
+              className="mx-auto h-20 sm:h-24 lg:h-28 w-auto object-contain drop-shadow-[0_0_45px_rgba(57,255,20,0.35)]"
+              data-testid="home-crest" />
+            <img src="/lion-wordmark.png" alt="LION.STATS"
+              className="mx-auto mt-3 h-10 sm:h-12 lg:h-14 w-auto object-contain drop-shadow-[0_0_30px_rgba(0,0,0,0.6)]"
               data-testid="home-logo" />
             <h1 className="font-display font-black uppercase tracking-tight text-white mt-5 leading-[0.9]">
               <span className="block text-4xl sm:text-5xl lg:text-6xl">Makes</span>
