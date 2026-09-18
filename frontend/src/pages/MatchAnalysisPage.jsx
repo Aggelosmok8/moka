@@ -354,9 +354,9 @@ export default function MatchAnalysisPage() {
       {/* HERO + MATCH ANALYSIS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
         <div className="relative rounded-2xl border border-white/10 overflow-hidden bg-[#11161d] flex" data-testid="match-hero">
-          <img src="https://images.unsplash.com/photo-1706675780107-7c43cc487928?crop=entropy&cs=srgb&fm=jpg&w=1200&q=70" alt=""
-            className="absolute inset-0 w-full h-full object-cover opacity-20" />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#0A0A0A]/60 via-[#0A0A0A]/80 to-[#0A0A0A]" />
+          <img src="https://images.unsplash.com/photo-1679391029864-d46f366a456b?crop=entropy&cs=srgb&fm=jpg&w=1400&q=80" alt=""
+            className="absolute inset-0 w-full h-full object-cover opacity-70" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0A]/90 via-[#0A0A0A]/45 to-[#0A0A0A]/25" />
           <div className="relative p-6 w-full flex flex-col justify-center">
             <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 text-center mb-4">{match.leagueName}</div>
             <div className="grid grid-cols-3 items-center gap-2">
