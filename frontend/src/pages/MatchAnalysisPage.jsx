@@ -365,9 +365,22 @@ export default function MatchAnalysisPage() {
                 <div className="font-display font-black uppercase text-white leading-tight">{hn}</div>
               </div>
               <div className="text-center">
-                <div className="font-display font-black text-white text-sm">{fmtDate(match.commence_time)}</div>
-                <div className="font-display font-black text-[#39FF14] text-2xl font-mono-num">{isLive ? "LIVE" : fmtTime(match.commence_time)}</div>
-                <div className="text-[10px] uppercase tracking-wider text-zinc-600 mt-1">vs</div>
+                {isLive ? (
+                  <>
+                    <div className="font-display font-black text-white text-4xl font-mono-num leading-none">
+                      {(live && live.homeScore) ?? 0}<span className="text-zinc-600 mx-2">-</span>{(live && live.awayScore) ?? 0}
+                    </div>
+                    <span className="inline-flex items-center gap-1.5 mt-2 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/30">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> Live{live && live.minute != null ? ` ${live.minute}'` : ""}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <div className="font-display font-black text-white text-sm">{fmtDate(match.commence_time)}</div>
+                    <div className="font-display font-black text-[#39FF14] text-2xl font-mono-num">{fmtTime(match.commence_time)}</div>
+                    <div className="text-[10px] uppercase tracking-wider text-zinc-600 mt-1">vs</div>
+                  </>
+                )}
               </div>
               <div className="flex flex-col items-center text-center gap-2">
                 {aInfo?.image && <img src={aInfo.image} alt="" className="w-16 h-16 object-contain" />}
@@ -565,7 +578,7 @@ export default function MatchAnalysisPage() {
       )}
 
       {/* TEAM CARDS */}
-      {(hInfo || aInfo || hRecent.length || aRecent.length) && (
+      {(hInfo || aInfo || hRecent.length > 0 || aRecent.length > 0) && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
           <TeamCard testId="team-card-home" name={hn} info={hInfo} recent={hRecent}
             xg={value.prediction?.xg_home} possession={match.homeTeam?.possession}
