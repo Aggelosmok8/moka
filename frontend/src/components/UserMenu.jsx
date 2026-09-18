@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "../lib/api";
-import { LogOut, User as UserIcon, Sparkles, Trash2, Wallet } from "lucide-react";
+import { LogOut, User as UserIcon, Sparkles, Trash2, Wallet, LifeBuoy } from "lucide-react";
 
 // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
 const startLogin = () => {
@@ -116,6 +116,18 @@ export const UserMenu = () => {
             >
               <LogOut className="w-4 h-4" /> Sign out
             </button>
+            <div className="border-t border-white/5 my-1.5" />
+            <a
+              href="mailto:lion.stats.support@gmail.com"
+              data-testid="support-link"
+              className="flex items-center gap-2 px-2 py-2 rounded text-sm text-zinc-300 hover:bg-white/5"
+            >
+              <LifeBuoy className="w-4 h-4" />
+              <span className="min-w-0">
+                <span className="block text-[10px] uppercase tracking-wider text-zinc-500">Support</span>
+                <span className="block text-xs truncate">lion.stats.support@gmail.com</span>
+              </span>
+            </a>
             <div className="border-t border-white/5 my-1.5" />
             <button
               onClick={onDelete}
