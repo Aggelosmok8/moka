@@ -515,3 +515,9 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - live_values.py: for UCL/UEL/UECL matches, team stats are now blended 70% domestic (all league/cup tables we cover, cached index `domestic_stats_idx`) + 30% competition table (`_blend_stats`, `_domestic_index`, EURO_SLUGS, DOMESTIC_WEIGHT=0.7). Form blended the same way via `formNum` used by `_team_obj`.
 - Prevents defaults (1.2/1.1) or tiny 1-3 game European samples from driving xG. Verified: Celtic in UEL now uses 2.33/0.5 (domestic) instead of neutral defaults; Olympiakos blend 0.75/2.0 -> 1.12.
 - Prediction/EV model itself unchanged — only the inputs are better sampled.
+
+## 2026-06 Match Analysis polish
+- Percentages right-aligned in a column across all charts (Bar + SplitPie legends use grid layout).
+- Goal Markets: smaller donuts (78px) so every label fits inside the boxes; Over/Under + BTTS legends always show a green/yellow dot matching the slice colour (fixed colours instead of conditional grey).
+- Match History: new backend endpoint GET /api/teams/{id}/recent?last=6 (af.recent_fixtures_for_team -> API-Football /fixtures?team&last, cached 6h) gives the last 6 matches ACROSS ALL competitions with a Comp. column; league-results feed is the fallback when the club id can't be resolved.
+- Removed the "Show advanced statistics" block entirely (toggle, Pro lock, upsell modal, StatsTable) from the analysis page.

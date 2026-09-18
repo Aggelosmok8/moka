@@ -365,6 +365,13 @@ async def team_detail(team_id: str):
     raise HTTPException(status_code=404, detail="Team not found")
 
 
+@api_router.get("/teams/{team_id}/recent")
+async def team_recent(team_id: str, last: int = 6):
+    """Recent finished matches of a team across all competitions."""
+    import apifootball as af
+    return {"matches": await af.recent_fixtures_for_team(team_id, last)}
+
+
 @api_router.get("/teams/{team_id}/players")
 async def team_players(team_id: str):
     """Real squad roster from API-Football (season 2024), or mock fallback."""

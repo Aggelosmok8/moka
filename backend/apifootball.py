@@ -129,6 +129,37 @@ def _form_list(form_str):
     return list(form_str) if form_str else []
 
 
+async def recent_fixtures_for_team(team_id: str, last: int = 6) -> list:
+    """Last finished matches of a club across ALL competitions."""
+    if not str(team_id).isdigit():
+        return []
+    ck = f"recent_team_{team_id}_{last}"
+    hit = _c_get(ck)
+    if hit is not None:
+        return hit
+    try:
+        d = await _get(FOOTBALL_BASE, "/fixtures", {"team": team_id, "last": last})
+        out = []
+        for f in d.get("response") or []:
+            fx, tm, gl = f.get("fixture") or {}, f.get("teams") or {}, f.get("goals") or {}
+            out.append({
+                "kickoff": fx.get("date"),
+                "home": (tm.get("home") or {}).get("name"),
+                "away": (tm.get("away") or {}).get("name"),
+                "homeImg": (tm.get("home") or {}).get("logo"),
+                "awayImg": (tm.get("away") or {}).get("logo"),
+                "homeScore": gl.get("home"),
+                "awayScore": gl.get("away"),
+                "league": (f.get("league") or {}).get("name"),
+                "finished": True,
+            })
+        _c_set(ck, out, ttl=6 * 3600)
+        return out
+    except Exception as e:
+        logger.warning("apifootball.recent_fixtures_for_team(%s): %s", team_id, e)
+        return []
+
+
 async def teams_for_league(slug: str) -> list:
     c = CATALOG.get(slug)
     if not c:

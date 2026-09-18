@@ -1,20 +1,19 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Check, ChevronDown, ChevronUp, Lock, ExternalLink, X, Loader2, Sparkles, Languages, MapPin, Target, TrendingUp, Star } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink, Loader2, Sparkles, Languages, MapPin, Target, TrendingUp, Star } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import Header from "../components/Header";
-import { UpgradeButton } from "../components/Gating";
 import AddToPortfolioButton from "../components/AddToPortfolioButton";
 import AddToChartButton from "../components/AddToChartButton";
 import AddToSlipButton from "../components/AddToSlipButton";
 import { bookmakerUrl } from "../lib/bookmakers";
-import { useEntitlements } from "../hooks/useEntitlements";
 import { fetchMatchById, fetchMatchAi } from "../lib/catalogApi";
-import { fetchLeagueDetail } from "../lib/api";
+import { fetchLeagueDetail, fetchTeamRecent } from "../lib/api";
 import { adaptValue, whyMokaReasons } from "../lib/valueEngine";
 import { useLang } from "../contexts/LanguageContext";
 
 const GREEN = "#39FF14";
+const YELLOW = "#FFD60A";
 const RED = "#FF3B30";
 
 const Shell = ({ children }) => (
@@ -31,8 +30,9 @@ const Card = ({ title, children, testId, className = "" }) => (
 );
 const Bar = ({ label, pct, color, hi }) => (
   <div className="mb-2">
-    <div className="flex justify-between text-xs text-zinc-400 mb-1">
-      <span>{label}</span><span className="font-bold" style={{ color: hi ? GREEN : "#fff" }}>{pct}%</span>
+    <div className="grid grid-cols-[1fr_auto] items-center text-xs text-zinc-400 mb-1 gap-2">
+      <span className="truncate">{label}</span>
+      <span className="font-bold font-mono-num text-right" style={{ color: hi ? GREEN : "#fff" }}>{pct}%</span>
     </div>
     <div className="h-2 rounded-full bg-[#0d1117] overflow-hidden">
       <div style={{ width: `${pct}%`, background: color }} className="h-full" />
@@ -76,54 +76,29 @@ const Donut = ({ pct, label, color = GREEN, size = 120 }) => (
 );
 
 const SplitPie = ({ a, b, aLabel, bLabel, title, testId }) => (
-  <div className="bg-[#0d1117] border border-white/10 rounded-xl p-4 flex items-center gap-4" data-testid={testId}>
-    <div className="w-[104px] h-[104px] shrink-0">
+  <div className="bg-[#0d1117] border border-white/10 rounded-xl p-4 flex items-center gap-3" data-testid={testId}>
+    <div className="w-[78px] h-[78px] shrink-0">
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie data={[{ v: a }, { v: b }]} dataKey="v" innerRadius="58%" outerRadius="100%" paddingAngle={2} stroke="none">
-            <Cell fill={a >= b ? GREEN : "#3f3f46"} /><Cell fill={b > a ? "#FFD60A" : "#2a2f36"} />
+            <Cell fill={GREEN} /><Cell fill={YELLOW} />
           </Pie>
         </PieChart>
       </ResponsiveContainer>
     </div>
-    <div className="min-w-0">
-      <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-2 whitespace-nowrap">{title}</div>
-      <div className="flex items-center gap-2 text-sm whitespace-nowrap">
-        <span className="w-2.5 h-2.5 rounded-sm" style={{ background: a >= b ? GREEN : "#3f3f46" }} />
+    <div className="min-w-0 flex-1">
+      <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-2 leading-tight">{title}</div>
+      <div className="grid grid-cols-[10px_1fr_auto] items-center gap-x-2 gap-y-1 text-sm">
+        <span className="w-2.5 h-2.5 rounded-sm" style={{ background: GREEN }} />
         <span className="text-zinc-300">{aLabel}</span>
-        <b className="font-mono-num text-white">{a}%</b>
-      </div>
-      <div className="flex items-center gap-2 text-sm mt-1 whitespace-nowrap">
-        <span className="w-2.5 h-2.5 rounded-sm" style={{ background: b > a ? "#FFD60A" : "#2a2f36" }} />
+        <b className="font-mono-num text-white text-right">{a}%</b>
+        <span className="w-2.5 h-2.5 rounded-sm" style={{ background: YELLOW }} />
         <span className="text-zinc-300">{bLabel}</span>
-        <b className="font-mono-num text-white">{b}%</b>
+        <b className="font-mono-num text-white text-right">{b}%</b>
       </div>
     </div>
   </div>
 );
-
-function StatsTable({ home = {}, away = {}, hn, an }) {
-  const fmt = (v) => (v === null || v === undefined || v === "") ? "N/A" : String(v);
-  const keys = Object.keys(home).filter((k) => k !== "form");
-  return (
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="text-[11px] text-zinc-500 uppercase">
-          <th className="text-left p-1">{hn}</th><th className="text-center p-1">Stat</th><th className="text-right p-1">{an}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {keys.map((k) => (
-          <tr key={k} className="border-t border-white/5">
-            <td className="p-1 text-white">{fmt(home[k])}</td>
-            <td className="p-1 text-center text-zinc-500">{k}</td>
-            <td className="p-1 text-right text-white">{fmt(away[k])}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
 
 const LIVE_STAT_ORDER = ["Ball Possession", "Total Shots", "Shots on Goal", "Shots off Goal",
   "Shots insidebox", "Shots outsidebox", "Corner Kicks", "Fouls", "Offsides",
@@ -227,16 +202,17 @@ function HistoryTable({ name, info, recent, testId }) {
         <div className="text-xs text-zinc-600">No recent matches available.</div>
       ) : (
         <div className="space-y-1">
-          <div className="grid grid-cols-[76px_1fr_54px_28px] gap-2 text-[9px] uppercase tracking-wider text-zinc-500 pb-1 border-b border-white/5">
-            <span>Date</span><span>Opponent</span><span className="text-center">Result</span><span />
+          <div className="grid grid-cols-[66px_1fr_92px_50px_26px] gap-2 text-[9px] uppercase tracking-wider text-zinc-500 pb-1 border-b border-white/5">
+            <span>Date</span><span>Opponent</span><span className="truncate">Comp.</span><span className="text-center">Result</span><span />
           </div>
           {recent.map((r, i) => (
-            <div key={i} className="grid grid-cols-[76px_1fr_54px_28px] gap-2 items-center py-1.5 border-b border-white/5 last:border-0 text-xs">
+            <div key={i} className="grid grid-cols-[66px_1fr_92px_50px_26px] gap-2 items-center py-1.5 border-b border-white/5 last:border-0 text-xs">
               <span className="text-zinc-500">{fmtDate(r.kickoff)}</span>
               <span className="flex items-center gap-1.5 min-w-0">
                 {r.oppImg && <img src={r.oppImg} alt="" className="w-4 h-4 object-contain" />}
                 <span className="text-zinc-300 truncate">{r.opponent}</span>
               </span>
+              <span className="text-zinc-600 truncate" title={r.league}>{r.league}</span>
               <span className="text-center font-mono-num text-white">{r.gf} - {r.ga}</span>
               <span className={`w-5 h-5 rounded text-[10px] font-black flex items-center justify-center ${
                 r.res === "W" ? "bg-[#39FF14]/20 text-[#39FF14]" : r.res === "D" ? "bg-white/10 text-zinc-300" : "bg-[#FF3B30]/20 text-[#FF3B30]"}`}>{r.res}</span>
@@ -250,15 +226,12 @@ function HistoryTable({ name, info, recent, testId }) {
 
 export default function MatchAnalysisPage() {
   const { id } = useParams();
-  const { role } = useEntitlements();
-  const isPro = role === "pro";
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [showAdv, setShowAdv] = useState(false);
-  const [showUpsell, setShowUpsell] = useState(false);
   const [showAllOdds, setShowAllOdds] = useState(false);
   const [league, setLeague] = useState(null);
+  const [apiRecent, setApiRecent] = useState({ h: null, a: null });
   const [ai, setAi] = useState(null);
   const [aiLoading, setAiLoading] = useState(true);
   const { lang } = useLang();
@@ -309,25 +282,39 @@ export default function MatchAnalysisPage() {
     return Object.entries(teamIndex).find(([k]) => n.length >= 4 && (k.includes(n) || n.includes(k)))?.[1] || null;
   };
 
-  const recentFor = (name) => {
+  const mapRecent = (rows, name) => {
     const n = norm(name);
     const hit = (s) => norm(s) === n || (n.length >= 4 && (norm(s).includes(n) || n.includes(norm(s))));
-    return (league?.results || [])
-      .filter((r) => r.finished && (hit(r.home) || hit(r.away)))
+    return (rows || [])
+      .filter((r) => r.finished && r.homeScore != null && (hit(r.home) || hit(r.away)))
       .sort((a, b) => (Date.parse(b.kickoff) || 0) - (Date.parse(a.kickoff) || 0))
-      .slice(0, 5)
+      .slice(0, 6)
       .map((r) => {
         const isHome = hit(r.home);
         const gf = isHome ? r.homeScore : r.awayScore;
         const ga = isHome ? r.awayScore : r.homeScore;
         return {
           kickoff: r.kickoff, opponent: isHome ? r.away : r.home,
-          oppImg: isHome ? r.awayImg : r.homeImg,
+          oppImg: isHome ? r.awayImg : r.homeImg, league: r.league || "",
           gf: gf ?? 0, ga: ga ?? 0,
           res: gf > ga ? "W" : gf === ga ? "D" : "L",
         };
       });
   };
+
+  // Recent matches across ALL competitions (needs the club id from standings).
+  useEffect(() => {
+    const hid = infoFor(data?.home?.name)?.id;
+    const aid = infoFor(data?.away?.name)?.id;
+    if (!hid && !aid) return;
+    let on = true;
+    Promise.all([
+      hid ? fetchTeamRecent(hid, 6).catch(() => null) : null,
+      aid ? fetchTeamRecent(aid, 6).catch(() => null) : null,
+    ]).then(([h, a]) => on && setApiRecent({ h: h?.length ? h : null, a: a?.length ? a : null }));
+    return () => { on = false; };
+  }, [teamIndex, data?.home?.name, data?.away?.name]); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   if (loading) return <Shell><div className="h-64 bg-[#11161d] border border-white/10 rounded-2xl animate-pulse" /></Shell>;
   if (notFound || !data) return <Shell><div className="text-center py-16 text-zinc-400">Match not found.</div></Shell>;
@@ -345,8 +332,9 @@ export default function MatchAnalysisPage() {
   const an = match.away?.name;
   const hInfo = infoFor(hn);
   const aInfo = infoFor(an);
-  const hRecent = recentFor(hn);
-  const aRecent = recentFor(an);
+  // All competitions when we can resolve the club id, otherwise the league feed.
+  const hRecent = apiRecent.h ? mapRecent(apiRecent.h, hn) : mapRecent(league?.results, hn);
+  const aRecent = apiRecent.a ? mapRecent(apiRecent.a, an) : mapRecent(league?.results, an);
 
   const oddsRows = (match.odds || [])
     .map((o) => ({ bookmaker: o.bookmaker, price: (o.odds && o.odds[outcomeKey]) || 0 }))
@@ -557,8 +545,7 @@ export default function MatchAnalysisPage() {
               <SplitPie testId="pie-over-under" title="Over / Under 2.5"
                 a={value.prediction.over25} b={value.prediction.under25} aLabel="Over 2.5" bLabel="Under 2.5" />
               <SplitPie testId="pie-btts" title="Both teams to score"
-                a={value.prediction.btts_yes} b={value.prediction.btts_no} aLabel="Yes" bLabel="No" />
-            </div>
+                a={value.prediction.btts_yes} b={value.prediction.btts_no} aLabel="Yes" bLabel="No" />            </div>
             <div className="grid grid-cols-3 gap-2 mt-3 text-center">
               <div className="bg-[#0d1117] border border-white/10 rounded-lg py-2"><div className="text-[10px] text-zinc-500 uppercase">xG Home</div><div className="font-display font-black text-lg text-white font-mono-num">{value.prediction.xg_home}</div></div>
               <div className="bg-[#0d1117] border border-white/10 rounded-lg py-2"><div className="text-[10px] text-zinc-500 uppercase">xG Away</div><div className="font-display font-black text-lg text-white font-mono-num">{value.prediction.xg_away}</div></div>
@@ -614,51 +601,6 @@ export default function MatchAnalysisPage() {
         </Card>
       )}
 
-      {/* ADVANCED STATISTICS — PRO only, Free sees an upsell */}
-      {isPro ? (
-        <>
-          <button
-            type="button"
-            onClick={() => setShowAdv((v) => !v)}
-            data-testid="toggle-advanced-stats"
-            className="w-full flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-400 hover:text-[#39FF14] border border-white/10 rounded-md py-2 mb-4 transition-colors"
-          >
-            {showAdv ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-            {showAdv ? "Hide advanced statistics" : "Show advanced statistics"}
-          </button>
-
-          {showAdv && (
-            <div data-testid="advanced-stats">
-              <Card title="Team Statistics">
-                <StatsTable home={match.homeTeam} away={match.awayTeam} hn={hn} an={an} />
-                <p className="text-[11px] text-zinc-500 mt-2">Values shown as N/A are not available for this league/match.</p>
-              </Card>
-            </div>
-          )}
-        </>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setShowUpsell(true)}
-          data-testid="advanced-pro-lock"
-          className="w-full flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-300 hover:text-[#39FF14] border border-[#39FF14]/30 bg-[#39FF14]/5 rounded-md py-2 mb-4 transition-colors"
-        >
-          <Lock className="w-3.5 h-3.5" /> Show advanced statistics — Pro
-        </button>
-      )}
-
-      {showUpsell && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setShowUpsell(false)} data-testid="advanced-upsell-modal">
-          <div className="relative w-full max-w-sm bg-[#161b22] border border-[#30363d] rounded-2xl p-6 text-center" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => setShowUpsell(false)} data-testid="upsell-close" className="absolute top-3 right-3 text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button>
-            <div className="w-12 h-12 mx-auto rounded-xl bg-[#39FF14]/10 border border-[#39FF14]/30 flex items-center justify-center text-[#39FF14] mb-3"><Lock className="w-6 h-6" /></div>
-            <h3 className="font-display font-black uppercase tracking-tight text-white text-lg">Advanced statistics</h3>
-            <p className="text-sm text-zinc-400 mt-2">Unlock the full LION model breakdown, LION-vs-market analysis and detailed team &amp; player statistics with Pro.</p>
-            <div className="mt-4"><UpgradeButton label="Upgrade to Pro" /></div>
-            <button onClick={() => setShowUpsell(false)} className="mt-3 text-xs text-zinc-500 hover:text-white">Maybe later</button>
-          </div>
-        </div>
-      )}
     </Shell>
   );
 }
