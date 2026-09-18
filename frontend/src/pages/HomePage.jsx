@@ -1,223 +1,112 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Search, TrendingUp, BarChart3, Wallet, Check } from "lucide-react";
+import { ArrowRight, Target, BarChart3, Wallet, ShieldCheck, Sparkles } from "lucide-react";
 import Header from "../components/Header";
 
-const HERO_SENTENCES = [
-  "Find the matches worth analysing",
-  "Find the best odds for every match",
-  "See the stats of every team",
-  "See the stats of every player",
-  "Study every detail",
-  "Track your profit and losses",
-];
-
-const IMG = {
-  hero: "https://images.unsplash.com/photo-1604524404499-67ba5a962db8?crop=entropy&cs=srgb&fm=jpg&q=85&w=2400",
-  fog: "https://images.unsplash.com/photo-1709078477781-3f885189ecbf?crop=entropy&cs=srgb&fm=jpg&q=85&w=2400",
-  grass: "https://images.unsplash.com/photo-1612607696387-f139f76bdd6c?crop=entropy&cs=srgb&fm=jpg&q=85&w=2400",
-  arena: "https://images.unsplash.com/photo-1605813187860-5ca514620126?crop=entropy&cs=srgb&fm=jpg&q=85&w=2400",
-};
-
 const NEON = "#39FF14";
+const HERO_IMG = "https://images.unsplash.com/photo-1679391029864-d46f366a456b?crop=entropy&cs=srgb&fm=jpg&w=2000&q=80";
 
-// Full-width editorial chapter for the four LION steps.
-function Step({ n, kicker, title, text, image, align = "left" }) {
-  const right = align === "right";
-  return (
-    <section
-      data-testid={`home-step-${n}`}
-      className="relative min-h-[80vh] flex items-center overflow-hidden border-t border-white/5"
-    >
-      <div className="absolute inset-0 bg-cover bg-center scale-105" style={{ backgroundImage: `url(${image})` }} />
-      <div className="absolute inset-0" style={{ background: right
-        ? "linear-gradient(270deg, rgba(13,17,23,0.55) 0%, rgba(13,17,23,0.92) 60%, #0d1117 100%)"
-        : "linear-gradient(90deg, rgba(13,17,23,0.55) 0%, rgba(13,17,23,0.92) 60%, #0d1117 100%)" }} />
-      <div className={`relative max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 ${right ? "text-right flex justify-end" : ""}`}>
-        <div className={`max-w-2xl ${right ? "items-end" : ""}`}>
-          <div className="font-display font-black text-[22vw] sm:text-[12rem] leading-none text-white/[0.06] absolute -top-24 select-none pointer-events-none">
-            {n}
-          </div>
-          <div className="relative">
-            <div className="text-[#39FF14] font-display font-black uppercase tracking-[0.25em] text-xs sm:text-sm mb-4">
-              {n} — {kicker}
-            </div>
-            <h2 className="font-display font-black uppercase tracking-tight text-white text-3xl sm:text-5xl lg:text-6xl leading-[0.95]">
-              {title}
-            </h2>
-            <p className={`text-zinc-300 text-base sm:text-xl mt-6 leading-relaxed ${right ? "ml-auto" : ""} max-w-xl`}>
-              {text}
-            </p>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
+const PILLARS = [
+  {
+    icon: Target,
+    title: "Every match, one place",
+    text: "Odds from licensed bookmakers, team & player stats, form and results — nothing hidden behind ten clicks.",
+  },
+  {
+    icon: BarChart3,
+    title: "Predictions from the numbers",
+    text: "LION's model reads scoring rates, form and head-to-head to give you probabilities and expected goals — plus an AI read of both sides.",
+  },
+  {
+    icon: Wallet,
+    title: "You stay in control",
+    text: "Log what you play, see exactly what you win and what you lose, day by day. No illusions — just your real performance.",
+  },
+];
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-[#0d1117]">
+    <div className="min-h-screen bg-[#0A0A0A] flex flex-col">
       <Header />
 
-      {/* HERO */}
-      <section className="relative min-h-[92vh] flex items-center justify-center overflow-hidden">
-        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${IMG.hero})` }} />
-        <div className="absolute inset-0" style={{ background: "radial-gradient(120% 80% at 50% 20%, rgba(13,17,23,0.35) 0%, rgba(13,17,23,0.85) 55%, #0d1117 100%)" }} />
-        <div className="relative text-center px-4 sm:px-6 max-w-5xl mx-auto py-24">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[#39FF14]/40 bg-[#39FF14]/10 text-[#39FF14] text-xs font-bold uppercase tracking-[0.2em] mb-6">
-            Premium Sports Intelligence
+      <main className="relative flex-1 flex items-center overflow-hidden">
+        <img src={HERO_IMG} alt="" className="absolute inset-0 w-full h-full object-cover opacity-30" />
+        <div className="absolute inset-0" style={{ background: "radial-gradient(130% 90% at 50% 0%, rgba(10,10,10,0.35) 0%, rgba(10,10,10,0.88) 55%, #0A0A0A 100%)" }} />
+        <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[900px] h-[900px] rounded-full pointer-events-none"
+          style={{ background: "radial-gradient(circle, rgba(57,255,20,0.12) 0%, transparent 62%)" }} />
+
+        <div className="relative w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-6">
+          {/* BRAND + HEADLINE */}
+          <div className="text-center">
+            <img src="/lion-logo-full.png" alt="LION.STATS"
+              className="mx-auto h-20 sm:h-24 lg:h-28 w-auto object-contain drop-shadow-[0_0_40px_rgba(57,255,20,0.25)]"
+              data-testid="home-logo" />
+            <h1 className="font-display font-black uppercase tracking-tight text-white mt-5 leading-[0.9]">
+              <span className="block text-4xl sm:text-5xl lg:text-6xl">Makes</span>
+              <span className="block text-3xl sm:text-4xl lg:text-5xl mt-1">
+                betting <span style={{ color: NEON }}>easier</span>
+              </span>
+            </h1>
+            <p className="text-zinc-300 text-base md:text-lg mt-5 max-w-3xl mx-auto leading-relaxed">
+              All the information you need for every match — <b className="text-white">and predictions built on team statistics</b>.
+              Play in a controlled way, see what you win and what you lose, and keep full control of your game.
+            </p>
+
+            <div className="flex flex-wrap items-center justify-center gap-3 mt-7">
+              <Link to="/matches" data-testid="hero-explore-matches"
+                className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-[#39FF14] text-black font-black uppercase tracking-wider text-sm hover:brightness-110 transition">
+                Today's matches <ArrowRight className="w-4 h-4" />
+              </Link>
+              <Link to="/compare" data-testid="hero-compare"
+                className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full border border-white/20 text-white font-bold uppercase tracking-wider text-sm hover:bg-white/5 transition">
+                <Sparkles className="w-4 h-4 text-[#39FF14]" /> Compare teams & players
+              </Link>
+              <Link to="/portfolio" data-testid="hero-portfolio"
+                className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full border border-white/20 text-white font-bold uppercase tracking-wider text-sm hover:bg-white/5 transition">
+                <Wallet className="w-4 h-4 text-[#39FF14]" /> My portfolio
+              </Link>
+            </div>
           </div>
-          <h1 className="font-display font-black uppercase tracking-tight text-white text-5xl sm:text-6xl lg:text-7xl leading-[0.9]">
-            LION makes<br />betting <span style={{ color: NEON }}>easier</span>.
-          </h1>
-          <p className="text-zinc-300 text-base sm:text-xl mt-6 max-w-2xl mx-auto leading-relaxed">
-            Everything you need to study the game, find potential opportunities and track your performance — in one place.
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-4 mt-8">
-            <Link to="/matches" data-testid="hero-explore-matches" className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-[#39FF14] text-black font-black uppercase tracking-wider text-sm hover:brightness-110 transition">
-              Explore Matches <ArrowRight className="w-4 h-4" />
-            </Link>
-            <Link to="/portfolio" className="inline-flex items-center gap-2 px-8 py-4 rounded-full border border-white/20 text-white font-bold uppercase tracking-wider text-sm hover:bg-white/5 transition">
-              My Portfolio
-            </Link>
-          </div>
 
-          {/* All the sentences, right here around the hero — no scroll needed */}
-          <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl mx-auto" data-testid="hero-sentences">
-            {HERO_SENTENCES.map((s, i) => (
-              <div key={i} className="group flex items-center gap-3 text-left bg-[#39FF14]/[0.06] border border-[#39FF14]/25 rounded-2xl px-5 py-4 backdrop-blur-sm hover:bg-[#39FF14]/10 hover:border-[#39FF14]/60 transition-all shadow-[0_0_24px_-10px_rgba(57,255,20,0.55)]">
-                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-[#39FF14]/15 border border-[#39FF14]/40 shrink-0">
-                  <Check className="w-5 h-5 text-[#39FF14]" strokeWidth={3} />
-                </span>
-                <span className="text-base sm:text-lg text-white font-bold leading-tight">{s}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* FOUR LION STEPS */}
-      <Step
-        n="01" kicker="Find the opportunities" image={IMG.fog}
-        title="Find the matches worth analysing"
-        text="LION analyses the available data and helps you spot the opportunities worth paying attention to"
-      />
-      <Step
-        n="02" kicker="Find the best odds" image={IMG.arena} align="right"
-        title="Find the best odds"
-        text="See the available betting odds for every match and easily find the best price"
-      />
-      <Step
-        n="03" kicker="Know the game" image={IMG.grass}
-        title="See the game in depth"
-        text="Study team and player statistics, form, results and all the data you need"
-      />
-      <Step
-        n="04" kicker="Track your performance" image={IMG.hero} align="right"
-        title="Build your own portfolio"
-        text="Record the matches you played, the odds and the result, and track what you win and lose every time"
-      />
-
-      {/* BRAND STATEMENT */}
-      <section className="relative min-h-[70vh] flex items-center justify-center overflow-hidden border-t border-white/5">
-        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${IMG.fog})` }} />
-        <div className="absolute inset-0 bg-[#0d1117]/85" />
-        <div className="relative text-center px-4 max-w-4xl mx-auto">
-          <h2 className="font-display font-black uppercase tracking-tight text-white text-4xl sm:text-6xl lg:text-7xl leading-[0.95]">
-            Betting<br />is not<br /><span style={{ color: NEON }}>a simple matter</span>
-          </h2>
-          <p className="text-zinc-300 text-lg sm:text-2xl mt-8">Before every decision, there is data</p>
-          <p className="text-zinc-500 text-base sm:text-lg mt-3 max-w-2xl mx-auto">
-            The more you understand the game, the more informed your decision can be.
-          </p>
-        </div>
-      </section>
-
-      {/* STATISTICS MESSAGE */}
-      <section className="relative py-28 sm:py-40 overflow-hidden border-t border-white/5">
-        <div className="absolute inset-0 bg-cover bg-center opacity-30" style={{ backgroundImage: `url(${IMG.grass})` }} />
-        <div className="absolute inset-0 bg-gradient-to-b from-[#0d1117] via-[#0d1117]/70 to-[#0d1117]" />
-        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 text-center">
-          <h2 className="font-display font-black uppercase tracking-tight text-white text-4xl sm:text-6xl lg:text-7xl leading-[0.95]">
-            Statistics<br />do not <span style={{ color: NEON }}>lie</span>
-          </h2>
-          <p className="font-display font-black uppercase text-2xl sm:text-4xl text-zinc-200 mt-6">Make them your tool</p>
-          <p className="text-zinc-400 text-lg sm:text-xl mt-10">Study every detail</p>
-          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 mt-6 font-display font-black uppercase tracking-tight text-xl sm:text-3xl text-white/90">
-            <span>Teams</span><span>Players</span><span>Form</span>
-            <span>Results</span><span>Odds</span><span>Stats</span>
-          </div>
-          <p className="text-[#39FF14] font-display font-black uppercase tracking-tight text-2xl sm:text-4xl mt-14">
-            The details can make the difference
-          </p>
-        </div>
-      </section>
-
-      {/* BENEFITS — large statements */}
-      <section className="py-24 sm:py-32 border-t border-white/5">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6">
-          <div className="space-y-6 sm:space-y-8">
-            {[
-              "Find the matches worth analysing",
-              "Find the best betting odds for every match",
-              "See the stats of every team",
-              "See the stats of every player",
-              "Study every detail",
-              "Track your own profit and losses",
-            ].map((t, i) => (
-              <div key={i} className="group flex items-baseline gap-4 sm:gap-6">
-                <span className="font-display font-black text-[#39FF14]/40 text-xl sm:text-3xl w-10 shrink-0">{String(i + 1).padStart(2, "0")}</span>
-                <p className="font-display font-black uppercase tracking-tight text-white text-2xl sm:text-4xl lg:text-5xl leading-[1.05] group-hover:text-[#39FF14] transition-colors">
-                  {t}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* JOURNEY: FIND -> ANALYSE -> CHOOSE -> TRACK */}
-      <section className="py-24 border-t border-white/5 bg-black/20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <h3 className="text-center font-display font-black uppercase tracking-[0.25em] text-zinc-500 text-sm mb-14">The LION Journey</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-8 sm:gap-4">
-            {[
-              { icon: Search, t: "Find", d: "Discover the matches worth watching." },
-              { icon: BarChart3, t: "Analyse", d: "Compare odds, team data and player statistics." },
-              { icon: TrendingUp, t: "Choose", d: "Make your own decision using the information." },
-              { icon: Wallet, t: "Track", d: "Record your bets and monitor your performance." },
-            ].map((s, i) => (
-              <div key={s.t} className="relative text-center">
-                <div className="w-14 h-14 mx-auto rounded-2xl bg-[#39FF14]/10 border border-[#39FF14]/30 flex items-center justify-center text-[#39FF14] mb-4">
-                  <s.icon className="w-6 h-6" />
+          {/* THREE PILLARS */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-9" data-testid="home-pillars">
+            {PILLARS.map((p) => (
+              <div key={p.title}
+                className="group text-left rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-sm p-5 hover:border-[#39FF14]/50 hover:bg-[#39FF14]/[0.04] transition-colors">
+                <div className="w-10 h-10 rounded-xl bg-[#39FF14]/10 border border-[#39FF14]/30 flex items-center justify-center text-[#39FF14] mb-3">
+                  <p.icon className="w-5 h-5" />
                 </div>
-                <div className="font-display font-black uppercase tracking-tight text-white text-2xl">{s.t}</div>
-                <p className="text-zinc-400 text-sm mt-2 max-w-[16rem] mx-auto">{s.d}</p>
-                {i < 3 && <ArrowRight className="hidden sm:block absolute top-5 -right-2 w-5 h-5 text-zinc-700" />}
+                <div className="font-display font-black uppercase tracking-tight text-white">{p.title}</div>
+                <p className="text-sm text-zinc-400 mt-1.5 leading-relaxed">{p.text}</p>
               </div>
             ))}
           </div>
-        </div>
-      </section>
 
-      {/* FINAL CTA */}
-      <section className="relative py-28 sm:py-40 overflow-hidden border-t border-white/5">
-        <div className="absolute inset-0 bg-cover bg-center opacity-40" style={{ backgroundImage: `url(${IMG.arena})` }} />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0d1117] via-[#0d1117]/80 to-[#0d1117]/60" />
-        <div className="relative text-center px-4 max-w-4xl mx-auto">
-          <h2 className="font-display font-black uppercase tracking-tight text-white text-3xl sm:text-5xl lg:text-6xl leading-[0.95]">
-            Study the game<br />See the opportunities<br /><span style={{ color: NEON }}>Make your own decision</span>
-          </h2>
-          <p className="text-zinc-300 text-lg sm:text-xl mt-8">Ready to see today's opportunities?</p>
-          <Link to="/matches" data-testid="cta-explore-matches" className="inline-flex items-center gap-2 mt-8 px-10 py-4 rounded-full bg-[#39FF14] text-black font-black uppercase tracking-wider text-sm hover:brightness-110 transition">
-            Explore Matches <ArrowRight className="w-4 h-4" />
-          </Link>
-          <p className="text-[11px] text-zinc-600 mt-10 max-w-2xl mx-auto">
-            LION provides data-driven insights and potential opportunities. It does not guarantee profits or winning bets.
-          </p>
+          {/* RESPONSIBLE GAMBLING / COMPLIANCE */}
+          <div className="mt-8 rounded-2xl border border-white/10 bg-black/40 px-5 py-4" data-testid="home-compliance">
+            <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#FF3B30]/15 border border-[#FF3B30]/40 text-[#FF3B30] text-[11px] font-black tracking-wider">
+                21+
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-white/15 text-zinc-300 text-[11px] font-bold tracking-wider">
+                <ShieldCheck className="w-3.5 h-3.5 text-[#39FF14]" /> Licensed operators only
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-white/15 text-zinc-300 text-[11px] font-bold tracking-wider">
+                Play responsibly
+              </span>
+            </div>
+            <p className="text-[11px] leading-relaxed text-zinc-500 text-center max-w-4xl mx-auto">
+              LION.STATS is an independent statistics and analysis service. <b className="text-zinc-300">We are not a bookmaker</b>,
+              we do not accept bets or handle any money. Odds are indicative, provided for information by bookmakers licensed by the
+              Hellenic Gaming Commission (EEEP), and can change at any time. Betting is permitted only for persons
+              <b className="text-zinc-300"> 21 years and over</b>. Gambling involves risk of losing money and can be addictive —
+              set limits and never bet money you cannot afford to lose. Model probabilities and AI commentary are estimates from
+              historical data and <b className="text-zinc-300">do not guarantee any result or profit</b>.
+              Help &amp; support: KETHEA ALFA helpline 210 9237777 · <span className="text-zinc-400">kethea-alfa.gr</span>.
+            </p>
+          </div>
         </div>
-      </section>
+      </main>
     </div>
   );
 }
