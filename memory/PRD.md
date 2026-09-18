@@ -521,3 +521,10 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - Goal Markets: smaller donuts (78px) so every label fits inside the boxes; Over/Under + BTTS legends always show a green/yellow dot matching the slice colour (fixed colours instead of conditional grey).
 - Match History: new backend endpoint GET /api/teams/{id}/recent?last=6 (af.recent_fixtures_for_team -> API-Football /fixtures?team&last, cached 6h) gives the last 6 matches ACROSS ALL competitions with a Comp. column; league-results feed is the fallback when the club id can't be resolved.
 - Removed the "Show advanced statistics" block entirely (toggle, Pro lock, upsell modal, StatsTable) from the analysis page.
+
+## 2026-06 odds-api.io merge (unified, de-duplicated odds)
+- odds_api_io.py: added canon_book() (Stoiximan / stoiximan / Stoiximan.gr -> same book, domain suffixes stripped, display-name map) and merge_odds(primary, extra) = ONE list per match, a bookmaker/selection never twice; newest timestamp wins, else best valid price; invalid/empty prices dropped; `source` kept per entry ("apifootball" | "odds-api.io").
+- live_values._build_one_league now calls oaio.merge_odds(apifootball_odds, greek_odds) instead of the old name-only dedupe. Same response schema -> frontend odds UI untouched.
+- Provider requests: bookmakers param now OPTIONAL — if ODDS_API_IO_BOOKMAKERS is empty we request everything the plan allows and keep whatever comes back; /odds/multi with per-event /odds?eventId= fallback; 12h shared cache; whole provider gated behind ODDS_API_IO_KEY (fail-open).
+- Unit-verified: same book+selection both sources -> 1 entry; different books -> both; different prices no ts -> best; newer ts -> that price; invalid records dropped; either/both providers down -> existing behaviour. Live /api/value-matches: 110 matches, 0 duplicate bookmakers.
+- BLOCKER: real ODDS_API_IO_KEY not provided yet (user pasted docs placeholder). Once set in backend/.env + Render env, call GET /v3/bookmakers to see which books the plan allows.

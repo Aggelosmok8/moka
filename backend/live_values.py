@@ -200,11 +200,8 @@ async def _build_one_league(slug: str) -> list:
         if count >= MAX_PER_LEAGUE:
             break
         home, away = f["home"], f["away"]
-        odds = list(odds_map.get(f["id"]) or [])
-        greek = oaio.lookup(greek_idx, home, away)
-        if greek:
-            have = {e["bookmaker"].strip().lower() for e in odds}
-            odds += [g for g in greek if g["bookmaker"].strip().lower() not in have]
+        # One unified, de-duplicated odds list from both providers.
+        odds = oaio.merge_odds(odds_map.get(f["id"]) or [], oaio.lookup(greek_idx, home, away))
         if not odds:                     # no odds -> skip (never show empty odds)
             continue
         hs = _lookup(idx, home)
