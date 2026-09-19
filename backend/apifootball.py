@@ -95,8 +95,17 @@ def _key() -> str:
     return os.environ.get("API_FOOTBALL_KEY") or os.environ.get("APISPORTS_KEY", "")
 
 
+def league_logo(slug: str) -> str:
+    """Static api-sports CDN badge (no API call, no quota)."""
+    c = CATALOG.get(slug) or {}
+    lid = c.get("league_id")
+    sport = "basketball" if c.get("sport") == "basketball" else "football"
+    return f"https://media.api-sports.io/{sport}/leagues/{lid}.png" if lid else ""
+
+
 def leagues_list() -> list:
-    return [{"id": slug, "name": c["name"], "sport": c["sport"]} for slug, c in CATALOG.items()]
+    return [{"id": slug, "name": c["name"], "sport": c["sport"], "logo": league_logo(slug)}
+            for slug, c in CATALOG.items()]
 
 
 _cache: dict = {}

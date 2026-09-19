@@ -4,6 +4,7 @@ import { Lock } from "lucide-react";
 import Header from "../components/Header";
 import { useEntitlements } from "../hooks/useEntitlements";
 import { fetchCatalogMatches } from "../lib/catalogApi";
+import { fetchLeagues } from "../lib/api";
 import { SPORTS, leaguesForSport } from "../lib/sportsCatalog";
 
 const EUROPE = new Set(["ucl", "uel", "uecl"]);
@@ -20,6 +21,7 @@ const groupLeagues = (list) => [
 export default function LeaguesPage() {
   const { accessibleIds } = useEntitlements();
   const [matches, setMatches] = useState([]);
+  const [logos, setLogos] = useState({});
 
   useEffect(() => {
     let active = true;
@@ -29,6 +31,19 @@ export default function LeaguesPage() {
     return () => {
       active = false;
     };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    fetchLeagues()
+      .then((rows) => {
+        if (!active) return;
+        const map = {};
+        (rows || []).forEach((r) => { if (r.logo) map[r.id] = r.logo; });
+        setLogos(map);
+      })
+      .catch(() => {});
+    return () => { active = false; };
   }, []);
 
   const counts = useMemo(() => {
@@ -58,10 +73,17 @@ export default function LeaguesPage() {
                   {g.items.map((l) => {                const soon = l.coming_soon;
                 const locked = !soon && !accessibleIds.has(l.id);
                 const inner = (
-                  <div className="flex items-center justify-between bg-[#161b22] border border-[#30363d] rounded-xl p-4 hover:border-[#39FF14]/40 transition-all">
-                    <div>
-                      <div className="font-display font-bold text-white">{l.name}</div>
+                  <div className="flex items-center justify-between gap-3 bg-[#161b22] border border-[#30363d] rounded-xl p-4 hover:border-[#39FF14]/40 transition-all">
+                    <div className="flex items-center gap-3 min-w-0">
+                      {logos[l.id] && (
+                        <img src={logos[l.id]} alt="" loading="lazy"
+                          className="w-8 h-8 object-contain shrink-0 bg-white/5 rounded p-0.5"
+                          onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                      )}
+                      <div className="min-w-0">
+                      <div className="font-display font-bold text-white truncate">{l.name}</div>
                       <div className="text-xs text-zinc-500">{soon ? "Not available yet" : `${counts[l.id] || 0} value matches`}</div>
+                      </div>
                     </div>
                     {soon ? (
                       <span className="text-[#FFD60A] text-[10px] font-black uppercase tracking-wider border border-[#FFD60A]/40 rounded-full px-2 py-0.5">Coming soon</span>
