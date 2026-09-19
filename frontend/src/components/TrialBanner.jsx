@@ -59,13 +59,13 @@ export default function TrialBanner() {
   }
 
   // expired / free
-  if (status === "expired") {
+  if (status === "expired" || (status === "free" && user.trial_used)) {
     return (
       <div className="bg-[#FF3B30]/10 border-b border-[#FF3B30]/20" data-testid="trial-banner-expired">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center justify-between gap-3 flex-wrap">
           <span className="text-sm text-[#FF3B30] flex items-center gap-2">
             <AlertTriangle className="w-4 h-4" />
-            <span className="text-zinc-200"><b className="text-white">Trial ended.</b> Upgrade to unlock all leagues, value bets & odds.</span>
+            <span className="text-zinc-200"><b className="text-white">Your free trial has already been used.</b> Upgrade to unlock all leagues, value bets &amp; odds.</span>
           </span>
           <Link to="/pricing" data-testid="banner-upgrade-link" className="text-xs font-black uppercase tracking-wider neon-bg text-black px-3 py-1.5 rounded hover:bg-[#32E612] transition-colors">
             Upgrade to Pro

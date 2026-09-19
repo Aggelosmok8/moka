@@ -7,6 +7,7 @@ which works with ANY Vercel preview URL without CORS config changes.
 import os
 import uuid
 import json
+import hashlib
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
@@ -43,6 +44,7 @@ class User(BaseModel):
     plan: Optional[str] = None
     trial_end_date: Optional[str] = None
     trial_days_left: int = 0
+    trial_used: bool = False
 
 
 def _is_pro_now(user_doc: dict) -> bool:
@@ -94,6 +96,59 @@ def _effective_status(user_doc: dict) -> tuple[str, int]:
     return "free", 0
 
 
+TRIAL_COOLDOWN_DAYS = 365   # one trial per identity per year (anti-abuse)
+
+
+def identity_key(email: str) -> str:
+    """Stable, GDPR-safe identity hash: normalised email -> sha256.
+
+    Gmail aliases (dots / +tag) resolve to the same inbox, so they resolve to the
+    same key. Only the hash is stored, never the address itself.
+    """
+    e = (email or "").strip().lower()
+    if not e or "@" not in e:
+        return ""
+    local, _, domain = e.partition("@")
+    local = local.split("+", 1)[0]
+    if domain in ("gmail.com", "googlemail.com"):
+        local = local.replace(".", "")
+        domain = "gmail.com"
+    return hashlib.sha256(f"{local}@{domain}".encode()).hexdigest()
+
+
+async def trial_already_used(db, email: str, provider_id: str = "") -> bool:
+    """True if this identity already consumed a trial within the cooldown."""
+    key = identity_key(email)
+    row = None
+    if key:
+        row = await db.trial_ledger.find_one({"identity_key": key})
+    if not row and provider_id:
+        row = await db.trial_ledger.find_one({"provider_id": str(provider_id)})
+    if not row:
+        return False
+    started = row.get("first_trial_at")
+    try:
+        dt = datetime.fromisoformat(started)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        return True
+    return (datetime.now(timezone.utc) - dt).days < TRIAL_COOLDOWN_DAYS
+
+
+async def record_trial(db, email: str, provider_id: str = "") -> None:
+    key = identity_key(email)
+    if not key:
+        return
+    if await db.trial_ledger.find_one({"identity_key": key}):
+        return
+    await db.trial_ledger.insert_one({
+        "identity_key": key,
+        "provider_id": str(provider_id or ""),
+        "first_trial_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+
 async def _resolve_token(request: Request) -> Optional[str]:
     """Extract Bearer token from Authorization header."""
     auth = request.headers.get("Authorization") or ""
@@ -138,6 +193,7 @@ def make_auth_router(db) -> APIRouter:
             plan=user_doc.get("plan"),
             trial_end_date=user_doc.get("trial_end_date"),
             trial_days_left=days_left,
+            trial_used=bool(user_doc.get("trial_used")) or eff_status in ("trial", "expired"),
         )
 
     async def current_user(request: Request) -> User:
@@ -196,24 +252,32 @@ def make_auth_router(db) -> APIRouter:
             )
         else:
             user_id = f"user_{uuid.uuid4().hex[:12]}"
+            provider_id = data.get("id") or ""
+            # Anti-abuse: an identity that already used a trial (even if the
+            # account was deleted) is created as a normal free user.
+            used = await trial_already_used(db, email, provider_id)
             trial_start = datetime.now(timezone.utc)
             trial_end = (trial_start + timedelta(days=TRIAL_DAYS)).isoformat()
             new_doc = {
                 "user_id": user_id,
                 "email": email,
+                "provider_id": provider_id,
                 "name": data.get("name", ""),
                 "picture": data.get("picture"),
                 # 7-day no-card Pro trial — grants full Pro access via pro_until.
-                "subscription_status": "trialing",
+                "subscription_status": None if used else "trialing",
                 "plan": None,
-                "trial_start_date": trial_start.isoformat(),
-                "trial_end_date": trial_end,
-                "pro_until": trial_end,
+                "trial_start_date": None if used else trial_start.isoformat(),
+                "trial_end_date": None if used else trial_end,
+                "pro_until": None if used else trial_end,
+                "trial_used": used,
                 "emails_sent": "[]",
                 "created_at": now,
                 "last_login_at": now,
             }
             await db.users.insert_one(new_doc)
+            if not used:
+                await record_trial(db, email, provider_id)
             # Fire welcome email (no-op without RESEND_API_KEY)
             await email_service.evaluate_lifecycle(db, new_doc)
 

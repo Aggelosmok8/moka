@@ -22,7 +22,7 @@ from football_service_layer import (
     get_bookmaker_links, fsl_cache_clear, fsl_cache_meta,
     generate_match_insight, _compute_value_score, _mock_matches,
 )
-from auth import make_auth_router
+from auth import make_auth_router, record_trial
 from billing import make_billing_router, make_webhook_router, cancel_user_subscription
 from retention import make_alerts_router, start_digest_scheduler
 from analytics import make_analytics_router
@@ -253,6 +253,15 @@ async def delete_account(user=Depends(current_user)):
     """GDPR right-to-erasure: cancel any active Stripe subscription, then delete
     the user and all their data. Idempotent-safe."""
     uid = user.user_id
+    # 0) Anti-abuse: remember (one-way hash only) that this identity already used
+    # a free trial, so delete + re-signup cannot grant a second one.
+    try:
+        doc = await db.users.find_one({"user_id": uid})
+        if doc and (doc.get("trial_start_date") or doc.get("subscription_status") in ("trialing", "active")):
+            await record_trial(db, doc.get("email") or "", doc.get("provider_id") or "")
+    except Exception as e:
+        logger.warning("delete-account: trial ledger failed for %s: %s", uid, e)
+
     # 1) Cancel Stripe subscription first (best-effort, never blocks deletion).
     try:
         await cancel_user_subscription(db, uid)

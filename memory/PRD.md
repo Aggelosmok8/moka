@@ -528,3 +528,10 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - Provider requests: bookmakers param now OPTIONAL — if ODDS_API_IO_BOOKMAKERS is empty we request everything the plan allows and keep whatever comes back; /odds/multi with per-event /odds?eventId= fallback; 12h shared cache; whole provider gated behind ODDS_API_IO_KEY (fail-open).
 - Unit-verified: same book+selection both sources -> 1 entry; different books -> both; different prices no ts -> best; newer ts -> that price; invalid records dropped; either/both providers down -> existing behaviour. Live /api/value-matches: 110 matches, 0 duplicate bookmakers.
 - BLOCKER: real ODDS_API_IO_KEY not provided yet (user pasted docs placeholder). Once set in backend/.env + Render env, call GET /v3/bookmakers to see which books the plan allows.
+
+## 2026-06 Free-trial abuse protection
+- New `trial_ledger` table (sqlite + Postgres schema, idempotent): identity_key (sha256 of normalised email — gmail dots/+tags collapsed), provider_id (Emergent/Google subject id), first_trial_at.
+- auth.py: `identity_key()`, `trial_already_used()` (365-day cooldown), `record_trial()`. New signups that match the ledger by email hash OR google sub are created as normal FREE users (no trial dates, no pro_until, trial_used=true). Users now also store `provider_id`.
+- server.py delete-account: writes the ledger entry (hash only, GDPR-safe) before erasing the account, so delete + re-signup can't grant a second trial.
+- /auth/me exposes `trial_used`; TrialBanner shows "Your free trial has already been used" instead of offering a new one.
+- Verified: alias normalisation (abuse.test+tag@gmail.com == Abuse.Test@googlemail.com), before/after ledger, match by google sub, clean identities unaffected, ledger idempotent (1 row), existing test-user logins and /auth/me unchanged.
