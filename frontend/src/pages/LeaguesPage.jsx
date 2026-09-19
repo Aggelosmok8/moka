@@ -6,6 +6,17 @@ import { useEntitlements } from "../hooks/useEntitlements";
 import { fetchCatalogMatches } from "../lib/catalogApi";
 import { SPORTS, leaguesForSport } from "../lib/sportsCatalog";
 
+const EUROPE = new Set(["ucl", "uel", "uecl"]);
+const CUPS = new Set(["facup", "eflcup", "copadelrey", "coppaitalia", "dfbpokal",
+  "coupedefrance", "greekcup", "portugalcup", "knvbbeker", "scottishcup", "danishcup"]);
+
+// Country leagues first, then European competitions, then national cups.
+const groupLeagues = (list) => [
+  { key: "country-leagues", title: "Country Leagues", items: list.filter((l) => !EUROPE.has(l.id) && !CUPS.has(l.id)) },
+  { key: "europe", title: "Europe Competitions", items: list.filter((l) => EUROPE.has(l.id)) },
+  { key: "country-cups", title: "Country Cups", items: list.filter((l) => CUPS.has(l.id)) },
+].filter((g) => g.items.length > 0);
+
 export default function LeaguesPage() {
   const { accessibleIds } = useEntitlements();
   const [matches, setMatches] = useState([]);
@@ -35,12 +46,16 @@ export default function LeaguesPage() {
         <h1 className="font-display font-black uppercase tracking-tight text-3xl text-white mb-6">Leagues</h1>
         {SPORTS.map((s) => (
           <section key={s.key} className="mb-8">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-400 mb-3">
-              {s.icon} {s.label}
+            <h2 className="font-display font-black uppercase tracking-tight text-2xl sm:text-3xl text-white mb-5 flex items-center gap-2">
+              <span className="text-xl sm:text-2xl">{s.icon}</span> {s.label}
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {leaguesForSport(s.key).map((l) => {
-                const soon = l.coming_soon;
+            {groupLeagues(leaguesForSport(s.key)).map((g, _i, all) => (
+              <div key={g.key} className="mb-6" data-testid={`league-group-${g.key}`}>
+                {all.length > 1 && (
+                  <h3 className="font-display font-black uppercase tracking-wide text-lg sm:text-xl text-[#39FF14] mb-3">{g.title}</h3>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {g.items.map((l) => {                const soon = l.coming_soon;
                 const locked = !soon && !accessibleIds.has(l.id);
                 const inner = (
                   <div className="flex items-center justify-between bg-[#161b22] border border-[#30363d] rounded-xl p-4 hover:border-[#39FF14]/40 transition-all">
@@ -63,7 +78,9 @@ export default function LeaguesPage() {
                   <Link key={l.id} to={`/leagues/${l.id}`} data-testid={`league-open-${l.id}`}>{inner}</Link>
                 );
               })}
-            </div>
+                </div>
+              </div>
+            ))}
           </section>
         ))}
       </main>

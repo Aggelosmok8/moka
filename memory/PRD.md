@@ -535,3 +535,6 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - server.py delete-account: writes the ledger entry (hash only, GDPR-safe) before erasing the account, so delete + re-signup can't grant a second trial.
 - /auth/me exposes `trial_used`; TrialBanner shows "Your free trial has already been used" instead of offering a new one.
 - Verified: alias normalisation (abuse.test+tag@gmail.com == Abuse.Test@googlemail.com), before/after ledger, match by google sub, clean identities unaffected, ledger idempotent (1 row), existing test-user logins and /auth/me unchanged.
+
+## 2026-06 Leagues page grouping
+- LeaguesPage: football leagues grouped under FOOTBALL as "Country Leagues" -> "Europe Competitions" -> "Country Cups" (groupLeagues() with EUROPE/CUPS id sets). Group title hidden when a sport has a single group (Basketball). No data/entitlement logic changed.
