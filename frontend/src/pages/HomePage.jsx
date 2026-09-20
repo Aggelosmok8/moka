@@ -85,8 +85,6 @@ export default function HomePage() {
                 </div>
                 <p className="text-xs text-zinc-500 mt-3" data-testid="home-signin-note">
                   Free account or 7-day Pro trial — no card required, cancel anytime.
-                  {" · "}
-                  <Link to="/matches" className="underline hover:text-zinc-300" data-testid="home-browse-guest">Just looking? Browse today's matches</Link>
                 </p>
               </>
             ) : (

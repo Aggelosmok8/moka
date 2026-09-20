@@ -10,6 +10,7 @@ import { useChart } from "../contexts/ChartContext";
 import { usePortfolio } from "../contexts/PortfolioContext";
 import { navLabel } from "../lib/i18n";
 import { useLang } from "../contexts/LanguageContext";
+import { useAuth } from "../contexts/AuthContext";
 import LangToggle from "./LangToggle";
 
 const NavLink = ({ to, label, icon: Icon, active, testId, badge }) => (
@@ -49,6 +50,9 @@ export const Header = () => {
   const { pendingCount, newlySettled, slipCount } = usePortfolio();
   const { lang } = useLang();
   const [menuOpen, setMenuOpen] = useState(false);
+  const { user } = useAuth();
+  // Signed-out visitors only get Pricing — the rest of the app is gated.
+  const navItems = user ? NAV_ITEMS : NAV_ITEMS.filter((it) => it.to === "/pricing");
   useEffect(() => { setMenuOpen(false); }, [loc.pathname]);
   const badgeFor = (b) => (b === "chart" ? chartCount : b === "pending" ? (slipCount || newlySettled || pendingCount) : 0);
 
@@ -78,7 +82,7 @@ export const Header = () => {
         </Link>
 
         <nav className="hidden lg:flex items-center justify-center gap-0.5 flex-1 min-w-0">
-          {NAV_ITEMS.map((it) => (
+          {navItems.map((it) => (
             <NavLink key={it.to} to={it.to} label={navLabel(it.label)} icon={it.icon} testId={it.testId}
               active={it.isActive(loc.pathname)} badge={badgeFor(it.badge)} />
           ))}
@@ -118,7 +122,7 @@ export const Header = () => {
 
       {menuOpen && (
         <nav data-testid="mobile-nav" className="lg:hidden border-t border-white/10 bg-[#0A0A0A]/95 backdrop-blur-xl px-4 py-2 flex flex-col gap-0.5">
-          {NAV_ITEMS.map((it) => {
+          {navItems.map((it) => {
             const Icon = it.icon;
             const active = it.isActive(loc.pathname);
             const badge = badgeFor(it.badge);

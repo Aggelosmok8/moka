@@ -29,7 +29,27 @@ import NewsPage from "./pages/NewsPage";
 import ComparePage from "./pages/ComparePage";
 import SlipFab from "./components/SlipFab";
 import DevLoginPanel from "./components/DevLoginPanel";
+import { useAuth } from "./contexts/AuthContext";
 import "@/index.css";
+
+// Signed-out visitors only get the entry page and Pricing; everything else
+// sends them back to "/" where the Google sign-in / trial CTAs live.
+function RequireAuth({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0d1117] flex items-center justify-center">
+        <div className="text-zinc-400 text-sm flex items-center gap-2" data-testid="auth-gate-loading">
+          <span className="w-2 h-2 rounded-full bg-[#39FF14] live-dot" /> Loading…
+        </div>
+      </div>
+    );
+  }
+  if (!user) return <Navigate to="/" replace />;
+  return children;
+}
+
+const Gated = ({ element }) => <RequireAuth>{element}</RequireAuth>;
 
 function AppRouter() {
   // Detect auth callback synchronously during render to avoid race conditions
@@ -41,21 +61,21 @@ function AppRouter() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
-      <Route path="/matches" element={<MatchesPage />} />
+      <Route path="/matches" element={<Gated element={<MatchesPage />} />} />
       <Route path="/value" element={<Navigate to="/matches" replace />} />
-      <Route path="/leagues" element={<LeaguesPage />} />
-      <Route path="/leagues/:slug" element={<LeagueDetailPage />} />
+      <Route path="/leagues" element={<Gated element={<LeaguesPage />} />} />
+      <Route path="/leagues/:slug" element={<Gated element={<LeagueDetailPage />} />} />
       <Route path="/odds" element={<Navigate to="/matches" replace />} />
-      <Route path="/charts" element={<ChartsPage />} />
-      <Route path="/portfolio" element={<PortfolioPage />} />
-      <Route path="/news" element={<NewsPage />} />
-      <Route path="/compare" element={<ComparePage />} />
-      <Route path="/sports" element={<SportsPage />} />
-      <Route path="/teams" element={<TeamsPage />} />
-      <Route path="/analysis/:id" element={<MatchAnalysisPage />} />
-      <Route path="/account" element={<AccountPage />} />
-      <Route path="/team/:id" element={<TeamPage />} />
-      <Route path="/match/:id" element={<MatchPage />} />
+      <Route path="/charts" element={<Gated element={<ChartsPage />} />} />
+      <Route path="/portfolio" element={<Gated element={<PortfolioPage />} />} />
+      <Route path="/news" element={<Gated element={<NewsPage />} />} />
+      <Route path="/compare" element={<Gated element={<ComparePage />} />} />
+      <Route path="/sports" element={<Gated element={<SportsPage />} />} />
+      <Route path="/teams" element={<Gated element={<TeamsPage />} />} />
+      <Route path="/analysis/:id" element={<Gated element={<MatchAnalysisPage />} />} />
+      <Route path="/account" element={<Gated element={<AccountPage />} />} />
+      <Route path="/team/:id" element={<Gated element={<TeamPage />} />} />
+      <Route path="/match/:id" element={<Gated element={<MatchPage />} />} />
       <Route path="/pricing" element={<PricingPage />} />
       <Route path="/pricing/success" element={<PricingSuccessPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />

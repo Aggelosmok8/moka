@@ -29,8 +29,12 @@ TRIAL_DAYS = 7
 ADMIN_EMAILS = [e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()]
 
 
-def is_admin(user) -> bool:
-    return bool(user) and (getattr(user, "email", "") or "").strip().lower() in ADMIN_EMAILS
+def _truthy(v) -> bool:
+    """TEXT columns hold '1'/'' (and legacy '0'/'false') — coerce safely."""
+    return str(v or "").strip().lower() not in ("", "0", "false", "none")
+
+
+def is_admin(user) -> bool:    return bool(user) and (getattr(user, "email", "") or "").strip().lower() in ADMIN_EMAILS
 
 
 class User(BaseModel):
@@ -193,7 +197,7 @@ def make_auth_router(db) -> APIRouter:
             plan=user_doc.get("plan"),
             trial_end_date=user_doc.get("trial_end_date"),
             trial_days_left=days_left,
-            trial_used=bool(user_doc.get("trial_used")) or eff_status in ("trial", "expired"),
+            trial_used=_truthy(user_doc.get("trial_used")) or eff_status in ("trial", "expired"),
         )
 
     async def current_user(request: Request) -> User:
@@ -270,7 +274,9 @@ def make_auth_router(db) -> APIRouter:
                 "trial_start_date": None if used else trial_start.isoformat(),
                 "trial_end_date": None if used else trial_end,
                 "pro_until": None if used else trial_end,
-                "trial_used": used,
+                # Postgres stores this column as TEXT — writing a bool makes
+                # asyncpg reject the whole INSERT (new signups would 500).
+                "trial_used": "1" if used else "",
                 "emails_sent": "[]",
                 "created_at": now,
                 "last_login_at": now,

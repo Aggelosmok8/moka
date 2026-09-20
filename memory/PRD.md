@@ -570,3 +570,9 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - compare/ai payload includes the chosen metrics and the prompt forbids judging a GK/defender on goals.
 - Accent colour: cyan/pink variants were trialled on Side B and REVERTED at user request — Side B stays #FFD60A.
 - Verified: teams rows (Man City vs Arsenal: GD 8/4, Win% 100/80), GK vs DEF shows goalkeeper metrics + warning, backend returns saves 14 / conceded 5 / passAccuracy 73 for Donnarumma. yarn build OK.
+
+## 2026-09-20 CRITICAL: new-user login was broken + app gated behind sign-in
+- ROOT CAUSE (login): the trial-abuse fix inserted a Python bool into users.trial_used, which on Postgres is a TEXT column -> asyncpg "invalid input for query argument $11: 0 (expected str, got int)" -> /api/auth/session returned 500 for EVERY brand-new email. Existing accounts (e.g. the admin) logged in fine, which is why it looked like "only new emails can't sign in".
+- Fix: auth.py writes "1"/"" and reads through new _truthy() helper (handles legacy '0'/'false'). Reproduced and verified with a DB probe: insert user + record_trial + insert session all succeed now (previously raised DataError).
+- Gating: App.jsx has RequireAuth — only "/" and "/pricing" are public, every other route redirects a signed-out visitor to "/". Header only shows Pricing to guests (verified: guest nav = ['Pricing'], signed-in nav = all 7). Removed the "Just looking? Browse today's matches" guest link from HomePage.
+- Verified: guest deep links /matches /portfolio /compare /account /news all bounce to "/", /pricing stays public, signed-in deep link renders the matches grid, /api/auth/me 401 without token and 200 with a test token.
