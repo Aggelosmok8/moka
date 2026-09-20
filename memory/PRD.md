@@ -538,3 +538,9 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 
 ## 2026-06 Leagues page grouping
 - LeaguesPage: football leagues grouped under FOOTBALL as "Country Leagues" -> "Europe Competitions" -> "Country Cups" (groupLeagues() with EUROPE/CUPS id sets). Group title hidden when a sport has a single group (Basketball). No data/entitlement logic changed.
+
+## 2026-06 Signed-out entry experience
+- HomePage is now a proper entry point: guests see "Sign in with Google" (white Google button) + "Start 7-day free trial" (both Emergent Google flow), with the note "Free account or 7-day Pro trial — no card required" and a small "Just looking? Browse today's matches" guest link. Logged-in users keep Today's matches / Compare (or "Upgrade to Pro" when not pro) / My portfolio.
+- Sign out (and delete account) now await logout and redirect to "/" so the user lands on the entry page and can switch accounts; sessions still persist 7 days otherwise.
+- Test-user panel intentionally kept (bypass for QA).
+- Verified: guest CTAs, free-user CTAs incl. upgrade, and sign-out -> back to sign-in screen.

@@ -1,7 +1,14 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Target, BarChart3, Wallet, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, Target, BarChart3, Wallet, ShieldCheck, Sparkles, Crown } from "lucide-react";
 import Header from "../components/Header";
+import { useAuth } from "../contexts/AuthContext";
+
+// REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
+const startLogin = () => {
+  const redirectUrl = window.location.origin + "/";
+  window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+};
 
 const NEON = "#39FF14";
 const HERO_IMG = "https://images.unsplash.com/photo-1604524404499-67ba5a962db8?crop=entropy&cs=srgb&fm=jpg&q=85&w=2400";
@@ -25,6 +32,9 @@ const PILLARS = [
 ];
 
 export default function HomePage() {
+  const { user, loading } = useAuth();
+  const signedOut = !loading && !user;
+  const needsUpgrade = !!user && !user.is_pro;
   return (
     <div className="min-h-screen bg-[#0A0A0A] flex flex-col">
       <Header />
@@ -55,20 +65,53 @@ export default function HomePage() {
               Play in a controlled way, see what you win and what you lose, and keep full control of your game.
             </p>
 
-            <div className="flex flex-wrap items-center justify-center gap-3 mt-7">
-              <Link to="/matches" data-testid="hero-explore-matches"
-                className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-[#39FF14] text-black font-black uppercase tracking-wider text-sm hover:brightness-110 transition">
-                Today's matches <ArrowRight className="w-4 h-4" />
-              </Link>
-              <Link to="/compare" data-testid="hero-compare"
-                className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full border border-white/20 text-white font-bold uppercase tracking-wider text-sm hover:bg-white/5 transition">
-                <Sparkles className="w-4 h-4 text-[#39FF14]" /> Compare teams & players
-              </Link>
-              <Link to="/portfolio" data-testid="hero-portfolio"
-                className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full border border-white/20 text-white font-bold uppercase tracking-wider text-sm hover:bg-white/5 transition">
-                <Wallet className="w-4 h-4 text-[#39FF14]" /> My portfolio
-              </Link>
-            </div>
+            {signedOut ? (
+              <>
+                <div className="flex flex-wrap items-center justify-center gap-3 mt-7">
+                  <button onClick={startLogin} data-testid="home-signin-google"
+                    className="inline-flex items-center gap-2.5 px-7 py-3.5 rounded-full bg-white text-black font-black uppercase tracking-wider text-sm hover:bg-zinc-200 transition">
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
+                      <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.4a5.5 5.5 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.6-5.2 3.6-8.8z" />
+                      <path fill="#34A853" d="M12 24c3.2 0 5.9-1.1 7.9-2.9l-3.9-3a7.2 7.2 0 0 1-10.7-3.8h-4v3.1A12 12 0 0 0 12 24z" />
+                      <path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6h-4a12 12 0 0 0 0 10.8l4-3.1z" />
+                      <path fill="#EA4335" d="M12 4.8c1.8 0 3.4.6 4.6 1.8l3.4-3.4A12 12 0 0 0 1.3 6.6l4 3.1A7.2 7.2 0 0 1 12 4.8z" />
+                    </svg>
+                    Sign in with Google
+                  </button>
+                  <button onClick={startLogin} data-testid="home-start-trial"
+                    className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-[#39FF14] text-black font-black uppercase tracking-wider text-sm hover:brightness-110 transition">
+                    <Sparkles className="w-4 h-4" /> Start 7-day free trial
+                  </button>
+                </div>
+                <p className="text-xs text-zinc-500 mt-3" data-testid="home-signin-note">
+                  Free account or 7-day Pro trial — no card required, cancel anytime.
+                  {" · "}
+                  <Link to="/matches" className="underline hover:text-zinc-300" data-testid="home-browse-guest">Just looking? Browse today's matches</Link>
+                </p>
+              </>
+            ) : (
+              <div className="flex flex-wrap items-center justify-center gap-3 mt-7">
+                <Link to="/matches" data-testid="hero-explore-matches"
+                  className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-[#39FF14] text-black font-black uppercase tracking-wider text-sm hover:brightness-110 transition">
+                  Today's matches <ArrowRight className="w-4 h-4" />
+                </Link>
+                {needsUpgrade ? (
+                  <Link to="/pricing" data-testid="hero-upgrade"
+                    className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full border border-[#39FF14]/40 bg-[#39FF14]/10 text-white font-bold uppercase tracking-wider text-sm hover:bg-[#39FF14]/20 transition">
+                    <Crown className="w-4 h-4 text-[#39FF14]" /> {user.trial_used ? "Upgrade to Pro" : "See Pro plans"}
+                  </Link>
+                ) : (
+                  <Link to="/compare" data-testid="hero-compare"
+                    className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full border border-white/20 text-white font-bold uppercase tracking-wider text-sm hover:bg-white/5 transition">
+                    <Sparkles className="w-4 h-4 text-[#39FF14]" /> Compare teams &amp; players
+                  </Link>
+                )}
+                <Link to="/portfolio" data-testid="hero-portfolio"
+                  className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full border border-white/20 text-white font-bold uppercase tracking-wider text-sm hover:bg-white/5 transition">
+                  <Wallet className="w-4 h-4 text-[#39FF14]" /> My portfolio
+                </Link>
+              </div>
+            )}
           </div>
 
           {/* THREE PILLARS */}

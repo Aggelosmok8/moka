@@ -20,7 +20,8 @@ export const UserMenu = () => {
     setBusy(true);
     try {
       await api.post("/auth/delete-account");
-      logout();
+      await logout();
+      window.location.assign("/");
     } finally {
       setBusy(false);
     }
@@ -110,7 +111,7 @@ export const UserMenu = () => {
               <Wallet className="w-4 h-4" /> My Portfolio
             </Link>
             <button
-              onClick={() => { setOpen(false); logout(); }}
+              onClick={async () => { setOpen(false); await logout(); window.location.assign("/"); }}
               data-testid="logout-btn"
               className="w-full text-left flex items-center gap-2 px-2 py-2 rounded text-sm text-zinc-300 hover:bg-white/5"
             >
