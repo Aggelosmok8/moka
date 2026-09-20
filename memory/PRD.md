@@ -558,3 +558,15 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - MatchesPage scroll: saved by a throttled scroll listener, not on unmount (at unmount the browser has already clamped scrollY to 0 for the shorter page). Restore re-applies the target every 150ms for up to 3s because the live rows/cards mount late and early scrollTo calls get clamped.
 - MatchAnalysisPage: "Back to matches" (data-testid="back-to-matches") links to the stored filtered URL.
 - Verified in browser: saved 2600 -> restored 2600 (delta 0), league filter retained after Back, IN SLIP badge persists across navigation, manual scrolling still free afterwards. yarn build OK.
+
+## 2026-09-20 Compare: position-aware player metrics + team-level metrics
+- BUG: every player was compared on the same 9 raw totals, so a goalkeeper/defender scored 0 on Goals/Assists/Shots and always "lost"; totals also favoured whoever had more minutes.
+- apifootball.player_stats: now also aggregates saves, conceded, duelsTotal and a minutes-weighted passAccuracy.
+- apifootball standings (football): teams now carry goalDiff and winPct.
+- ComparePage: playerMetricDefs(posKey) picks the metric set per position — GK (Saves/90, Conceded/90, Save %, Pass accuracy, Rating, Minutes), DEF (Tackles/90, Interceptions/90, Duels won %, Fouls/90, Rating, Minutes), MID (Key passes/90, G+A/90, Pass accuracy, Tackles/90, Duels won %, Rating), ATT (Goals/90, Assists/90, Shots on target/90, Conversion %, Duels won %, Rating). Everything per-90 or a share.
+- Position mismatch banner (data-testid="compare-position-warning") states which position's metrics are shown (side A's).
+- Teams: "Played"/"Position" replaced by Goal difference and Win %.
+- Pie panel is now generic ("<first metric> share") instead of hardcoded goals/G+A.
+- compare/ai payload includes the chosen metrics and the prompt forbids judging a GK/defender on goals.
+- Accent colour: Side B changed from #FFD60A to cyan #22D3EE (pairs with the neon green, no longer clashes with the slip yellow).
+- Verified: teams rows (Man City vs Arsenal: GD 8/4, Win% 100/80), GK vs DEF shows goalkeeper metrics + warning, backend returns saves 14 / conceded 5 / passAccuracy 73 for Donnarumma. yarn build OK.

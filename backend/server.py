@@ -294,7 +294,8 @@ async def compare_ai(payload: dict):
     a, b = payload.get("a") or {}, payload.get("b") or {}
     if not a or not b:
         raise HTTPException(status_code=400, detail="Both sides are required")
-    raw = _json.dumps({"kind": kind, "a": a, "b": b}, sort_keys=True, ensure_ascii=False)
+    raw = _json.dumps({"kind": kind, "a": a, "b": b, "metrics": payload.get("metrics") or []},
+                      sort_keys=True, ensure_ascii=False)
     ck = f"compare_ai_{lang}_{hashlib.sha1(raw.encode()).hexdigest()[:14]}"
     cached = af._c_get(ck)
     if cached is not None:
@@ -307,6 +308,9 @@ async def compare_ai(payload: dict):
         "write a comparison of 70-110 words in plain English.\n"
         "RULES:\n"
         "- Use ONLY the numbers provided; never invent stats, injuries or transfers.\n"
+        "- Judge each player strictly by what their position requires: never call a "
+        "goalkeeper or defender weak for scoring few goals, and use the `metrics` list "
+        "(already chosen for the position, per 90 minutes) as the main evidence.\n"
         "- For EACH side state one or two clear strengths AND one or two weaknesses, "
         "based strictly on the numbers.\n"
         "- Finish with one hedged sentence on who the data favours and in what role/context.\n"

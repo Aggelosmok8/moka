@@ -11,7 +11,7 @@ import { useLang } from "../contexts/LanguageContext";
 
 const FOOTBALL_LEAGUES = LEAGUE_CATALOG.filter((l) => l.sport === "football" && !l.coming_soon);
 const A_COLOR = "#39FF14";
-const B_COLOR = "#FFD60A";
+const B_COLOR = "#22D3EE";
 
 const formNum = (form) => {
   const r = (form || []).slice(-5);
@@ -87,13 +87,60 @@ const StatRow = ({ label, a, b, better }) => {
     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 py-2 border-b border-white/5 last:border-0">
       <div className={`text-right font-bold ${aw ? "text-[#39FF14]" : "text-zinc-300"}`}>{a}</div>
       <div className="text-[11px] uppercase tracking-wider text-zinc-500 text-center min-w-[110px]">{label}</div>
-      <div className={`font-bold ${bw ? "text-[#FFD60A]" : "text-zinc-300"}`}>{b}</div>
+      <div className={`font-bold ${bw ? "text-[#22D3EE]" : "text-zinc-300"}`}>{b}</div>
     </div>
   );
 };
 
-const Panel = ({ title, children, testId }) => (
-  <div className="rounded-2xl border border-white/10 bg-[#11161d] p-5" data-testid={testId}>
+const posKey = (p) => {
+  const s = (p?.position || "").toLowerCase();
+  if (s.startsWith("goal")) return "goalkeeper";
+  if (s.startsWith("def")) return "defender";
+  if (s.startsWith("mid")) return "midfielder";
+  return "attacker";
+};
+
+// Each position is judged on its own job, per 90 minutes or as a share.
+const playerMetricDefs = (kind) => {
+  const p90 = (key) => (s) => (s.minutes ? Math.round(((s[key] || 0) / s.minutes) * 90 * 100) / 100 : 0);
+  const share = (num, den) => (s) => (s[den] ? Math.round(((s[num] || 0) / s[den]) * 100) : 0);
+  const duels = { k: "Duels won %", f: share("duelsWon", "duelsTotal") };
+  const acc = { k: "Pass accuracy %", f: (s) => s.passAccuracy || 0 };
+  const rating = { k: "Rating", f: (_s, p) => p.rating || 0 };
+  const minutes = { k: "Minutes", f: (s) => s.minutes || 0 };
+  const sets = {
+    goalkeeper: [
+      { k: "Saves / 90", f: p90("saves") },
+      { k: "Conceded / 90", f: p90("conceded"), lowerBetter: true },
+      { k: "Save %", f: (s) => ((s.saves || 0) + (s.conceded || 0) ? Math.round(((s.saves || 0) / ((s.saves || 0) + (s.conceded || 0))) * 100) : 0) },
+      acc, rating, minutes,
+    ],
+    defender: [
+      { k: "Tackles / 90", f: p90("tackles") },
+      { k: "Interceptions / 90", f: p90("interceptions") },
+      duels,
+      { k: "Fouls / 90", f: p90("fouls"), lowerBetter: true },
+      rating, minutes,
+    ],
+    midfielder: [
+      { k: "Key passes / 90", f: p90("keyPasses") },
+      { k: "G+A / 90", f: (s) => (s.minutes ? Math.round((((s.goals || 0) + (s.assists || 0)) / s.minutes) * 90 * 100) / 100 : 0) },
+      acc,
+      { k: "Tackles / 90", f: p90("tackles") },
+      duels, rating,
+    ],
+    attacker: [
+      { k: "Goals / 90", f: p90("goals") },
+      { k: "Assists / 90", f: p90("assists") },
+      { k: "Shots on target / 90", f: p90("shotsOn") },
+      { k: "Conversion %", f: share("goals", "shots") },
+      duels, rating,
+    ],
+  };
+  return sets[kind];
+};
+
+const Panel = ({ title, children, testId }) => (  <div className="rounded-2xl border border-white/10 bg-[#11161d] p-5" data-testid={testId}>
     <div className="font-display font-black uppercase tracking-tight text-white mb-4">{title}</div>
     {children}
   </div>
@@ -137,24 +184,18 @@ export default function ComparePage() {
         { k: "Points", a: a.points ?? 0, b: b.points ?? 0 },
         { k: "Goals / game", a: a.goalsPerGame ?? 0, b: b.goalsPerGame ?? 0 },
         { k: "Conceded / game", a: a.concededPerGame ?? 0, b: b.concededPerGame ?? 0, lowerBetter: true },
+        { k: "Goal difference", a: a.goalDiff ?? 0, b: b.goalDiff ?? 0 },
+        { k: "Win %", a: a.winPct ?? 0, b: b.winPct ?? 0 },
         { k: "Form (last 5)", a: formNum(a.form), b: formNum(b.form) },
-        { k: "Position", a: a.position ?? 0, b: b.position ?? 0, lowerBetter: true },
-        { k: "Played", a: a.played ?? 0, b: b.played ?? 0 },
       ];
     }
-    const sa = pA.stats || {}, sb = pB.stats || {};
-    const per90 = (v, min) => (min ? Math.round(((v || 0) / min) * 90 * 100) / 100 : 0);
-    return [
-      { k: "Goals", a: sa.goals || 0, b: sb.goals || 0 },
-      { k: "Assists", a: sa.assists || 0, b: sb.assists || 0 },
-      { k: "Goals / 90", a: per90(sa.goals, sa.minutes), b: per90(sb.goals, sb.minutes) },
-      { k: "Key passes", a: sa.keyPasses || 0, b: sb.keyPasses || 0 },
-      { k: "Shots on target", a: sa.shotsOn || 0, b: sb.shotsOn || 0 },
-      { k: "Tackles + int.", a: (sa.tackles || 0) + (sa.interceptions || 0), b: (sb.tackles || 0) + (sb.interceptions || 0) },
-      { k: "Duels won", a: sa.duelsWon || 0, b: sb.duelsWon || 0 },
-      { k: "Minutes", a: sa.minutes || 0, b: sb.minutes || 0 },
-      { k: "Rating", a: pA.rating || 0, b: pB.rating || 0 },
-    ];
+    // Players are judged on their own position's job — per 90 minutes, so a
+    // squad player is not buried by someone with three times the minutes.
+    const defs = playerMetricDefs(posKey(pA));
+    return defs.map((d) => ({
+      k: d.k, lowerBetter: d.lowerBetter,
+      a: d.f(pA.stats || {}, pA), b: d.f(pB.stats || {}, pB),
+    }));
   }, [ready, mode, A.team, B.team, pA, pB]);
 
   const radarData = useMemo(() => metrics.slice(0, 6).map((m) => {
@@ -166,20 +207,13 @@ export default function ComparePage() {
   const barData = useMemo(() => metrics.slice(0, 6).map((m) => ({ name: m.k, A: m.a, B: m.b })), [metrics]);
 
   const pieData = useMemo(() => {
-    if (!ready) return [];
-    if (mode === "teams") {
-      return [
-        { name: `${nameA} goals`, value: Number(A.team.goalsPerGame) || 0 },
-        { name: `${nameB} goals`, value: Number(B.team.goalsPerGame) || 0 },
-      ];
-    }
-    const ga = (pA.stats?.goals || 0) + (pA.stats?.assists || 0);
-    const gb = (pB.stats?.goals || 0) + (pB.stats?.assists || 0);
+    if (!ready || !metrics.length) return [];
+    const m = metrics[0];
     return [
-      { name: `${nameA} G+A`, value: ga },
-      { name: `${nameB} G+A`, value: gb },
+      { name: `${nameA} ${m.k}`, value: Number(m.a) || 0 },
+      { name: `${nameB} ${m.k}`, value: Number(m.b) || 0 },
     ];
-  }, [ready, mode, A.team, B.team, pA, pB, nameA, nameB]);
+  }, [ready, metrics, nameA, nameB]);
 
   const runAi = (langOverride) => {
     if (!ready) return;
@@ -187,7 +221,7 @@ export default function ComparePage() {
     setAi({ text: null, busy: true });
     const payload = mode === "teams"
       ? { kind: "teams", lang: l, a: { name: nameA, ...A.team }, b: { name: nameB, ...B.team } }
-      : { kind: "players", lang: l, a: pA, b: pB };
+      : { kind: "players", lang: l, a: pA, b: pB, metrics };
     fetchCompareAi(payload)
       .then((d) => setAi({ text: d.text || "LION Analysis is unavailable right now.", busy: false }))
       .catch(() => setAi({ text: "LION Analysis is unavailable right now.", busy: false }));
@@ -241,11 +275,16 @@ export default function ComparePage() {
                 </div>
                 <div className="font-display font-black text-zinc-600 text-lg">VS</div>
                 <div>
-                  <div className="font-display font-black uppercase text-xl sm:text-2xl text-[#FFD60A] truncate">{nameB}</div>
+                  <div className="font-display font-black uppercase text-xl sm:text-2xl text-[#22D3EE] truncate">{nameB}</div>
                   <div className="text-xs text-zinc-500">{mode === "teams" ? B.team?.leagueName : `${pB?.position || ""} · ${pB?.team || ""}`}</div>
                 </div>
               </div>
               <div data-testid="compare-stat-table">
+                {mode === "players" && posKey(pA) !== posKey(pB) && (
+                  <div data-testid="compare-position-warning" className="mb-3 text-xs text-[#22D3EE] bg-[#22D3EE]/10 border border-[#22D3EE]/30 rounded-lg px-3 py-2">
+                    Different positions ({pA?.position} vs {pB?.position}) — the metrics below are the ones that matter for a {pA?.position?.toLowerCase()}.
+                  </div>
+                )}
                 {metrics.map((m) => (
                   <StatRow key={m.k} label={m.k} a={m.a} b={m.b}
                     better={m.a === m.b ? null : (m.lowerBetter ? (m.a < m.b ? "a" : "b") : (m.a > m.b ? "a" : "b"))} />
@@ -275,7 +314,7 @@ export default function ComparePage() {
                   </BarChart>
                 </ResponsiveContainer>
               </Panel>
-              <Panel title={mode === "teams" ? "Attack share" : "Goals + assists share"} testId="compare-pie">
+              <Panel title={metrics.length ? `${metrics[0].k} share` : "Share"} testId="compare-pie">
                 <ResponsiveContainer width="100%" height={260}>
                   <PieChart>
                     <Pie data={pieData} dataKey="value" nameKey="name" innerRadius="52%" outerRadius="80%" paddingAngle={3} stroke="none">

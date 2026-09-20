@@ -198,6 +198,8 @@ async def teams_for_league(slug: str) -> list:
                     "form": _form_list(t.get("form")),
                     "goalsPerGame": round(gf / played, 2) if played else None,
                     "concededPerGame": round(ga / played, 2) if played else None,
+                    "goalDiff": gf - ga,
+                    "winPct": round(((t.get("all") or {}).get("win") or 0) / played * 100) if played else None,
                     "leagueName": c["name"],
                     "sport": "football",
                 })
@@ -568,7 +570,9 @@ async def player_stats(player_id: str, season: int = None, team_id: str = None) 
                 stats = [s for s in stats if ((s.get("team") or {}).get("id")) == tid]
         agg = {k: 0 for k in ("appearances", "minutes", "goals", "assists", "shots",
                               "shotsOn", "passes", "keyPasses", "tackles", "interceptions",
-                              "duelsWon", "fouls", "yellow", "red")}
+                              "duelsWon", "duelsTotal", "fouls", "yellow", "red",
+                              "saves", "conceded")}
+        acc_sum = 0
         ratings, team, position, team_apps = [], None, None, -1
         for s in stats:
             g = s.get("games") or {}
@@ -587,17 +591,24 @@ async def player_stats(player_id: str, season: int = None, team_id: str = None) 
             go = s.get("goals") or {}
             agg["goals"] += go.get("total") or 0
             agg["assists"] += go.get("assists") or 0
+            agg["saves"] += go.get("saves") or 0
+            agg["conceded"] += go.get("conceded") or 0
             sh = s.get("shots") or {}
             agg["shots"] += sh.get("total") or 0
             agg["shotsOn"] += sh.get("on") or 0
             ps = s.get("passes") or {}
             agg["passes"] += ps.get("total") or 0
             agg["keyPasses"] += ps.get("key") or 0
+            try:
+                acc_sum += float(str(ps.get("accuracy") or 0).replace("%", "")) * apps
+            except (TypeError, ValueError):
+                pass
             tk = s.get("tackles") or {}
             agg["tackles"] += tk.get("total") or 0
             agg["interceptions"] += tk.get("interceptions") or 0
             du = s.get("duels") or {}
             agg["duelsWon"] += du.get("won") or 0
+            agg["duelsTotal"] += du.get("total") or 0
             fo = s.get("fouls") or {}
             agg["fouls"] += fo.get("committed") or 0
             cd = s.get("cards") or {}
@@ -614,7 +625,7 @@ async def player_stats(player_id: str, season: int = None, team_id: str = None) 
             "season": season,
             "played": (agg["appearances"] > 0 or agg["minutes"] > 0),
             "rating": round(sum(ratings) / len(ratings), 2) if ratings else None,
-            "stats": agg,
+            "stats": {**agg, "passAccuracy": round(acc_sum / agg["appearances"]) if agg["appearances"] else 0},
         }
         _c_set(ck, out)
         return out
