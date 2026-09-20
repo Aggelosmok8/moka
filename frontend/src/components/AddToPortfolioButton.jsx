@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Wallet, X, Layers, Check } from "lucide-react";
 import { toast } from "sonner";
 import { usePortfolio } from "../contexts/PortfolioContext";
+import { isDoubleChance, pickChoices } from "../lib/picks";
 
 const CHIPS = [5, 10, 20, 50];
 
@@ -10,17 +11,24 @@ export default function AddToPortfolioButton({ entry, className = "", size = "sm
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("single"); // single | slip
   const [stake, setStake] = useState("10");
+  const [choice, setChoice] = useState(null);
+  const [oddsInput, setOddsInput] = useState("");
 
   const match = entry?.match || {};
   const value = entry?.value || {};
-  const odds = value.bestOdds || 0;
-  const inSlip = match.id ? slipHas(match.id) : false;
+  const dc = isDoubleChance(value);
+  const choices = dc ? pickChoices(match, value) : [];
+  const picked = choice || (dc ? choices[0] : null);
+  const odds = Number(oddsInput) > 1 ? Number(oddsInput) : (value.bestOdds || 0);
+  const inSlip = slipHas(match.id, match.home?.name, match.away?.name);
 
   const openModal = (e) => {
     e.preventDefault();
     e.stopPropagation();
     setStake("10");
     setMode("single");
+    setChoice(null);
+    setOddsInput("");
     setOpen(true);
   };
   const close = (e) => {
@@ -31,7 +39,8 @@ export default function AddToPortfolioButton({ entry, className = "", size = "sm
 
   const leg = {
     matchId: match.id, home: match.home?.name, away: match.away?.name, league: match.leagueName,
-    pick: value.pick, pickName: value.pickName, odds, bookmaker: value.bookmaker,
+    pick: picked?.pick || value.pick, pickName: picked?.pickName || value.pickName,
+    odds, bookmaker: value.bookmaker,
     kickoff: match.commence_time || null,
   };
 
@@ -100,14 +109,38 @@ export default function AddToPortfolioButton({ entry, className = "", size = "sm
               </button>
             </div>
 
+            {dc && (
+              <div className="mb-4" data-testid="portfolio-pick-market">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
+                  LION predicts {value.possibleOutcome} — what did you play?
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {choices.map((c) => (
+                    <button key={c.pick} type="button" data-testid={`portfolio-pick-${c.pick}`}
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setChoice(c); }}
+                      className={`px-2 py-2 rounded-lg text-xs font-bold border transition-colors ${
+                        picked?.pick === c.pick ? "bg-[#39FF14] text-black border-[#39FF14]" : "bg-[#0d1117] text-zinc-300 border-white/10 hover:border-[#39FF14]/40"}`}>
+                      {c.code} · {c.pickName}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-2 mb-4">
               <div className="bg-[#0d1117] border border-[#30363d] rounded-lg p-2.5">
                 <div className="text-[10px] text-zinc-500 uppercase">Your pick</div>
-                <div className="text-sm font-bold text-[#39FF14] truncate">{value.pickName || "—"}</div>
+                <div className="text-sm font-bold text-[#39FF14] truncate">{picked?.pickName || value.pickName || "—"}</div>
               </div>
               <div className="bg-[#0d1117] border border-[#30363d] rounded-lg p-2.5">
-                <div className="text-[10px] text-zinc-500 uppercase">Odds</div>
-                <div className="text-sm font-bold text-white font-mono-num">{odds || "—"} <span className="text-zinc-500 font-normal">@ {value.bookmaker}</span></div>
+                <div className="text-[10px] text-zinc-500 uppercase">Odds {picked?.doubleChance && "(edit to your price)"}</div>
+                {picked?.doubleChance ? (
+                  <input type="number" step="0.01" min="1" value={oddsInput} placeholder={String(value.bestOdds || "")}
+                    onChange={(e) => setOddsInput(e.target.value)} data-testid="portfolio-odds-input"
+                    className="w-full bg-transparent text-sm font-bold text-white font-mono-num focus:outline-none" />
+                ) : (
+                  <div className="text-sm font-bold text-white font-mono-num">{odds || "—"} <span className="text-zinc-500 font-normal">@ {value.bookmaker}</span></div>
+                )}
               </div>
             </div>
 

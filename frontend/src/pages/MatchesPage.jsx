@@ -72,7 +72,8 @@ export default function MatchesPage() {
     setLoading(true);
     fetchValueMatches()
       .then((d) => active && setEntries(adaptValueMatches(d)))
-      .catch(() => active && setEntries([]))
+      // Keep the previous list on a failed/limited refresh instead of emptying the page.
+      .catch(() => {})
       .finally(() => active && setLoading(false));
     return () => { active = false; };
   }, []);

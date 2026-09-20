@@ -660,10 +660,13 @@ app.include_router(access_router)
 # ── Security middleware: rate limiting + input sanitization ───────────────────
 # In-memory sliding-window limiter (no Redis): max 60 requests / minute / IP.
 _RL_WINDOW = 60
-_RL_MAX = 60
+_RL_MAX = 300   # a single page load makes many cached reads; abuse still blocked
 _rl_hits: dict = defaultdict(list)
 # Exempt uptime checks and the Stripe webhook (signed, may burst) from limiting.
 _RL_EXEMPT = ("/health", "/ping", "/api/webhook/stripe")
+# Cached read endpoints must never 429 a normal browsing session.
+_RL_SOFT = ("/api/value-matches", "/api/live-scores", "/api/leagues", "/api/results",
+            "/api/matches", "/api/teams", "/api/news", "/api/catalog")
 
 # Reject requests whose params carry classic SQL-injection tokens. The DB layer
 # already uses parameterized queries, so this is defense-in-depth, kept narrow to
@@ -686,6 +689,8 @@ def _client_ip(request) -> str:
 async def rate_limit_middleware(request, call_next):
     path = request.url.path
     if request.method == "OPTIONS" or any(path.startswith(p) for p in _RL_EXEMPT):
+        return await call_next(request)
+    if request.method == "GET" and any(path.startswith(p) for p in _RL_SOFT):
         return await call_next(request)
     ip = _client_ip(request)
     now = _time.time()

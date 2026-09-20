@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useCallback, useMemo, useState, useEffect, useRef } from "react";
 import { useAuth } from "./AuthContext";
+import { legWins, matchKey } from "../lib/picks";
 import { getPortfolioRemote, putPortfolioRemote } from "../lib/api";
 import { fetchResults } from "../lib/catalogApi";
 
@@ -199,7 +200,9 @@ export function PortfolioProvider({ children }) {
   const addToSlip = useCallback((leg) => {
     setSlip((prev) => {
       if (!leg?.matchId) return prev;
-      if (prev.some((l) => l.matchId === leg.matchId)) return prev; // one leg per match
+      const key = matchKey(leg.home, leg.away);
+      // One leg per match — ids can differ between feeds, so also match on teams.
+      if (prev.some((l) => l.matchId === leg.matchId || (key && matchKey(l.home, l.away) === key))) return prev;
       const next = [...prev, {
         matchId: leg.matchId, home: leg.home, away: leg.away, league: leg.league,
         pick: leg.pick, pickName: leg.pickName, odds: Number(leg.odds) || 0, bookmaker: leg.bookmaker || "",
@@ -229,7 +232,10 @@ export function PortfolioProvider({ children }) {
   }, []);
 
   const clearSlip = useCallback(() => saveSlip([]), []);
-  const slipHas = useCallback((matchId) => slip.some((l) => l.matchId === matchId), [slip]);
+  const slipHas = useCallback((matchId, home, away) => {
+    const key = home || away ? matchKey(home, away) : "";
+    return slip.some((l) => l.matchId === matchId || (key && matchKey(l.home, l.away) === key));
+  }, [slip]);
 
   const placeTicket = useCallback((stake) => {
     let placed = false;
@@ -295,7 +301,7 @@ export function PortfolioProvider({ children }) {
         settled++;
         return {
           ...item,
-          status: r.outcome === item.pick ? "won" : "lost",
+          status: legWins(item.pick, r.outcome) ? "won" : "lost",
           finalScore: `${r.home}-${r.away}`,
           settledAt: new Date().toISOString(),
         };
