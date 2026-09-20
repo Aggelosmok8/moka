@@ -32,7 +32,7 @@ export default function AddToSlipButton({ entry, className = "", size = "sm" }) 
     e.preventDefault();
     e.stopPropagation();
     if (inSlip) {
-      removeFromSlip(id);
+      removeFromSlip(id, match.home?.name, match.away?.name);
       toast("Removed from bet slip");
       return;
     }

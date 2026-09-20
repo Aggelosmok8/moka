@@ -544,3 +544,9 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - Sign out (and delete account) now await logout and redirect to "/" so the user lands on the entry page and can switch accounts; sessions still persist 7 days otherwise.
 - Test-user panel intentionally kept (bypass for QA).
 - Verified: guest CTAs, free-user CTAs incl. upgrade, and sign-out -> back to sign-in screen.
+
+## 2026-06 Slip persistence + double-chance settlement (bug fixes)
+- ROOT CAUSE of "In slip disappears after navigating": backend rate limiter (60 req/min/IP) returned HTTP 429 during normal browsing -> Matches list came back EMPTY, so re-rendered cards lost the state and the fixture could be added again. Fixes: _RL_MAX 60 -> 300 and cached GET endpoints exempt (_RL_SOFT) in server.py; MatchesPage keeps the previous list when a refresh fails.
+- Slip dedupe hardened: addToSlip / slipHas / removeFromSlip now match by matchId OR normalised home|away key (ids differ between live and value feeds).
+- Double chance: new /app/frontend/src/lib/picks.js (WINNING_OUTCOMES, legWins, isDoubleChance, pickChoices). "Add to slip" on a "Home/Away or Draw" prediction opens a "What did you play?" dialog (1 vs 1X); Add-to-Portfolio modal shows the same choice plus an editable odds field for the double-chance price. autoSettle now uses legWins(), so home_or_draw WINS on a draw (previously counted as a loss).
+- Verified by testing agent iteration_10.json: 6/6 scenarios pass, frontend 100%, no console errors. Follow-up done: removeFromSlip aligned to the same dedupe key.

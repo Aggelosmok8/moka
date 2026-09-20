@@ -214,9 +214,10 @@ export function PortfolioProvider({ children }) {
     });
   }, []);
 
-  const removeFromSlip = useCallback((matchId) => {
+  const removeFromSlip = useCallback((matchId, home, away) => {
     setSlip((prev) => {
-      const next = prev.filter((l) => l.matchId !== matchId);
+      const key = home || away ? matchKey(home, away) : "";
+      const next = prev.filter((l) => l.matchId !== matchId && !(key && matchKey(l.home, l.away) === key));
       try { localStorage.setItem(SLIP_KEY, JSON.stringify(next)); } catch {}
       return next;
     });
