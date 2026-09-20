@@ -11,7 +11,7 @@ import { useLang } from "../contexts/LanguageContext";
 
 const FOOTBALL_LEAGUES = LEAGUE_CATALOG.filter((l) => l.sport === "football" && !l.coming_soon);
 const A_COLOR = "#39FF14";
-const B_COLOR = "#22D3EE";
+const B_COLOR = "#FFD60A";
 
 const formNum = (form) => {
   const r = (form || []).slice(-5);
@@ -87,7 +87,7 @@ const StatRow = ({ label, a, b, better }) => {
     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 py-2 border-b border-white/5 last:border-0">
       <div className={`text-right font-bold ${aw ? "text-[#39FF14]" : "text-zinc-300"}`}>{a}</div>
       <div className="text-[11px] uppercase tracking-wider text-zinc-500 text-center min-w-[110px]">{label}</div>
-      <div className={`font-bold ${bw ? "text-[#22D3EE]" : "text-zinc-300"}`}>{b}</div>
+      <div className={`font-bold ${bw ? "text-[#FFD60A]" : "text-zinc-300"}`}>{b}</div>
     </div>
   );
 };
@@ -275,13 +275,13 @@ export default function ComparePage() {
                 </div>
                 <div className="font-display font-black text-zinc-600 text-lg">VS</div>
                 <div>
-                  <div className="font-display font-black uppercase text-xl sm:text-2xl text-[#22D3EE] truncate">{nameB}</div>
+                  <div className="font-display font-black uppercase text-xl sm:text-2xl text-[#FFD60A] truncate">{nameB}</div>
                   <div className="text-xs text-zinc-500">{mode === "teams" ? B.team?.leagueName : `${pB?.position || ""} · ${pB?.team || ""}`}</div>
                 </div>
               </div>
               <div data-testid="compare-stat-table">
                 {mode === "players" && posKey(pA) !== posKey(pB) && (
-                  <div data-testid="compare-position-warning" className="mb-3 text-xs text-[#22D3EE] bg-[#22D3EE]/10 border border-[#22D3EE]/30 rounded-lg px-3 py-2">
+                  <div data-testid="compare-position-warning" className="mb-3 text-xs text-[#FFD60A] bg-[#FFD60A]/10 border border-[#FFD60A]/30 rounded-lg px-3 py-2">
                     Different positions ({pA?.position} vs {pB?.position}) — the metrics below are the ones that matter for a {pA?.position?.toLowerCase()}.
                   </div>
                 )}

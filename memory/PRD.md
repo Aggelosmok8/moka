@@ -568,5 +568,5 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - Teams: "Played"/"Position" replaced by Goal difference and Win %.
 - Pie panel is now generic ("<first metric> share") instead of hardcoded goals/G+A.
 - compare/ai payload includes the chosen metrics and the prompt forbids judging a GK/defender on goals.
-- Accent colour: Side B changed from #FFD60A to cyan #22D3EE (pairs with the neon green, no longer clashes with the slip yellow).
+- Accent colour: cyan/pink variants were trialled on Side B and REVERTED at user request — Side B stays #FFD60A.
 - Verified: teams rows (Man City vs Arsenal: GD 8/4, Win% 100/80), GK vs DEF shows goalkeeper metrics + warning, backend returns saves 14 / conceded 5 / passAccuracy 73 for Donnarumma. yarn build OK.
