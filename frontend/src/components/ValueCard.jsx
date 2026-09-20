@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { Lock, ChevronDown, ChevronUp, ArrowRight, Clock } from "lucide-react";
+import { Lock, ChevronDown, ChevronUp, ArrowRight, Clock, Check } from "lucide-react";
 import { aiExplanation, shortExplanation } from "../lib/valueEngine";
 import { UpgradeButton } from "./Gating";
 import AddToChartButton from "./AddToChartButton";
@@ -8,6 +8,7 @@ import AddToSlipButton from "./AddToSlipButton";
 import InfoTip from "./InfoTip";
 import { useLiveScores } from "../contexts/LiveScoresContext";
 import { useLang } from "../contexts/LanguageContext";
+import { usePortfolio } from "../contexts/PortfolioContext";
 
 function fmtKickoff(iso) {
   if (!iso) return null;
@@ -99,6 +100,7 @@ export default function ValueCard({ entry }) {
   const live = useLiveScores().get(match.id);
   const { lang } = useLang();
   const [adv, setAdv] = useState(false);
+  const inSlip = usePortfolio().slipHas(match.id, match.home?.name, match.away?.name);
   const probs = value.probabilities || {};
   const isLive = value.liveOnly || match.status === "live";
   const toggle = (e) => {
@@ -112,10 +114,21 @@ export default function ValueCard({ entry }) {
       to={`/analysis/${match.id}`}
       data-testid={`value-card-${match.id}`}
       data-lang={lang}
-      className="block bg-[#161b22] border border-[#30363d] rounded-xl p-4 hover:border-[#39FF14]/40 transition-all"
+      className={`block rounded-xl p-4 transition-all ${
+        inSlip
+          ? "bg-[#FFD60A]/[0.05] border border-[#FFD60A]/50 hover:border-[#FFD60A]"
+          : "bg-[#161b22] border border-[#30363d] hover:border-[#39FF14]/40"
+      }`}
     >
       <div className="flex items-center justify-between mb-2 gap-2">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 truncate">{match.leagueName}</span>
+        <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 truncate flex items-center gap-1.5">
+          {inSlip && (
+            <span data-testid={`in-slip-badge-${match.id}`} className="inline-flex items-center gap-1 text-[9px] font-black text-[#FFD60A] bg-[#FFD60A]/15 border border-[#FFD60A]/40 rounded-full px-1.5 py-0.5 whitespace-nowrap">
+              <Check className="w-2.5 h-2.5" /> IN SLIP
+            </span>
+          )}
+          {match.leagueName}
+        </span>
         {isLive ? (
           <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/30 whitespace-nowrap">
             <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> Live

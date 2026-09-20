@@ -347,7 +347,7 @@ export default function MatchAnalysisPage() {
 
   return (
     <Shell>
-      <Link to="/matches" className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white mb-5">
+      <Link to={sessionStorage.getItem("matches_return") || "/matches"} data-testid="back-to-matches" className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white mb-5">
         <ArrowLeft className="w-4 h-4" /> Back to matches
       </Link>
 

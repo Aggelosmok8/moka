@@ -550,3 +550,11 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - Slip dedupe hardened: addToSlip / slipHas / removeFromSlip now match by matchId OR normalised home|away key (ids differ between live and value feeds).
 - Double chance: new /app/frontend/src/lib/picks.js (WINNING_OUTCOMES, legWins, isDoubleChance, pickChoices). "Add to slip" on a "Home/Away or Draw" prediction opens a "What did you play?" dialog (1 vs 1X); Add-to-Portfolio modal shows the same choice plus an editable odds field for the double-chance price. autoSettle now uses legWins(), so home_or_draw WINS on a draw (previously counted as a loss).
 - Verified by testing agent iteration_10.json: 6/6 scenarios pass, frontend 100%, no console errors. Follow-up done: removeFromSlip aligned to the same dedupe key.
+
+## 2026-09-20 Slip marking on the card + Back-to-matches restores position
+- ValueCard: a fixture already in the slip is now visually marked — yellow border + "IN SLIP" badge (data-testid="in-slip-badge-{id}"), driven by slipHas().
+- PortfolioContext.slipHas: matchId comparison guarded (`matchId && l.matchId === matchId`) so legs stored without an id no longer mark every card.
+- MatchesPage: return URL written while still on the page (sessionStorage "matches_return") — writing it on unmount captured /analysis/{id}, because react-router swaps the URL before passive effect cleanup runs.
+- MatchesPage scroll: saved by a throttled scroll listener, not on unmount (at unmount the browser has already clamped scrollY to 0 for the shorter page). Restore re-applies the target every 150ms for up to 3s because the live rows/cards mount late and early scrollTo calls get clamped.
+- MatchAnalysisPage: "Back to matches" (data-testid="back-to-matches") links to the stored filtered URL.
+- Verified in browser: saved 2600 -> restored 2600 (delta 0), league filter retained after Back, IN SLIP badge persists across navigation, manual scrolling still free afterwards. yarn build OK.

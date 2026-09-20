@@ -65,6 +65,9 @@ export default function MatchesPage() {
     if (fDate) next.set("date", fDate);
     if (liveMode) next.set("live", "1");
     setParams(next, { replace: true });
+    // Remember the filtered URL while we are still on this page (not on unmount —
+    // by then the router has already switched the URL to the analysis page).
+    sessionStorage.setItem("matches_return", `/matches?${next.toString()}`);
   }, [view, fSport, fLeague, fTeam, fDate, liveMode, setParams]);
 
   useEffect(() => {
@@ -78,17 +81,38 @@ export default function MatchesPage() {
     return () => { active = false; };
   }, []);
 
-  // Scroll restoration (#16): remember position when leaving, restore on return.
+  // Scroll restoration (#16): remember position + the filtered URL when leaving,
+  // so "Back to matches" returns to the exact spot with the same filters.
   useEffect(() => {
-    return () => sessionStorage.setItem("matches_scroll", String(window.scrollY));
+    // Save while scrolling: on unmount the browser has already clamped scrollY to 0
+    // for the new (shorter) page, so reading it there returns nothing useful.
+    let t;
+    const onScroll = () => {
+      clearTimeout(t);
+      t = setTimeout(() => {
+        if (window.scrollY > 0) sessionStorage.setItem("matches_scroll", String(window.scrollY));
+      }, 120);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => { window.removeEventListener("scroll", onScroll); clearTimeout(t); };
   }, []);
   useEffect(() => {
     if (loading) return;
-    const y = sessionStorage.getItem("matches_scroll");
-    if (y != null) {
-      requestAnimationFrame(() => window.scrollTo(0, parseInt(y, 10) || 0));
-      sessionStorage.removeItem("matches_scroll");
-    }
+    const y = parseInt(sessionStorage.getItem("matches_scroll") || "0", 10) || 0;
+    if (!y) return;
+    // Keep nudging until the target is reachable: the live rows/cards mount late,
+    // so early scrollTo calls get clamped to a still-short page.
+    let elapsed = 0;
+    const iv = setInterval(() => {
+      window.scrollTo(0, y);
+      elapsed += 150;
+      if (Math.abs(window.scrollY - y) < 4 || elapsed >= 3000) {
+        clearInterval(iv);
+        sessionStorage.removeItem("matches_scroll");
+      }
+    }, 150);
+    window.scrollTo(0, y);
+    return () => clearInterval(iv);
   }, [loading]);
 
   const list = useMemo(() => {

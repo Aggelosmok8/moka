@@ -235,7 +235,7 @@ export function PortfolioProvider({ children }) {
   const clearSlip = useCallback(() => saveSlip([]), []);
   const slipHas = useCallback((matchId, home, away) => {
     const key = home || away ? matchKey(home, away) : "";
-    return slip.some((l) => l.matchId === matchId || (key && matchKey(l.home, l.away) === key));
+    return slip.some((l) => (matchId && l.matchId === matchId) || (key && matchKey(l.home, l.away) === key));
   }, [slip]);
 
   const placeTicket = useCallback((stake) => {
