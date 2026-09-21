@@ -126,6 +126,13 @@ _SQLITE_SCHEMA = """
         provider_id TEXT DEFAULT '',
         first_trial_at TEXT
     );
+    CREATE TABLE IF NOT EXISTS password_resets (
+        token TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        expires_at TEXT,
+        used TEXT DEFAULT '',
+        created_at TEXT
+    );
     CREATE INDEX IF NOT EXISTS idx_user_sessions_token ON user_sessions(session_token);
     CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_events_user_ts ON events(user_id, ts);
@@ -224,6 +231,13 @@ _PG_SCHEMA = """
         provider_id TEXT DEFAULT '',
         first_trial_at TEXT
     );
+    CREATE TABLE IF NOT EXISTS password_resets (
+        token TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        expires_at TEXT,
+        used TEXT DEFAULT '',
+        created_at TEXT
+    );
     CREATE INDEX IF NOT EXISTS idx_user_sessions_token ON user_sessions(session_token);
     CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_events_user_ts ON events(user_id, ts);
@@ -270,7 +284,7 @@ async def init_db():
             # Idempotent additive migrations for pre-existing Supabase tables
             # (CREATE TABLE IF NOT EXISTS won't add columns to an existing table).
             for col in ("trial_start_date", "trial_end_date", "plan", "emails_sent",
-                        "provider_id", "trial_used"):
+                        "provider_id", "trial_used", "password_hash"):
                 await conn.execute(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col} TEXT")
             for col in ("email", "package_id", "metadata", "payment_status", "mode",
                         "updated_at", "stripe_subscription_id"):
@@ -281,7 +295,7 @@ async def init_db():
             await conn.executescript(_SQLITE_SCHEMA)
             await conn.commit()
             for col in ("trial_start_date", "trial_end_date", "plan", "emails_sent",
-                        "provider_id", "trial_used"):
+                        "provider_id", "trial_used", "password_hash"):
                 try:
                     await conn.execute(f"ALTER TABLE users ADD COLUMN {col} TEXT")
                     await conn.commit()

@@ -4,11 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { api } from "../lib/api";
 import { LogOut, User as UserIcon, Sparkles, Trash2, Wallet, LifeBuoy } from "lucide-react";
 
-// REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
-const startLogin = () => {
-  const redirectUrl = window.location.origin + "/";
-  window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
-};
+const goSignIn = () => window.location.assign("/signin");
 
 export const UserMenu = () => {
   const { user, loading, logout } = useAuth();
@@ -34,7 +30,7 @@ export const UserMenu = () => {
   if (!user) {
     return (
       <button
-        onClick={startLogin}
+        onClick={goSignIn}
         data-testid="login-btn"
         className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-white text-black text-xs font-bold uppercase tracking-wider whitespace-nowrap hover:bg-zinc-200 transition-colors"
       >

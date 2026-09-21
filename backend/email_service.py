@@ -82,6 +82,18 @@ async def _send(to_email: str, subject: str, html: str) -> bool:
         return False
 
 
+async def send_password_reset(name: str, to_email: str, link: str) -> bool:
+    """Password reset link (1 hour, single use). No-op without RESEND_API_KEY."""
+    return await _send(
+        to_email,
+        "Reset your LION.STATS password",
+        _wrap("Reset your password",
+              f"Hey {name or 'there'}, click the button below to set a new password. "
+              "The link works once and expires in 1 hour. If you did not ask for this, ignore this email.",
+              link),
+    )
+
+
 async def evaluate_lifecycle(db, user_doc: dict) -> None:
     """Send any due trial emails for this user (idempotent)."""
     if not user_doc or user_doc.get("subscription_status") == "active":

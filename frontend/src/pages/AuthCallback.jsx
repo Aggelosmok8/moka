@@ -24,16 +24,19 @@ export default function AuthCallback() {
 
     (async () => {
       let token = null;
+      let intent = "free";
+      try { intent = localStorage.getItem("lion_signup_intent") || "free"; } catch { /* ignore */ }
       try {
         const res = await authApi.post(
           "/auth/session",
-          {},
+          { intent },
           { headers: { "X-Session-ID": sessionId } }
         );
         token = res?.data?.session_token || null;
       } catch (err) {
         // fall through — will land on / logged out
       } finally {
+        try { localStorage.removeItem("lion_signup_intent"); } catch { /* ignore */ }
         // strip the fragment so we never re-process
         window.history.replaceState(null, "", window.location.pathname);
       }

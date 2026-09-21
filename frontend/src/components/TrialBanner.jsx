@@ -2,18 +2,16 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { Clock, Crown, AlertTriangle } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import { api } from "../lib/api";
+import { toast } from "sonner";
 
 export default function TrialBanner() {
-  const { user, loading } = useAuth();
+  const { user, loading, refresh } = useAuth();
   if (loading) return null;
 
   // Guest — promote the no-card trial (sign-in starts it automatically).
   if (!user) {
-    const startTrial = () => {
-      // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
-      const redirectUrl = window.location.origin + "/account";
-      window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
-    };
+    const startTrial = () => window.location.assign("/signin?intent=trial");
     return (
       <div className="bg-[#39FF14]/10 border-b border-[#39FF14]/20" data-testid="trial-banner-guest">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center justify-between gap-3 flex-wrap">
@@ -53,6 +51,32 @@ export default function TrialBanner() {
           <Link to="/pricing" data-testid="banner-upgrade-link" className="text-xs font-black uppercase tracking-wider neon-bg text-black px-3 py-1.5 rounded hover:bg-[#32E612] transition-colors">
             {urgent ? "Upgrade now" : "Go Annual & save €25+"}
           </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Free user who has never used the trial — they can start it explicitly.
+  if (!user.trial_used && (status === "free" || !status)) {
+    const startNow = async () => {
+      try {
+        await api.post("/auth/trial/start");
+        await refresh();
+      } catch (e) {
+        toast.error(e?.response?.data?.detail || "Could not start your trial.");
+      }
+    };
+    return (
+      <div className="bg-[#39FF14]/10 border-b border-[#39FF14]/20" data-testid="trial-banner-free">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center justify-between gap-3 flex-wrap">
+          <span className="text-sm text-zinc-200 flex items-center gap-2">
+            <Clock className="w-4 h-4 text-[#39FF14]" />
+            You are on the <b className="text-white">Free</b> plan. Try <b className="text-white">7 days of Pro</b> — no card required.
+          </span>
+          <button onClick={startNow} data-testid="banner-start-trial-now"
+            className="text-xs font-black uppercase tracking-wider neon-bg text-black px-3 py-1.5 rounded hover:bg-[#32E612] transition-colors">
+            Start free trial
+          </button>
         </div>
       </div>
     );

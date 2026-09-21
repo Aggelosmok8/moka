@@ -27,6 +27,8 @@ import SportsPage from "./pages/SportsPage";
 import LeagueDetailPage from "./pages/LeagueDetailPage";
 import NewsPage from "./pages/NewsPage";
 import ComparePage from "./pages/ComparePage";
+import SignInPage from "./pages/SignInPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import SlipFab from "./components/SlipFab";
 import DevLoginPanel from "./components/DevLoginPanel";
 import { useAuth } from "./contexts/AuthContext";
@@ -45,7 +47,7 @@ function RequireAuth({ children }) {
       </div>
     );
   }
-  if (!user) return <Navigate to="/" replace />;
+  if (!user) return <Navigate to="/signin" replace />;
   return children;
 }
 
@@ -61,6 +63,8 @@ function AppRouter() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
+      <Route path="/signin" element={<SignInPage />} />
+      <Route path="/reset" element={<ResetPasswordPage />} />
       <Route path="/matches" element={<Gated element={<MatchesPage />} />} />
       <Route path="/value" element={<Navigate to="/matches" replace />} />
       <Route path="/leagues" element={<Gated element={<LeaguesPage />} />} />

@@ -41,9 +41,7 @@ export default function PricingPage() {
     if (!user) {
       // Remember the plan so we can auto-resume checkout right after sign-in.
       try { sessionStorage.setItem("moka_pending_checkout", packageId); } catch {}
-      // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
-      const redirectUrl = window.location.origin + "/pricing";
-      window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+      window.location.assign("/signin");
       return;
     }
     setBusy(packageId);
