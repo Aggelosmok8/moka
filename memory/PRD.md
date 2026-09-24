@@ -592,3 +592,10 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - Verified with a simulated Google-only user: password login -> explanatory 401, forgot -> token row created, reset -> 200, login with the new password -> 200. Same single account either way (email is the linking key).
 - LiveTicker is rendered only when a user is signed in (Header) — guests no longer see live scores on the landing/sign-in screens.
 - REMINDER: reset emails need RESEND_API_KEY on Render. With onboarding@resend.dev, Resend only delivers to the account owner's own address.
+
+## 2026-09-24 Standard sign-in / pricing funnel
+- Pricing Free card now has a "Sign in for free" CTA (data-testid="plan-free-cta") for guests, and shows "Your current plan" for signed-in non-Pro users.
+- Paid plans for guests: button reads "Sign in & upgrade", stores the package in sessionStorage "moka_pending_checkout" and sends them to /signin. After ANY successful auth (email/password in SignInPage, or Google in AuthCallback) the pending plan resumes -> /pricing auto-calls /billing/checkout. No more "signed in as free, now press Upgrade again".
+- Default landing after auth is /matches (was /account).
+- Copy: Home CTA and the sign-up screen say "Sign in for free"; header Sign In button uses a neutral LogIn icon (it is no longer Google-only).
+- Verified end-to-end in the browser: guest -> Annual -> /signin (pending=pro_yearly) -> sign up -> lands on checkout.stripe.com automatically.

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import Header from "../components/Header";
 import { authApi, useAuth } from "../contexts/AuthContext";
-import { Sparkles, Check, Lock, RefreshCw, Crown } from "lucide-react";
+import { Sparkles, Check, Lock, RefreshCw, Crown, LogIn } from "lucide-react";
 
 const PRO_FEATURES = [
   "All leagues unlocked (incl. Pro-only competitions)",
@@ -130,6 +130,16 @@ export default function PricingPage() {
                 </li>
               ))}
             </ul>
+            {loading ? null : !user ? (
+              <a href="/signin?mode=signup" data-testid="plan-free-cta"
+                className="mt-6 w-full px-5 py-3 rounded-lg bg-white/10 text-white hover:bg-white/15 font-black text-sm uppercase tracking-wider inline-flex items-center justify-center gap-2 transition-colors">
+                <LogIn className="w-4 h-4" /> Sign in for free
+              </a>
+            ) : !isPro ? (
+              <div className="mt-6 w-full px-5 py-3 rounded-lg bg-white/[0.06] text-zinc-300 text-center text-sm font-bold uppercase tracking-wider border border-white/10" data-testid="plan-free-current">
+                Your current plan
+              </div>
+            ) : null}
           </div>
 
           {/* Monthly */}

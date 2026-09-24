@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "../lib/api";
-import { LogOut, User as UserIcon, Sparkles, Trash2, Wallet, LifeBuoy } from "lucide-react";
+import { LogOut, User as UserIcon, Sparkles, Trash2, Wallet, LifeBuoy, LogIn } from "lucide-react";
 
 const goSignIn = () => window.location.assign("/signin");
 
@@ -34,12 +34,7 @@ export const UserMenu = () => {
         data-testid="login-btn"
         className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-white text-black text-xs font-bold uppercase tracking-wider whitespace-nowrap hover:bg-zinc-200 transition-colors"
       >
-        <svg className="w-4 h-4" viewBox="0 0 48 48" aria-hidden="true">
-          <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.6-6 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.3 6.1 29.4 4 24 4 12.95 4 4 12.95 4 24s8.95 20 20 20 20-8.95 20-20c0-1.2-.1-2.4-.4-3.5z"/>
-          <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.5 16.1 18.9 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.3 6.1 29.4 4 24 4 16.1 4 9.3 8.4 6.3 14.7z"/>
-          <path fill="#4CAF50" d="M24 44c5.2 0 10-2 13.6-5.2l-6.3-5.2c-2 1.5-4.6 2.4-7.3 2.4-5.3 0-9.7-3.4-11.3-8l-6.5 5C9.1 39.5 16 44 24 44z"/>
-          <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.3 5.6l6.3 5.2c-.4.4 7-5.1 7-14.8 0-1.2-.1-2.4-.4-3.5z"/>
-        </svg>
+        <LogIn className="w-4 h-4" />
         Sign in
       </button>
     );

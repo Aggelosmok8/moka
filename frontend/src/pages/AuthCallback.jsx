@@ -45,10 +45,11 @@ export default function AuthCallback() {
         // started (e.g. /pricing to resume checkout, or /account) so AuthProvider
         // re-runs checkAuth() and renders the signed-in state.
         storeAuthToken(token);
-        const dest = window.location.pathname && window.location.pathname !== "/"
-          ? window.location.pathname
-          : "/account";
-        window.location.replace(dest);
+        // A plan picked before signing in resumes checkout on /pricing;
+        // otherwise land inside the app.
+        let pending = null;
+        try { pending = sessionStorage.getItem("moka_pending_checkout"); } catch { /* ignore */ }
+        window.location.replace(pending ? "/pricing" : "/matches");
       } else {
         navigate("/", { replace: true });
       }

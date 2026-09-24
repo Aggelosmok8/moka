@@ -65,7 +65,7 @@ export default function HomePage() {
                 <div className="flex flex-wrap items-center justify-center gap-3 mt-7">
                   <Link to="/signin" data-testid="home-signin-google"
                     className="inline-flex items-center gap-2.5 px-7 py-3.5 rounded-full bg-white text-black font-black uppercase tracking-wider text-sm hover:bg-zinc-200 transition">
-                    <LogIn className="w-4 h-4" /> Sign in
+                    <LogIn className="w-4 h-4" /> Sign in for free
                   </Link>
                   <Link to="/signin?intent=trial" data-testid="home-start-trial"
                     className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-[#39FF14] text-black font-black uppercase tracking-wider text-sm hover:brightness-110 transition">
