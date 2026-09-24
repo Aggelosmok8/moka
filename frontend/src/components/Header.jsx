@@ -146,7 +146,7 @@ export const Header = () => {
       )}
       <SearchPalette open={searchOpen} onOpenChange={setSearchOpen} />
       <TrialBanner />
-      <LiveTicker />
+      {user && <LiveTicker />}
     </header>
   );
 };

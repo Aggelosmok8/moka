@@ -443,7 +443,7 @@ def make_auth_router(db) -> APIRouter:
         if not user or not user.get("password_hash"):
             _note_failure(key)
             # Google-only accounts have no password — say so without leaking存在.
-            raise HTTPException(status_code=401, detail="Wrong email or password. If you signed up with Google, use the Google button.")
+            raise HTTPException(status_code=401, detail="No password set for this account yet. Use “Continue with Google”, or tap “Forgot your password?” to create one.")
         if not verify_password(payload.password or "", user["password_hash"]):
             _note_failure(key)
             raise HTTPException(status_code=401, detail="Wrong email or password")
@@ -458,7 +458,9 @@ def make_auth_router(db) -> APIRouter:
         email = payload.email.strip().lower()
         user = await _find_user_by_email(email)
         sent = False
-        if user and user.get("password_hash"):
+        # Works for Google-created accounts too: this is how they SET a password
+        # for the first time (they have no password_hash yet).
+        if user:
             token = secrets.token_urlsafe(32)
             now = datetime.now(timezone.utc)
             await db.password_resets.insert_one({
