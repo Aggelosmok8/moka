@@ -88,6 +88,7 @@ class User(BaseModel):
     trial_end_date: Optional[str] = None
     trial_days_left: int = 0
     trial_used: bool = False
+    has_password: bool = False
 
 
 class RegisterIn(BaseModel):
@@ -109,6 +110,11 @@ class ForgotIn(BaseModel):
 class ResetIn(BaseModel):
     token: str
     password: str
+
+
+class SetPasswordIn(BaseModel):
+    new_password: str
+    current_password: Optional[str] = ""
 
 
 def _is_pro_now(user_doc: dict) -> bool:
@@ -258,6 +264,7 @@ def make_auth_router(db) -> APIRouter:
             trial_end_date=user_doc.get("trial_end_date"),
             trial_days_left=days_left,
             trial_used=_truthy(user_doc.get("trial_used")) or eff_status in ("trial", "expired"),
+            has_password=bool(user_doc.get("password_hash")),
         )
 
     async def current_user(request: Request) -> User:
@@ -420,6 +427,9 @@ def make_auth_router(db) -> APIRouter:
         if len(payload.password or "") < 8:
             raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
         if await _find_user_by_email(email):
+            existing = await _find_user_by_email(email)
+            if not existing.get("password_hash"):
+                raise HTTPException(status_code=409, detail="This email is already registered with Google. Sign in with Google once, then add a password from your Account page.")
             raise HTTPException(status_code=409, detail="An account with this email already exists. Sign in instead.")
         doc = await _create_user(
             email=email,
@@ -443,7 +453,7 @@ def make_auth_router(db) -> APIRouter:
         if not user or not user.get("password_hash"):
             _note_failure(key)
             # Google-only accounts have no password — say so without leaking存在.
-            raise HTTPException(status_code=401, detail="No password set for this account yet. Use “Continue with Google”, or tap “Forgot your password?” to create one.")
+            raise HTTPException(status_code=401, detail="This account uses Google sign-in. Tap “Continue with Google”, then add a password from your Account page.")
         if not verify_password(payload.password or "", user["password_hash"]):
             _note_failure(key)
             raise HTTPException(status_code=401, detail="Wrong email or password")
@@ -517,6 +527,26 @@ def make_auth_router(db) -> APIRouter:
         }})
         await record_trial(db, doc["email"], doc.get("provider_id") or "")
         return {"ok": True, "trial_end_date": end}
+
+    @router.post("/password/set")
+    async def set_password(payload: SetPasswordIn, user: User = Depends(current_user)):
+        """Signed-in user sets or changes their password.
+
+        Being signed in IS the proof of ownership, so a Google-created account
+        can add a password here without any email round trip. Changing an
+        existing password still requires the current one.
+        """
+        if len(payload.new_password or "") < 8:
+            raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+        doc = await db.users.find_one({"user_id": user.user_id})
+        if not doc:
+            raise HTTPException(status_code=404, detail="Account not found")
+        existing = doc.get("password_hash") or ""
+        if existing and not verify_password(payload.current_password or "", existing):
+            raise HTTPException(status_code=401, detail="Your current password is wrong")
+        await db.users.update_one({"user_id": user.user_id},
+                                  {"$set": {"password_hash": hash_password(payload.new_password)}})
+        return {"ok": True, "had_password": bool(existing)}
 
     router.current_user = current_user
     router.current_user_optional = current_user_optional

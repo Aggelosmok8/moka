@@ -83,11 +83,11 @@ export default function SignInPage() {
 
       <div className="w-full max-w-[400px] rounded-2xl border border-white/10 bg-[#11161d] p-6" data-testid="signin-card">
         <h1 className="font-display font-black uppercase tracking-tight text-2xl text-white text-center">
-          {signup ? (intent === "trial" ? "Start your free trial" : "Sign in for free") : "Sign in"}
+          {signup ? (intent === "trial" ? "Start your free trial" : "Create your account") : "Sign in"}
         </h1>
         <p className="text-xs text-zinc-500 text-center mt-1 mb-5">
           {signup
-            ? (intent === "trial" ? "7 days of full Pro access — no card required." : "Free account with your email — no card, no cost.")
+            ? (intent === "trial" ? "7 days of full Pro access — no card required." : "Your own email and password — free, no card needed.")
             : "Enter your details to access your account."}
         </p>
 
@@ -109,7 +109,7 @@ export default function SignInPage() {
           <button type="submit" disabled={busy} data-testid="signin-submit"
             className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-[#39FF14] text-black font-black uppercase tracking-wider text-sm py-3 hover:brightness-110 disabled:opacity-50 transition">
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : (signup && intent === "trial" ? <Sparkles className="w-4 h-4" /> : null)}
-            {signup ? (intent === "trial" ? "Start 7-day trial" : "Sign in for free") : "Sign in"}
+            {signup ? (intent === "trial" ? "Start 7-day trial" : "Create my free account") : "Sign in"}
           </button>
         </form>
 
@@ -145,7 +145,7 @@ export default function SignInPage() {
           ) : (
             <>Don't have an account yet?{" "}
               <button type="button" onClick={() => { setMode("signup"); setErr(""); }} data-testid="switch-to-signup"
-                className="text-[#39FF14] font-bold hover:underline">Sign up</button></>
+                className="text-[#39FF14] font-bold hover:underline">Create an account</button></>
           )}
         </div>
       </div>

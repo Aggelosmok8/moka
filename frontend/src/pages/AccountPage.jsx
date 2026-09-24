@@ -3,6 +3,7 @@ import Header from "../components/Header";
 import { ProBadge, UpgradeButton } from "../components/Gating";
 import { useEntitlements } from "../hooks/useEntitlements";
 import { useAuth } from "../contexts/AuthContext";
+import PasswordCard from "../components/PasswordCard";
 
 function Row({ label, value }) {
   return (
@@ -43,6 +44,7 @@ export default function AccountPage() {
             </div>
           )}
         </div>
+        <PasswordCard hasPassword={!!user?.has_password} />
         {!isPro && (
           <p className="text-zinc-500 text-sm mt-4">
             Upgrade to Pro to access more value opportunities across more leagues, full odds comparison, full AI explanations,

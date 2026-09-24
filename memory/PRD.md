@@ -599,3 +599,10 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - Default landing after auth is /matches (was /account).
 - Copy: Home CTA and the sign-up screen say "Sign in for free"; header Sign In button uses a neutral LogIn icon (it is no longer Google-only).
 - Verified end-to-end in the browser: guest -> Annual -> /signin (pending=pro_yearly) -> sign up -> lands on checkout.stripe.com automatically.
+
+## 2026-09-24 "Create an account" + set password from Account (no email needed)
+- User wanted email+password without the forced "tap forgot password" detour. Refused the literal request (accepting any password for an EXISTING email = account takeover for anyone who knows the address). Implemented the standard safe path instead.
+- NEW POST /api/auth/password/set (authenticated): being signed in IS the proof of ownership. No password yet -> sets it directly; existing password -> current_password required. /auth/me now returns has_password.
+- Frontend: components/PasswordCard.jsx on AccountPage — "Set a password" for Google-created accounts, "Change password" (asks for the current one) afterwards.
+- Copy: sign-in screen now reads "Sign in" / "Don't have an account yet? Create an account"; sign-up submit is "Create my free account". Error messages point to the right action instead of "forgot password": register on a Google email -> 409 "...Sign in with Google once, then add a password from your Account page"; password login on a Google-only account -> same guidance.
+- Verified (9 backend checks + browser): has_password false->true, login before set -> guidance 401, register duplicate -> 409, set while signed in -> 200, login with new password -> 200, change without/with wrong current -> 401, with correct -> 200, unauthenticated set -> 401, UI label flips SET A PASSWORD -> CHANGE PASSWORD.
