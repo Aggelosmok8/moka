@@ -458,6 +458,63 @@ async def match_odds(match_id: str, user=Depends(current_user_optional)):
     }
 
 
+@api_router.get("/specific-bets/{match_id}")
+async def specific_bets(match_id: str):
+    """Specific Bets payload — separate deterministic engine, cached 30 min."""
+    import apifootball as _af
+    import specific_bets as sb
+
+    ck = f"sb_out_{match_id}"
+    hit = _af._c_get(ck)
+    if hit is not None:
+        return hit
+
+    m = None
+    try:
+        m = await fsl_get_match_detail(match_id)
+    except Exception as e:
+        logger.warning("specific_bets detail(%s): %s", match_id, e)
+    if not m or not m.get("leagueName"):
+        # fsl detail only knows today's cached list; the live value feed is the
+        # same source the Matches page uses, so fall back to it (already cached).
+        try:
+            import live_values
+            for cand in (await live_values.build_live_matches() or []):
+                if str(cand.get("id")) == match_id:
+                    m = cand
+                    break
+        except Exception as e:
+            logger.warning("specific_bets live fallback(%s): %s", match_id, e)
+    digits = re.findall(r"(\d{4,})", match_id)
+    if not digits:
+        raise HTTPException(status_code=404, detail="Specific bets are not available for this fixture")
+
+    # Best price per 1X2 outcome from the odds we already have (no new provider).
+    h2h = {}
+    best_book = None
+    for row in ((m or {}).get("odds") or []):
+        for k in ("home", "draw", "away"):
+            p = (row.get("odds") or {}).get(k)
+            if p and p > (h2h.get(k) or 0):
+                h2h[k] = p
+                if k == "home":
+                    best_book = row.get("bookmaker")
+    h2h["book"] = best_book
+
+    out = await sb.build(digits[-1], h2h)
+    out["match"] = {
+        "id": match_id,
+        "home": (m or {}).get("home", {}).get("name") or out.get("home"),
+        "away": (m or {}).get("away", {}).get("name") or out.get("away"),
+        "leagueName": (m or {}).get("leagueName", ""),
+        "leagueId": (m or {}).get("leagueId", ""),
+        "commence_time": (m or {}).get("commence_time"),
+        "status": (m or {}).get("status"),
+    }
+    _af._c_set(ck, out, ttl=1800)
+    return out
+
+
 @api_router.post("/admin/refresh")
 async def refresh_cache(scope: str = "all", admin=Depends(require_admin)):
     fsl_cache_clear()

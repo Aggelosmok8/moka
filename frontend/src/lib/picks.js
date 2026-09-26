@@ -36,3 +36,31 @@ export const pickChoices = (match, value) => {
 
 export const matchKey = (home, away) =>
   `${NORM(home).replace(/[^a-z0-9]/g, "")}|${NORM(away).replace(/[^a-z0-9]/g, "")}`;
+
+// Settlement for Specific Bets picks. Returns "won" / "lost", or null when the
+// market cannot be settled from the final score (cards, corners, first half,
+// player markets) — those stay pending instead of being wrongly marked lost.
+export const settleStatus = (pick, r) => {
+  const p = NORM(pick);
+  if (WINNING_OUTCOMES[p]) return legWins(p, r?.outcome) ? "won" : "lost";
+  const hs = Number(r?.home);
+  const as = Number(r?.away);
+  if (!Number.isFinite(hs) || !Number.isFinite(as)) return null;
+  const total = hs + as;
+  let m;
+  if ((m = p.match(/^(over|under)_([\d.]+)$/))) {
+    const isOver = total > parseFloat(m[2]);
+    return (m[1] === "over") === isOver ? "won" : "lost";
+  }
+  if (p === "btts_yes") return hs > 0 && as > 0 ? "won" : "lost";
+  if (p === "btts_no") return hs > 0 && as > 0 ? "lost" : "won";
+  if ((m = p.match(/^(home|away)_over_([\d.]+)$/))) {
+    const g = m[1] === "home" ? hs : as;
+    return g > parseFloat(m[2]) ? "won" : "lost";
+  }
+  if ((m = p.match(/^(home|away)_hcp_(-?[\d.]+)$/))) {
+    const diff = m[1] === "home" ? hs - as : as - hs;
+    return diff + parseFloat(m[2]) > 0 ? "won" : "lost";
+  }
+  return null;
+};

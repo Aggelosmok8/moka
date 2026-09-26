@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useCallback, useMemo, useState, useEffect, useRef } from "react";
 import { useAuth } from "./AuthContext";
-import { legWins, matchKey } from "../lib/picks";
+import { legWins, settleStatus, matchKey } from "../lib/picks";
 import { getPortfolioRemote, putPortfolioRemote } from "../lib/api";
 import { fetchResults } from "../lib/catalogApi";
 
@@ -298,11 +298,12 @@ export function PortfolioProvider({ children }) {
     const settleLegOrBet = (item) => {
       if (item.status !== "pending") return item;
       const r = results[item.matchId];
-      if (r && r.finished && r.outcome) {
+      const resolved = r && r.finished ? settleStatus(item.pick, r) : null;
+      if (resolved) {
         settled++;
         return {
           ...item,
-          status: legWins(item.pick, r.outcome) ? "won" : "lost",
+          status: resolved,
           finalScore: `${r.home}-${r.away}`,
           settledAt: new Date().toISOString(),
         };
