@@ -621,3 +621,8 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - Slip: uses the EXISTING addToSlip. One selection per match is preserved (previous duplicate-bug fix), with a note explaining it. Rows without a market price add with odds 0 and the toast tells the user to set their price in the slip.
 - Settlement: picks.js gained settleStatus(pick, result) — over/under, BTTS, team goals, handicap and the existing 1X2/DC settle from the final score; cards/corners/first-half/player markets return null and stay PENDING instead of being wrongly marked lost. PortfolioContext.autoSettle now uses it.
 - Verified: engine payload on 3 real fixtures (Core 19 rows, Game 17, players 43+42, DC market 69%/61% with edge), 16 settlement unit cases, 41 cards showing the new action, page renders hero+sections+players, Add -> slip leg {pick: over_2.5} + FAB counter + IN SLIP badge on Matches, existing /analysis/:id page still opens.
+
+## 2026-09-26 Match Analysis odds strip: all three outcomes
+- The "Best odds" card used to list bookmakers only for the model's outcome. It now renders three labelled groups (home team / Draw / away team), each sorted by price with its own "BEST" badge, so a user can back the draw or the other side.
+- The group matching the model gets a green heading + "LION's pick" chip, and its best box carries the lion crest (/lion-crest.png, data-testid="odds-lion-badge") in the top-left corner with a stronger border.
+- "View all odds" now expands every group. Add to slip / Watchlist / Portfolio buttons unchanged (still tied to the model's selection). Verified: home/draw/away groups present, exactly 1 crest, pick chip only on the model's group.

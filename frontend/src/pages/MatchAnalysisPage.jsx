@@ -336,11 +336,17 @@ export default function MatchAnalysisPage() {
   const hRecent = apiRecent.h ? mapRecent(apiRecent.h, hn) : mapRecent(league?.results, hn);
   const aRecent = apiRecent.a ? mapRecent(apiRecent.a, an) : mapRecent(league?.results, an);
 
-  const oddsRows = (match.odds || [])
-    .map((o) => ({ bookmaker: o.bookmaker, price: (o.odds && o.odds[outcomeKey]) || 0 }))
+  const oddsFor = (key) => (match.odds || [])
+    .map((o) => ({ bookmaker: o.bookmaker, price: (o.odds && o.odds[key]) || 0 }))
     .filter((o) => o.price > 0)
     .sort((a, b) => b.price - a.price);
-  const topOdds = showAllOdds ? oddsRows : oddsRows.slice(0, 6);
+  // All three outcomes, so the user can also back the draw or the other side.
+  const oddsGroups = [
+    { key: "home", label: match.home?.name || "Home win" },
+    { key: "draw", label: "Draw" },
+    { key: "away", label: match.away?.name || "Away win" },
+  ].map((g) => ({ ...g, rows: oddsFor(g.key), isPick: g.key === outcomeKey }));
+  const oddsRows = oddsFor(outcomeKey);
 
   const pickPct = value.prediction ? value.prediction[outcomeKey] : null;
   const marketPct = value.bookProb != null ? Math.round(value.bookProb * 100) : null;
@@ -459,7 +465,7 @@ export default function MatchAnalysisPage() {
       {!isLive && (
         <Card testId="available-odds" className="mb-4">
           <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-            <h3 className="font-display font-black uppercase tracking-tight text-sm text-white">Best odds · {outcomeName}</h3>
+            <h3 className="font-display font-black uppercase tracking-tight text-sm text-white">Best odds · all outcomes</h3>
             <div className="flex items-center gap-2">
               {oddsRows.length > 6 && (
                 <button onClick={() => setShowAllOdds((v) => !v)} data-testid="toggle-all-odds"
@@ -471,28 +477,51 @@ export default function MatchAnalysisPage() {
               <AddToChartButton entry={{ match, value }} />
             </div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-            {oddsRows.length === 0 && <div className="text-sm text-zinc-500">No odds available.</div>}
-            {topOdds.map((o, i) => {
-              const url = bookmakerUrl(o.bookmaker);
-              const best = i === 0 && !showAllOdds ? true : i === 0;
-              const box = `relative rounded-xl px-3 py-3 text-center transition-colors ${best ? "bg-[#39FF14]/10 border border-[#39FF14]/50" : "bg-[#0d1117] border border-white/10 hover:border-[#39FF14]/30"}`;
-              const inner = (
-                <>
-                  {best && <span className="absolute -top-2 right-2 text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-[#39FF14] text-black">Best</span>}
-                  <div className={`text-[11px] font-bold truncate ${best ? "text-[#39FF14]" : "text-zinc-300"}`}>
-                    {o.bookmaker}{url && <ExternalLink className="w-3 h-3 inline ml-1 opacity-50" />}
-                  </div>
-                  <div className={`font-display font-black text-xl font-mono-num mt-1 ${best ? "text-[#39FF14]" : "text-white"}`}>{o.price}</div>
-                </>
-              );
-              return url ? (
-                <a key={o.bookmaker} href={url} target="_blank" rel="noopener noreferrer" data-testid={`odds-link-${i}`} title={`Bet with ${o.bookmaker}`} className={box}>{inner}</a>
-              ) : (
-                <div key={o.bookmaker} data-testid={`odds-row-${i}`} title="No verified betting link for this bookmaker" className={box}>{inner}</div>
-              );
-            })}
-          </div>
+          {oddsGroups.every((g) => !g.rows.length) && <div className="text-sm text-zinc-500">No odds available.</div>}
+          {oddsGroups.filter((g) => g.rows.length).map((g) => (
+            <div key={g.key} className="mb-4 last:mb-1" data-testid={`odds-group-${g.key}`}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className={`text-[11px] font-black uppercase tracking-widest ${g.isPick ? "text-[#39FF14]" : "text-zinc-500"}`}>
+                  {g.label}
+                </span>
+                {g.isPick && (
+                  <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#39FF14]/15 text-[#39FF14] border border-[#39FF14]/40"
+                    data-testid={`odds-group-pick-${g.key}`}>
+                    LION's pick
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                {(showAllOdds ? g.rows : g.rows.slice(0, 6)).map((o, i) => {
+                  const url = bookmakerUrl(o.bookmaker);
+                  const best = i === 0;
+                  const lion = best && g.isPick;
+                  const box = `relative rounded-xl px-3 py-3 text-center transition-colors ${
+                    lion ? "bg-[#39FF14]/[0.14] border border-[#39FF14]"
+                      : best ? "bg-[#39FF14]/10 border border-[#39FF14]/50"
+                        : "bg-[#0d1117] border border-white/10 hover:border-[#39FF14]/30"}`;
+                  const inner = (
+                    <>
+                      {lion && (
+                        <img src="/lion-crest.png" alt="LION's pick" data-testid="odds-lion-badge"
+                          className="absolute -top-3 -left-2 w-7 h-7 object-contain drop-shadow-[0_0_6px_rgba(57,255,20,0.5)]" />
+                      )}
+                      {best && <span className="absolute -top-2 right-2 text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-[#39FF14] text-black">Best</span>}
+                      <div className={`text-[11px] font-bold truncate ${best ? "text-[#39FF14]" : "text-zinc-300"}`}>
+                        {o.bookmaker}{url && <ExternalLink className="w-3 h-3 inline ml-1 opacity-50" />}
+                      </div>
+                      <div className={`font-display font-black text-xl font-mono-num mt-1 ${best ? "text-[#39FF14]" : "text-white"}`}>{o.price}</div>
+                    </>
+                  );
+                  return url ? (
+                    <a key={o.bookmaker} href={url} target="_blank" rel="noopener noreferrer" data-testid={`odds-link-${g.key}-${i}`} title={`Bet with ${o.bookmaker}`} className={box}>{inner}</a>
+                  ) : (
+                    <div key={o.bookmaker} data-testid={`odds-row-${g.key}-${i}`} title="No verified betting link for this bookmaker" className={box}>{inner}</div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
           <div className="mt-3"><AddToPortfolioButton entry={{ match, value }} /></div>
         </Card>
       )}
