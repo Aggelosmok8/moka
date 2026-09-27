@@ -156,8 +156,12 @@ export default function MatchesPage() {
   const hasFilters = fLeague || fTeam || fDate || fSport;
   const clearFilters = () => { setFLeague(""); setFTeam(""); setFDate(""); setFSport(""); };
 
-  const visible = isPro ? filtered : filtered.slice(0, 3);
-  const lockedCount = isPro ? 0 : Math.max(0, Math.min(3, filtered.length - visible.length));
+  // A match in play belongs in the "Live now" section only, never twice.
+  const liveIds = useMemo(() => new Set(liveFiltered.map((m) => m.id)), [liveFiltered]);
+  const upcoming = useMemo(() => filtered.filter((e) => !liveIds.has(e.match.id)), [filtered, liveIds]);
+
+  const visible = isPro ? upcoming : upcoming.slice(0, 3);
+  const lockedCount = isPro ? 0 : Math.max(0, Math.min(3, upcoming.length - visible.length));
   const busy = loading || entLoading;
 
   return (
@@ -217,7 +221,7 @@ export default function MatchesPage() {
           </div>
         )}
 
-        {!liveMode && view === "all" && liveFiltered.length > 0 && (
+        {!liveMode && liveFiltered.length > 0 && (
           <div className="mb-6" data-testid="all-live-section">
             <div className="text-[11px] font-black uppercase tracking-wider text-red-400 mb-2 flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> Live now ({liveFiltered.length})
@@ -240,7 +244,7 @@ export default function MatchesPage() {
           )
         ) : busy ? (
           <Skel />
-        ) : filtered.length === 0 ? (
+        ) : upcoming.length === 0 && liveFiltered.length === 0 ? (
           <div className="text-center py-16 text-zinc-400" data-testid="matches-empty">
             {hasFilters ? "No matches match your filters." : "No matches in this category right now."}
           </div>
@@ -250,7 +254,7 @@ export default function MatchesPage() {
               {visible.map((e) => <ValueCard key={e.match.id} entry={e} />)}
               {Array.from({ length: lockedCount }).map((_, i) => <LockedValueCard key={`lock-${i}`} />)}
             </div>
-            {!isPro && filtered.length > visible.length && (
+            {!isPro && upcoming.length > visible.length && (
               <div className="mt-6 flex flex-col items-center gap-2 text-center" data-testid="matches-upgrade">
                 <div className="flex items-center gap-1.5 text-zinc-300 text-sm font-semibold"><Lock className="w-4 h-4" /> Upgrade to Pro to unlock every opportunity</div>
                 <UpgradeButton />
