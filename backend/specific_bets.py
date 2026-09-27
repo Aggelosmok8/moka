@@ -104,41 +104,45 @@ async def _stats(team_id, league_id, season) -> Optional[dict]:
     return out
 
 
-async def _corners(team_id, last: int = 3) -> Optional[dict]:
-    """Corner averages from the last few finished fixtures (small sample -> MEDIUM)."""
-    ck = f"sb_corners_{team_id}"
+async def _fixture_stats(team_id, last: int = 3) -> Optional[dict]:
+    """Per-match averages from the last few finished fixtures.
+
+    One fetch covers corners, fouls, offsides and goalkeeper saves — the same
+    API calls, four markets. Small sample, so these are flagged MEDIUM.
+    """
+    ck = f"sb_fxstats_{team_id}"
     hit = af._c_get(ck)
     if hit is not None:
         return hit
     out = None
+    want = {"corner kicks": "corners", "fouls": "fouls", "offsides": "offsides",
+            "goalkeeper saves": "saves"}
     try:
         d = await af._get(af.FOOTBALL_BASE, "/fixtures",
                           {"team": team_id, "last": last, "status": "FT"})
         ids = [(f.get("fixture") or {}).get("id") for f in (d.get("response") or [])]
-        got, conceded, n = 0, 0, 0
+        acc = {v: 0 for v in want.values()}
+        acc["corners_against"] = 0
+        n = 0
         for fid in [i for i in ids if i][:last]:
             s = await af._get(af.FOOTBALL_BASE, "/fixtures/statistics", {"fixture": fid})
-            rows = s.get("response") or []
-            mine = other = None
-            for row in rows:
-                val = None
+            mine, other = {}, {}
+            for row in s.get("response") or []:
+                target = mine if str((row.get("team") or {}).get("id")) == str(team_id) else other
                 for st in row.get("statistics") or []:
-                    if (st.get("type") or "").lower() == "corner kicks":
-                        val = st.get("value")
-                if val is None:
-                    continue
-                if str((row.get("team") or {}).get("id")) == str(team_id):
-                    mine = val
-                else:
-                    other = val
-            if mine is not None and other is not None:
-                got += mine
-                conceded += other
+                    k = want.get((st.get("type") or "").lower())
+                    if k and st.get("value") is not None:
+                        target[k] = st["value"]
+            if "corners" in mine and "corners" in other:
+                acc["corners_against"] += other["corners"]
                 n += 1
+                for k in want.values():
+                    acc[k] += mine.get(k) or 0
         if n >= 2:
-            out = {"for": round(got / n, 2), "against": round(conceded / n, 2), "n": n}
+            out = {k: round(v / n, 2) for k, v in acc.items()}
+            out["n"] = n
     except Exception as e:
-        logger.warning("sb._corners(%s): %s", team_id, e)
+        logger.warning("sb._fixture_stats(%s): %s", team_id, e)
     af._c_set(ck, out, ttl=24 * 3600)
     return out
 
@@ -190,13 +194,14 @@ async def _squad(team_id, season) -> list:
 
 
 def _row(market, selection, lion, market_pct=None, odds=None, book=None,
-         line=None, pick=None, quality=HIGH, note=None, player=None, player_id=None):
+         line=None, pick=None, quality=HIGH, note=None, player=None, player_id=None, side=None):
     edge = None if market_pct is None else round(lion - market_pct, 1)
     return {
         "market": market, "selection": selection, "line": line, "pick": pick,
         "lion": lion, "market_pct": market_pct, "odds": odds, "bookmaker": book,
         "edge": edge, "value": bool(edge is not None and edge >= 5),
         "quality": quality, "note": note, "player": player, "player_id": player_id,
+        "side": side,
     }
 
 
@@ -208,8 +213,8 @@ def _best(rows: list) -> Optional[dict]:
     if priced:
         return max(priced, key=lambda r: (r["edge"], r["lion"]))
     band = [r for r in rows if 45 <= r["lion"] <= 82]
-    pool = band or rows
-    return max(pool, key=lambda r: r["lion"]) if pool else None
+    # No price and nothing meaningful in range -> no highlighted pick at all.
+    return max(band, key=lambda r: r["lion"]) if band else None
 
 
 async def build(fixture_id: str, h2h_odds: Optional[dict] = None) -> dict:
@@ -243,30 +248,41 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None) -> dict:
     p_away = sum(grid[i][j] for i in range(9) for j in range(9) if i < j)
 
     core, game = [], []
+    panels = []
+
+    def panel(key, title, icon, rows, split=False, note=None):
+        if rows:
+            panels.append({"key": key, "title": title, "icon": icon, "rows": rows,
+                           "top": _best(rows), "split": split, "note": note})
 
     # --- Goals over/under -----------------------------------------------------
     o = (h2h_odds or {})
+    goals_rows = []
     for line in (0.5, 1.5, 2.5, 3.5):
         po = _p_over(line, lam_t)
-        mk_o = _implied(o.get(f"over{str(line).replace('.', '')}"))
-        mk_u = _implied(o.get(f"under{str(line).replace('.', '')}"))
-        core.append(_row("Goals", f"Over {line}", _pct(po), mk_o,
-                         o.get(f"over{str(line).replace('.', '')}"), o.get("book"),
-                         line=line, pick=f"over_{line}", quality=q_goals))
-        core.append(_row("Goals", f"Under {line}", _pct(1 - po), mk_u,
-                         o.get(f"under{str(line).replace('.', '')}"), o.get("book"),
-                         line=line, pick=f"under_{line}", quality=q_goals))
+        goals_rows.append(_row("Goals", f"Over {line}", _pct(po), pick=f"over_{line}",
+                               line=line, quality=q_goals))
+        goals_rows.append(_row("Goals", f"Under {line}", _pct(1 - po), pick=f"under_{line}",
+                               line=line, quality=q_goals))
+    core += goals_rows
+    panel("goals", "Goals Over / Under", "goals", goals_rows,
+          note=f"Expected {round(lam_t, 2)} goals")
 
     # --- BTTS -----------------------------------------------------------------
     p_btts = 1 - (_pmf(0, lam_h) + _pmf(0, lam_a) - _pmf(0, lam_h) * _pmf(0, lam_a))
-    core.append(_row("Both Teams To Score", "Yes", _pct(p_btts), pick="btts_yes", quality=q_goals))
-    core.append(_row("Both Teams To Score", "No", _pct(1 - p_btts), pick="btts_no", quality=q_goals))
+    btts = [_row("Both Teams To Score", "Yes", _pct(p_btts), pick="btts_yes", quality=q_goals),
+            _row("Both Teams To Score", "No", _pct(1 - p_btts), pick="btts_no", quality=q_goals)]
+    core += btts
+    panel("btts", "Both Teams To Score", "btts", btts)
 
     # --- Team goals -----------------------------------------------------------
+    tg = []
     for side, lam, name in (("home", lam_h, fx["home"]), ("away", lam_a, fx["away"])):
-        for line in (0.5, 1.5):
-            core.append(_row("Team Goals", f"{name} Over {line}", _pct(_p_over(line, lam)),
-                             line=line, pick=f"{side}_over_{line}", quality=q_goals))
+        for line in (0.5, 1.5, 2.5):
+            tg.append(_row("Team Goals", f"Over {line} goals", _pct(_p_over(line, lam)),
+                           line=line, pick=f"{side}_over_{line}", quality=q_goals, side=side))
+    core += tg
+    panel("team_goals", "Team Goals", "team_goals", tg, split=True)
 
     # --- Double chance (isolated inside this module) ---------------------------
     imp = None
@@ -274,39 +290,108 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None) -> dict:
         raw = [1 / o["home"], 1 / o["draw"], 1 / o["away"]]
         tot = sum(raw)
         imp = [r / tot for r in raw]  # de-vigged 1X2 -> combine for DC
-    core.append(_row("Double Chance", f"{fx['home']} or Draw", _pct(p_home + p_draw),
-                     _pct(imp[0] + imp[1]) if imp else None, pick="home_or_draw", quality=q_goals))
-    core.append(_row("Double Chance", f"{fx['away']} or Draw", _pct(p_away + p_draw),
-                     _pct(imp[2] + imp[1]) if imp else None, pick="away_or_draw", quality=q_goals))
-    core.append(_row("Double Chance", "Home or Away (no draw)", _pct(p_home + p_away),
-                     _pct(imp[0] + imp[2]) if imp else None, pick="home_or_away", quality=q_goals))
+    dc = [
+        _row("Double Chance", f"{fx['home']} or Draw", _pct(p_home + p_draw),
+             _pct(imp[0] + imp[1]) if imp else None, pick="home_or_draw", quality=q_goals),
+        _row("Double Chance", f"{fx['away']} or Draw", _pct(p_away + p_draw),
+             _pct(imp[2] + imp[1]) if imp else None, pick="away_or_draw", quality=q_goals),
+        _row("Double Chance", "Home or Away (no draw)", _pct(p_home + p_away),
+             _pct(imp[0] + imp[2]) if imp else None, pick="home_or_away", quality=q_goals),
+    ]
+    core += dc
+    panel("double_chance", "Double Chance", "double_chance", dc)
 
     # --- Handicap -------------------------------------------------------------
     p_h1 = sum(grid[i][j] for i in range(9) for j in range(9) if i - j >= 2)
     p_a1 = sum(grid[i][j] for i in range(9) for j in range(9) if j - i >= 2)
-    core.append(_row("Handicap", f"{fx['home']} -1", _pct(p_h1), line=-1, pick="home_hcp_-1", quality=q_goals))
-    core.append(_row("Handicap", f"{fx['away']} -1", _pct(p_a1), line=-1, pick="away_hcp_-1", quality=q_goals))
+    hcp = [_row("Handicap", f"{fx['home']} -1", _pct(p_h1), line=-1, pick="home_hcp_-1", quality=q_goals, side="home"),
+           _row("Handicap", f"{fx['away']} -1", _pct(p_a1), line=-1, pick="away_hcp_-1", quality=q_goals, side="away")]
+    core += hcp
+    panel("handicap", "Handicap", "handicap", hcp)
+
+    # --- Correct score (final) ------------------------------------------------
+    cs = []
+    flat = sorted(((grid[i][j], i, j) for i in range(6) for j in range(6)), reverse=True)[:8]
+    for p, i, j in flat:
+        cs.append(_row("Correct Score", f"{i} - {j}", _pct(p), pick=f"cs_{i}_{j}", quality=q_goals))
+    panel("correct_score", "Correct Score (final)", "correct_score", cs,
+          note="Most likely final scorelines")
+
+    # --- Score at any time ----------------------------------------------------
+    # A scoreline x-y is reached at some point iff both teams get at least that
+    # many goals, so P = P(H>=x) * P(A>=y).
+    anyt = []
+    for i, j in ((1, 0), (0, 1), (1, 1), (2, 0), (0, 2), (2, 1), (1, 2), (2, 2)):
+        ph = 1 - sum(_pmf(k, lam_h) for k in range(i)) if i else 1.0
+        pa = 1 - sum(_pmf(k, lam_a) for k in range(j)) if j else 1.0
+        anyt.append(_row("Score At Any Time", f"{i} - {j} at some point", _pct(ph * pa),
+                         pick=f"anyt_{i}_{j}", quality=MEDIUM))
+    panel("score_anytime", "Score At Any Time", "score_anytime", anyt,
+          note="This exact scoreline appears at some moment in the match")
 
     # --- Cards ----------------------------------------------------------------
     if hs.get("cards_per_game") and as_.get("cards_per_game"):
         lam_c = hs["cards_per_game"] + as_["cards_per_game"]
+        cards = []
         for line in (3.5, 4.5, 5.5):
-            game.append(_row("Cards", f"Over {line} cards", _pct(_p_over(line, lam_c)),
-                             line=line, pick=f"cards_over_{line}", quality=q_goals,
-                             note=f"Expected {round(lam_c, 1)} cards"))
-            game.append(_row("Cards", f"Under {line} cards", _pct(1 - _p_over(line, lam_c)),
-                             line=line, pick=f"cards_under_{line}", quality=q_goals))
+            cards.append(_row("Cards", f"Over {line} cards", _pct(_p_over(line, lam_c)),
+                              line=line, pick=f"cards_over_{line}", quality=q_goals))
+            cards.append(_row("Cards", f"Under {line} cards", _pct(1 - _p_over(line, lam_c)),
+                              line=line, pick=f"cards_under_{line}", quality=q_goals))
+        game += cards
+        panel("cards", "Cards", "cards", cards, note=f"Expected {round(lam_c, 1)} cards")
 
-    # --- Corners --------------------------------------------------------------
-    hc, ac = await _corners(fx["home_id"]), await _corners(fx["away_id"])
+    # --- Corners / fouls / offsides / saves (same fixture-stats fetch) ---------
+    hc, ac = await _fixture_stats(fx["home_id"]), await _fixture_stats(fx["away_id"])
     if hc and ac:
-        lam_corn = (hc["for"] + ac["against"]) / 2 + (ac["for"] + hc["against"]) / 2
-        for line in (8.5, 9.5, 10.5):
-            game.append(_row("Corners", f"Over {line} corners", _pct(_p_over(line, lam_corn)),
-                             line=line, pick=f"corners_over_{line}", quality=MEDIUM,
-                             note=f"Expected {round(lam_corn, 1)} · {hc['n'] + ac['n']} matches sampled"))
-            game.append(_row("Corners", f"Under {line} corners", _pct(1 - _p_over(line, lam_corn)),
-                             line=line, pick=f"corners_under_{line}", quality=MEDIUM))
+        sample_note = f"{hc['n'] + ac['n']} recent matches sampled"
+        lam_corn = (hc["corners"] + ac["corners_against"]) / 2 + (ac["corners"] + hc["corners_against"]) / 2
+        corners = []
+        for line in (8.5, 9.5, 10.5, 11.5):
+            corners.append(_row("Corners", f"Over {line} corners", _pct(_p_over(line, lam_corn)),
+                                line=line, pick=f"corners_over_{line}", quality=MEDIUM))
+            corners.append(_row("Corners", f"Under {line} corners", _pct(1 - _p_over(line, lam_corn)),
+                                line=line, pick=f"corners_under_{line}", quality=MEDIUM))
+        game += corners
+        panel("corners", "Corners", "corners", corners,
+              note=f"Expected {round(lam_corn, 1)} · {sample_note}")
+
+        lam_f = hc["fouls"] + ac["fouls"]
+        fouls = []
+        for line in (19.5, 21.5, 23.5):
+            fouls.append(_row("Fouls", f"Over {line} total fouls", _pct(_p_over(line, lam_f)),
+                              line=line, pick=f"fouls_over_{line}", quality=MEDIUM))
+            fouls.append(_row("Fouls", f"Under {line} total fouls", _pct(1 - _p_over(line, lam_f)),
+                              line=line, pick=f"fouls_under_{line}", quality=MEDIUM))
+        for side, st, name in (("home", hc, fx["home"]), ("away", ac, fx["away"])):
+            for line in (9.5, 11.5):
+                fouls.append(_row("Team Fouls", f"{name} over {line} fouls", _pct(_p_over(line, st["fouls"])),
+                                  line=line, pick=f"{side}_fouls_over_{line}", quality=MEDIUM, side=side))
+        game += fouls
+        panel("fouls", "Fouls", "fouls", fouls,
+              note=f"Expected {round(lam_f, 1)} total · {sample_note}")
+
+        lam_off = hc["offsides"] + ac["offsides"]
+        if lam_off > 0:
+            offs = []
+            for line in (1.5, 2.5, 3.5):
+                offs.append(_row("Offsides", f"Over {line} offsides", _pct(_p_over(line, lam_off)),
+                                 line=line, pick=f"offsides_over_{line}", quality=MEDIUM))
+                offs.append(_row("Offsides", f"Under {line} offsides", _pct(1 - _p_over(line, lam_off)),
+                                 line=line, pick=f"offsides_under_{line}", quality=MEDIUM))
+            game += offs
+            panel("offsides", "Offsides", "offsides", offs,
+                  note=f"Expected {round(lam_off, 1)} · {sample_note}")
+
+        saves = []
+        for side, st, name in (("home", hc, fx["home"]), ("away", ac, fx["away"])):
+            if (st.get("saves") or 0) <= 0:
+                continue
+            for line in (1.5, 2.5, 3.5, 4.5):
+                saves.append(_row("Goalkeeper Saves", f"Over {line} saves", _pct(_p_over(line, st["saves"])),
+                                  line=line, pick=f"{side}_saves_over_{line}", quality=MEDIUM, side=side))
+        game += saves
+        panel("saves", "Goalkeeper Saves", "saves", saves, split=True, note=sample_note)
 
     # --- First half -----------------------------------------------------------
     shares = [s for s in (hs.get("fh_share"), as_.get("fh_share")) if s]
@@ -314,15 +399,18 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None) -> dict:
         share = sum(shares) / len(shares)
         lam_fh = lam_t * share
         lam_fh_h, lam_fh_a = lam_h * share, lam_a * share
+        fh = []
         for line in (0.5, 1.5):
-            game.append(_row("First Half", f"Over {line} goals (1st half)", _pct(_p_over(line, lam_fh)),
-                             line=line, pick=f"fh_over_{line}", quality=MEDIUM,
-                             note=f"{_pct(share)}% of goals come before HT"))
-            game.append(_row("First Half", f"Under {line} goals (1st half)", _pct(1 - _p_over(line, lam_fh)),
-                             line=line, pick=f"fh_under_{line}", quality=MEDIUM))
+            fh.append(_row("First Half", f"Over {line} goals (1st half)", _pct(_p_over(line, lam_fh)),
+                           line=line, pick=f"fh_over_{line}", quality=MEDIUM))
+            fh.append(_row("First Half", f"Under {line} goals (1st half)", _pct(1 - _p_over(line, lam_fh)),
+                           line=line, pick=f"fh_under_{line}", quality=MEDIUM))
         p_fh_btts = 1 - (_pmf(0, lam_fh_h) + _pmf(0, lam_fh_a) - _pmf(0, lam_fh_h) * _pmf(0, lam_fh_a))
-        game.append(_row("First Half", "Both teams to score (1st half)", _pct(p_fh_btts),
-                         pick="fh_btts_yes", quality=MEDIUM))
+        fh.append(_row("First Half", "Both teams to score (1st half)", _pct(p_fh_btts),
+                       pick="fh_btts_yes", quality=MEDIUM))
+        game += fh
+        panel("first_half", "First Half", "first_half", fh,
+              note=f"{_pct(share)}% of goals come before half time")
 
     # --- Players intelligence -------------------------------------------------
     async def team_players(team_id, lam_team, stats, side):
@@ -385,6 +473,7 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None) -> dict:
         "model": {"xg_home": round(lam_h, 2), "xg_away": round(lam_a, 2),
                   "xg_total": round(lam_t, 2), "sample_matches": sample},
         "quality": q_goals,
+        "panels": panels,
         "categories": [
             {"key": "core", "title": "Core Markets", "rows": core, "top": _best(core)},
             {"key": "game", "title": "Game Markets", "rows": game, "top": _best(game)},

@@ -58,6 +58,9 @@ export const settleStatus = (pick, r) => {
     const g = m[1] === "home" ? hs : as;
     return g > parseFloat(m[2]) ? "won" : "lost";
   }
+  if ((m = p.match(/^cs_(\d+)_(\d+)$/))) {
+    return hs === Number(m[1]) && as === Number(m[2]) ? "won" : "lost";
+  }
   if ((m = p.match(/^(home|away)_hcp_(-?[\d.]+)$/))) {
     const diff = m[1] === "home" ? hs - as : as - hs;
     return diff + parseFloat(m[2]) > 0 ? "won" : "lost";
