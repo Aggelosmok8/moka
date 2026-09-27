@@ -224,7 +224,10 @@ function BetSlip({ slip, removeFromSlip, updateSlipLegOdds, clearSlip, placeTick
           <div key={legId} className="flex items-center justify-between gap-2 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2" data-testid={`slip-leg-${legId}`}>
             <div className="min-w-0 flex-1">
               <div className="text-xs text-white font-semibold break-words">{l.home} <span className="text-zinc-600">vs</span> {l.away}</div>
-              <div className="text-[11px] text-[#39FF14] font-bold break-words">{l.pickName}</div>
+              <div className="text-[11px] text-[#39FF14] font-bold break-words">
+                {l.kind === "specific" && <span className="mr-1.5 align-middle text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#39FF14]/15 text-[#39FF14] border border-[#39FF14]/30">Specific</span>}
+                {l.pickName}
+              </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <div className="flex flex-col items-end">

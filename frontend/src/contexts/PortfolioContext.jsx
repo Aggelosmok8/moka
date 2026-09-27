@@ -208,6 +208,7 @@ export function PortfolioProvider({ children }) {
       const next = [...prev, {
         matchId: leg.matchId, home: leg.home, away: leg.away, league: leg.league,
         pick: leg.pick, pickName: leg.pickName, odds: Number(leg.odds) || 0, bookmaker: leg.bookmaker || "",
+        kind: leg.kind || "match",
         // Match start time — Portfolio dates performance by KICKOFF, not settle time (#8).
         kickoff: leg.kickoff || leg.commence_time || null,
       }];
@@ -220,8 +221,10 @@ export function PortfolioProvider({ children }) {
     setSlip((prev) => {
       const key = home || away ? matchKey(home, away) : "";
       const isMatch = (l) => l.matchId === matchId || (key && matchKey(l.home, l.away) === key);
-      // With a pick we drop only that selection; without one, every leg of the match.
-      const next = prev.filter((l) => !(isMatch(l) && (!pick || (l.pick || "") === pick)));
+      // With a pick we drop only that selection; without one, the match prediction
+      // leg only — specific bets are removed individually from their own page.
+      const next = prev.filter((l) => !(isMatch(l)
+        && (pick ? (l.pick || "") === pick : l.kind !== "specific")));
       try { localStorage.setItem(SLIP_KEY, JSON.stringify(next)); } catch {}
       return next;
     });
@@ -244,9 +247,12 @@ export function PortfolioProvider({ children }) {
       && ((matchId && l.matchId === matchId) || (key && matchKey(l.home, l.away) === key)));
   }, [slip]);
 
+  // Match-level "in slip" = the match prediction only. A specific bet is its own
+  // independent selection and must never mark the match itself as played.
   const slipHas = useCallback((matchId, home, away) => {
     const key = home || away ? matchKey(home, away) : "";
-    return slip.some((l) => (matchId && l.matchId === matchId) || (key && matchKey(l.home, l.away) === key));
+    return slip.some((l) => l.kind !== "specific"
+      && ((matchId && l.matchId === matchId) || (key && matchKey(l.home, l.away) === key)));
   }, [slip]);
 
   const placeTicket = useCallback((stake) => {

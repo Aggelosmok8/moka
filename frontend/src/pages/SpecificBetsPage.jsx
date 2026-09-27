@@ -167,6 +167,7 @@ export default function SpecificBetsPage() {
     }
     addToSlip({
       matchId: match.id, home: teams.home, away: teams.away, league: match.leagueName,
+      kind: "specific",
       pick: row.pick, pickName: `${row.player ? row.player + " " : ""}${row.selection}`,
       odds: row.odds || 0, bookmaker: row.odds ? (row.bookmaker || "") : "", kickoff: match.commence_time,
     });
