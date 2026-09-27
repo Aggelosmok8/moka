@@ -213,8 +213,56 @@ def _best(rows: list) -> Optional[dict]:
     return max(rows, key=lambda r: (r["lion"], r.get("edge") or 0))
 
 
+def _calibrate(pred: dict) -> Optional[tuple]:
+    """Find the (lam_home, lam_away) whose Poisson grid reproduces the match
+    model's own 1X2 (+ over 2.5) probabilities, so both pages always agree.
+
+    Pure arithmetic on numbers we already have — no extra API call.
+    """
+    try:
+        ph, pd, pa = [float(pred[k]) / 100.0 for k in ("home", "draw", "away")]
+    except (KeyError, TypeError, ValueError):
+        return None
+    tot = ph + pd + pa
+    if tot <= 0:
+        return None
+    ph, pd, pa = ph / tot, pd / tot, pa / tot
+    o25 = pred.get("over25")
+    o25 = float(o25) / 100.0 if o25 not in (None, "") else None
+
+    def err(lh, la):
+        H = [_pmf(k, lh) for k in range(9)]
+        A = [_pmf(k, la) for k in range(9)]
+        h = sum(H[i] * A[j] for i in range(9) for j in range(9) if i > j)
+        d = sum(H[i] * A[i] for i in range(9))
+        a = sum(H[i] * A[j] for i in range(9) for j in range(9) if i < j)
+        e = (h - ph) ** 2 + (d - pd) ** 2 + (a - pa) ** 2
+        if o25 is not None:
+            over = 1.0 - sum(_pmf(k, lh + la) for k in range(3))
+            e += 0.7 * (over - o25) ** 2
+        return e
+
+    best, step, lo, hi = None, 0.1, 0.2, 3.6
+    for _ in range(2):  # coarse pass, then a fine pass around the winner
+        lh = lo
+        while lh <= hi + 1e-9:
+            la = lo
+            while la <= hi + 1e-9:
+                e = err(lh, la)
+                if best is None or e < best[0]:
+                    best = (e, lh, la)
+                la = round(la + step, 3)
+            lh = round(lh + step, 3)
+        lo, hi, step = max(0.15, best[1] - 0.1), best[1] + 0.1, 0.02
+        lo2, hi2 = max(0.15, best[2] - 0.1), best[2] + 0.1
+        # second pass searches a tight box around both winners
+        lo, hi = min(lo, lo2), max(hi, hi2)
+    return (best[1], best[2]) if best else None
+
+
 async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
-                model_pick: Optional[str] = None) -> dict:
+                model_pick: Optional[str] = None,
+                model_pred: Optional[dict] = None) -> dict:
     """Full Specific Bets payload for one fixture."""
     fx = await _fixture(fixture_id)
     if not fx or not fx.get("home_id"):
@@ -232,6 +280,13 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
     # Attack vs opponent defence, averaged — the classic transparent approach.
     lam_h = max(0.15, (h_att + a_def) / 2)
     lam_a = max(0.15, (a_att + h_def) / 2)
+    basis = "team averages"
+    # Anchor on the match model's own probabilities when we have them: one match,
+    # one view of the game, so a "1-0" can never sit under an "away win".
+    fit = _calibrate(model_pred or {})
+    if fit:
+        lam_h, lam_a = fit
+        basis = "calibrated to LION's match model"
     lam_t = lam_h + lam_a
     sample = min(hs["played"], as_["played"])
     q_goals = HIGH if sample >= 8 else (MEDIUM if sample >= 4 else INSUFFICIENT)
@@ -477,7 +532,7 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
         "home": fx["home"], "away": fx["away"],
         "home_logo": fx.get("home_logo"), "away_logo": fx.get("away_logo"),
         "model": {"xg_home": round(lam_h, 2), "xg_away": round(lam_a, 2),
-                  "xg_total": round(lam_t, 2), "sample_matches": sample},
+                  "xg_total": round(lam_t, 2), "sample_matches": sample, "basis": basis},
         "quality": q_goals,
         "panels": panels,
         "categories": [
