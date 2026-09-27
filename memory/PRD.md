@@ -647,3 +647,8 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - A ticket can therefore mix specific bets and See-Analysis picks; each leg keeps its own suggested price, editable in the slip.
 - Slip shows a small green "SPECIFIC" tag on those legs.
 - Verified in browser: specific leg in slip -> match button still "Add to slip", 0 IN SLIP badges; clicking it gives slip [over_2.5/specific, home/match] and the button then reads "In slip".
+
+## 2026-09-27 Correct Score no longer contradicts the match pick
+- Bug: the Correct Score panel highlighted 0-1 while the page called a home win (the raw grid maximum can sit on the other side of the result, and the two engines can disagree).
+- build() now takes the match page's model_pick (server.py passes m["value"]["pick"]) and uses it as the `lead` result; without it the engine falls back to its own highest of p_home/p_draw/p_away. The Correct Score LION pick is chosen only among scorelines that satisfy that result, and the panel note says "consistent with LION's call: <team/draw>". panel() gained a `top_from` argument for this.
+- Verified on Swansea vs Norwich (model pick = home): DC top "Swansea or Draw" 81%, Correct Score top "1 - 0" 12% (was free to pick 0-1 before), note shows the team name.

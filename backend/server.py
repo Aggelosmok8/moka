@@ -501,7 +501,7 @@ async def specific_bets(match_id: str):
                     best_book = row.get("bookmaker")
     h2h["book"] = best_book
 
-    out = await sb.build(digits[-1], h2h)
+    out = await sb.build(digits[-1], h2h, ((m or {}).get("value") or {}).get("pick"))
     out["match"] = {
         "id": match_id,
         "home": (m or {}).get("home", {}).get("name") or out.get("home"),

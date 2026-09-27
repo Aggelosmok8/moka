@@ -213,7 +213,8 @@ def _best(rows: list) -> Optional[dict]:
     return max(rows, key=lambda r: (r["lion"], r.get("edge") or 0))
 
 
-async def build(fixture_id: str, h2h_odds: Optional[dict] = None) -> dict:
+async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
+                model_pick: Optional[str] = None) -> dict:
     """Full Specific Bets payload for one fixture."""
     fx = await _fixture(fixture_id)
     if not fx or not fx.get("home_id"):
@@ -246,10 +247,11 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None) -> dict:
     core, game = [], []
     panels = []
 
-    def panel(key, title, icon, rows, split=False, note=None):
+    def panel(key, title, icon, rows, split=False, note=None, top_from=None):
         if rows:
             panels.append({"key": key, "title": title, "icon": icon, "rows": rows,
-                           "top": _best(rows), "split": split, "note": note})
+                           "top": _best(top_from if top_from else rows),
+                           "split": split, "note": note})
 
     # --- Goals over/under -----------------------------------------------------
     o = (h2h_odds or {})
@@ -306,12 +308,22 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None) -> dict:
     panel("handicap", "Handicap", "handicap", hcp)
 
     # --- Correct score (final) ------------------------------------------------
+    # The highlighted scoreline must agree with the result the SAME model rates
+    # highest, so the page never suggests 0-1 while it is calling a home win.
+    lead = max((p_home, "home"), (p_draw, "draw"), (p_away, "away"))[1]
+    # If the match page already shows a LION match pick, follow it so the two
+    # pages never contradict each other.
+    if model_pick in ("home", "draw", "away"):
+        lead = model_pick
+    fits = {"home": lambda i, j: i > j, "draw": lambda i, j: i == j, "away": lambda i, j: i < j}[lead]
+    lead_label = {"home": fx["home"], "draw": "a draw", "away": fx["away"]}[lead]
     cs = []
     flat = sorted(((grid[i][j], i, j) for i in range(6) for j in range(6)), reverse=True)[:8]
     for p, i, j in flat:
         cs.append(_row("Correct Score", f"{i} - {j}", _pct(p), pick=f"cs_{i}_{j}", quality=q_goals))
     panel("correct_score", "Correct Score (final)", "correct_score", cs,
-          note="Most likely final scorelines")
+          note=f"Most likely final scorelines · consistent with LION's call: {lead_label}",
+          top_from=[r for r in cs if fits(*(int(x) for x in r["pick"].split("_")[1:]))])
 
     # --- Score at any time ----------------------------------------------------
     # A scoreline x-y is reached at some point iff both teams get at least that
