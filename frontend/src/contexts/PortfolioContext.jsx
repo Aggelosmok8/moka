@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useCallback, useMemo, useState, useEffect, useRef } from "react";
 import { useAuth } from "./AuthContext";
-import { legWins, matchKey } from "../lib/picks";
+import { legWins, settleStatus, matchKey } from "../lib/picks";
 import { getPortfolioRemote, putPortfolioRemote } from "../lib/api";
 import { fetchResults } from "../lib/catalogApi";
 
@@ -201,11 +201,14 @@ export function PortfolioProvider({ children }) {
     setSlip((prev) => {
       if (!leg?.matchId) return prev;
       const key = matchKey(leg.home, leg.away);
-      // One leg per match — ids can differ between feeds, so also match on teams.
-      if (prev.some((l) => l.matchId === leg.matchId || (key && matchKey(l.home, l.away) === key))) return prev;
+      // One leg per match+selection: the same pick can never be added twice, but
+      // different specific-bet markets of the same match can live side by side.
+      const samePick = (l) => (l.pick || "") === (leg.pick || "");
+      if (prev.some((l) => samePick(l) && (l.matchId === leg.matchId || (key && matchKey(l.home, l.away) === key)))) return prev;
       const next = [...prev, {
         matchId: leg.matchId, home: leg.home, away: leg.away, league: leg.league,
         pick: leg.pick, pickName: leg.pickName, odds: Number(leg.odds) || 0, bookmaker: leg.bookmaker || "",
+        kind: leg.kind || "match",
         // Match start time — Portfolio dates performance by KICKOFF, not settle time (#8).
         kickoff: leg.kickoff || leg.commence_time || null,
       }];
@@ -214,28 +217,42 @@ export function PortfolioProvider({ children }) {
     });
   }, []);
 
-  const removeFromSlip = useCallback((matchId, home, away) => {
+  const removeFromSlip = useCallback((matchId, home, away, pick) => {
     setSlip((prev) => {
       const key = home || away ? matchKey(home, away) : "";
-      const next = prev.filter((l) => l.matchId !== matchId && !(key && matchKey(l.home, l.away) === key));
+      const isMatch = (l) => l.matchId === matchId || (key && matchKey(l.home, l.away) === key);
+      // With a pick we drop only that selection; without one, the match prediction
+      // leg only — specific bets are removed individually from their own page.
+      const next = prev.filter((l) => !(isMatch(l)
+        && (pick ? (l.pick || "") === pick : l.kind !== "specific")));
       try { localStorage.setItem(SLIP_KEY, JSON.stringify(next)); } catch {}
       return next;
     });
   }, []);
 
   // Let the user edit a leg's odds to the price they actually played (#3).
-  const updateSlipLegOdds = useCallback((matchId, odds) => {
+  const updateSlipLegOdds = useCallback((matchId, odds, pick) => {
     setSlip((prev) => {
-      const next = prev.map((l) => (l.matchId === matchId ? { ...l, odds: Number(odds) || 0 } : l));
+      const next = prev.map((l) => (l.matchId === matchId && (!pick || (l.pick || "") === pick)
+        ? { ...l, odds: Number(odds) || 0 } : l));
       try { localStorage.setItem(SLIP_KEY, JSON.stringify(next)); } catch {}
       return next;
     });
   }, []);
 
   const clearSlip = useCallback(() => saveSlip([]), []);
+  const slipHasPick = useCallback((matchId, pick, home, away) => {
+    const key = home || away ? matchKey(home, away) : "";
+    return slip.some((l) => (l.pick || "") === pick
+      && ((matchId && l.matchId === matchId) || (key && matchKey(l.home, l.away) === key)));
+  }, [slip]);
+
+  // Match-level "in slip" = the match prediction only. A specific bet is its own
+  // independent selection and must never mark the match itself as played.
   const slipHas = useCallback((matchId, home, away) => {
     const key = home || away ? matchKey(home, away) : "";
-    return slip.some((l) => (matchId && l.matchId === matchId) || (key && matchKey(l.home, l.away) === key));
+    return slip.some((l) => l.kind !== "specific"
+      && ((matchId && l.matchId === matchId) || (key && matchKey(l.home, l.away) === key)));
   }, [slip]);
 
   const placeTicket = useCallback((stake) => {
@@ -298,11 +315,12 @@ export function PortfolioProvider({ children }) {
     const settleLegOrBet = (item) => {
       if (item.status !== "pending") return item;
       const r = results[item.matchId];
-      if (r && r.finished && r.outcome) {
+      const resolved = r && r.finished ? settleStatus(item.pick, r) : null;
+      if (resolved) {
         settled++;
         return {
           ...item,
-          status: legWins(item.pick, r.outcome) ? "won" : "lost",
+          status: resolved,
           finalScore: `${r.home}-${r.away}`,
           settledAt: new Date().toISOString(),
         };
@@ -427,7 +445,7 @@ export function PortfolioProvider({ children }) {
   return (
     <Ctx.Provider value={{
       bets, addBet, settle, updateStake, remove, clear, pendingCount, stats,
-      slip, addToSlip, removeFromSlip, updateSlipLegOdds, clearSlip, slipHas, slipCount: slip.length,
+      slip, addToSlip, removeFromSlip, updateSlipLegOdds, clearSlip, slipHas, slipHasPick, slipCount: slip.length,
       tickets, placeTicket, settleLeg, removeTicket, clearTickets, autoSettle,
       newlySettled, clearNewlySettled,
     }}>

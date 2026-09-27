@@ -606,3 +606,60 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - Frontend: components/PasswordCard.jsx on AccountPage — "Set a password" for Google-created accounts, "Change password" (asks for the current one) afterwards.
 - Copy: sign-in screen now reads "Sign in" / "Don't have an account yet? Create an account"; sign-up submit is "Create my free account". Error messages point to the right action instead of "forgot password": register on a Google email -> 409 "...Sign in with Google once, then add a password from your Account page"; password login on a Google-only account -> same guidance.
 - Verified (9 backend checks + browser): has_password false->true, login before set -> guidance 401, register duplicate -> 409, set while signed in -> 200, login with new password -> 200, change without/with wrong current -> 401, with correct -> 200, unauthenticated set -> 401, UI label flips SET A PASSWORD -> CHANGE PASSWORD.
+
+## 2026-09-26 NEW FEATURE: Specific Bets (additive, independent engine)
+- Entry point: ValueCard now shows "See Analysis" and, underneath, "See Specific Bets" (data-testid see-specific-bets-{id}) -> route /specific-bets/:id (gated). Existing analysis link/route/page untouched; the card is a Link so the new action uses navigate() + stopPropagation.
+- NEW backend module /app/backend/specific_bets.py — deterministic Poisson engine, completely separate from the existing value/prediction model. Own cache keys (sb_*), reuses apifootball._get/_c_get/_c_set. No LLM produces any number.
+  - lam_home = (home attack at home + away conceded away)/2, lam_away likewise; 9x9 score grid for outcome-derived markets.
+  - Core: Goals O/U 0.5-3.5, BTTS, Team Goals, Double Chance, Handicap -1.
+  - Game: Cards O/U (team cards per game from /teams/statistics), Corners O/U (last 3 finished fixtures per team via /fixtures/statistics, MEDIUM quality), First Half O/U + FH BTTS (from goals.for.minute distribution).
+  - Players Intelligence (both teams): /players?team&season (2 pages, cached 24h) -> per-90 rates scaled to expected minutes; To score, Shots O/U, SOT O/U, To assist, To be carded. Players under 180 minutes are skipped.
+  - Data quality: HIGH / MEDIUM / INSUFFICIENT. Fewer than 4 league matches -> {"available": false, reason} and the page shows "Not enough data" instead of inventing a probability.
+  - Top opportunity = biggest positive edge; with no market price it picks the strongest selection inside a 45-82% band (so a 99% "Over 0.5" is never the highlight).
+- Endpoint GET /api/specific-bets/{match_id} (server.py), cached 30 min. Market implied % comes from de-vigged 1X2 of the odds we ALREADY have (no second odds system); markets without a price show "—" and never a fake number. Falls back to live_values.build_live_matches() because fsl_get_match_detail only knows today's cached list.
+- Frontend /app/frontend/src/pages/SpecificBetsPage.jsx: full-width hero (logos, league, kickoff, engine xG, quality dot), Core/Game sections grouped by market with probability bars, LION vs Market vs Best odds, per-team Players Intelligence with "LION's player pick" + "Show all N player markets" toggle.
+- Slip: uses the EXISTING addToSlip. One selection per match is preserved (previous duplicate-bug fix), with a note explaining it. Rows without a market price add with odds 0 and the toast tells the user to set their price in the slip.
+- Settlement: picks.js gained settleStatus(pick, result) — over/under, BTTS, team goals, handicap and the existing 1X2/DC settle from the final score; cards/corners/first-half/player markets return null and stay PENDING instead of being wrongly marked lost. PortfolioContext.autoSettle now uses it.
+- Verified: engine payload on 3 real fixtures (Core 19 rows, Game 17, players 43+42, DC market 69%/61% with edge), 16 settlement unit cases, 41 cards showing the new action, page renders hero+sections+players, Add -> slip leg {pick: over_2.5} + FAB counter + IN SLIP badge on Matches, existing /analysis/:id page still opens.
+
+## 2026-09-26 Match Analysis odds strip: all three outcomes
+- The "Best odds" card used to list bookmakers only for the model's outcome. It now renders three labelled groups (home team / Draw / away team), each sorted by price with its own "BEST" badge, so a user can back the draw or the other side.
+- The group matching the model gets a green heading + "LION's pick" chip, and its best box carries the lion crest (/lion-crest.png, data-testid="odds-lion-badge") in the top-left corner with a stronger border.
+- "View all odds" now expands every group. Add to slip / Watchlist / Portfolio buttons unchanged (still tied to the model's selection). Verified: home/draw/away groups present, exactly 1 crest, pick chip only on the model's group.
+
+## 2026-09-27 Specific Bets v2 — per-selection slip, category panels, new markets
+- BUG FIX (slip): ticking one specific bet marked EVERY row as "in slip" and nothing could be removed. Cause: the page used the match-level slipHas(). Now PortfolioContext has slipHasPick(matchId, pick, home, away); addToSlip dedupes on match+PICK (identical pick still cannot be added twice, so the old duplicate fix holds) and removeFromSlip(matchId, home, away, pick) drops just that selection. updateSlipLegOdds also takes an optional pick. Per the user's choice, several specific bets from the SAME match can now sit in the slip together.
+- UI: each market is its own panel with an icon (corner flag, cards, fouls triangle, offsides, goalkeeper hand, clock, hash…), a sticky "LION's pick" strip carrying the lion crest, checkbox-style toggles, probability bars and its own scrollbar (max-h-72, .sb-scroll). Team-specific panels (Team Goals, Goalkeeper Saves) are split home | away side by side.
+- NEW markets, all from the SAME fixture-statistics fetch that corners already used (zero extra API cost): total + team Fouls, Offsides, Goalkeeper Saves per team. Plus Correct Score (final, top 8 scorelines from the score grid) and Score At Any Time (P(H>=x)*P(A>=y) — a scoreline is reached at some point iff both teams get at least that many goals).
+- _best() no longer highlights a pick when nothing sits in the 45-82% band (a 25% handicap is not "LION's pick").
+- settleStatus now also settles cs_x_y (correct score) from the final score; fouls/offsides/saves/anytime stay pending.
+- Hidden review mode `?demo=1` (not linked anywhere) fills sample prices + market % with a visible "DEMO PRICES" flag, so the layout can be judged with numbers.
+- Verified: 13 panels with real data on a Premier League fixture, tick -> only that row checked (slip [over_2.5]), second market of same match added ([over_2.5, btts_yes]), untick removed only that leg ([btts_yes]).
+
+## 2026-09-27 Specific Bets v2.1 — panel height, honest LION pick, per-leg odds editing
+- Panels now grow with their content instead of leaving empty space: the max-h-72 scroll cap is applied only when a panel has more than 7 rows (per column for split panels), and both panel grids use `items-start` so a short panel no longer stretches to the height of its taller neighbour.
+- LION's pick is now ALWAYS the highest model probability in that panel (`_best` = max lion%, edge only breaks ties). The old 45-82% band hid an 85% selection and highlighted a 50% one, which the user rightly flagged. The same change applies to the player panels' top list.
+- Bet Slip (PortfolioPage): legs were keyed by matchId only, so with several selections from one match React duplicated keys and editing/removing one leg hit all of them. Legs are now keyed `${matchId}-${pick}` and both updateSlipLegOdds and removeFromSlip receive the leg's pick, so "Your odds" can be edited per selection to the price actually played.
+- Verified in browser (Pro test account, Portfolio > My Tickets): 2 legs from the same match render, editing leg 1 to 2.40 leaves leg 2 at 1.85, removing leg 1 leaves [btts_yes]. `_best` unit check returns the 85% row over a priced 50% row.
+
+## 2026-09-27 Specific bets are independent of the match prediction
+- Legs now carry `kind` ("specific" from SpecificBetsPage, "match" otherwise). Match-level slipHas() ignores specific legs, so playing e.g. Over 2.5 no longer makes the match card / Add-to-slip button show "In slip" as if the 1X2 prediction were played. removeFromSlip without a pick also only drops the match-prediction leg.
+- A ticket can therefore mix specific bets and See-Analysis picks; each leg keeps its own suggested price, editable in the slip.
+- Slip shows a small green "SPECIFIC" tag on those legs.
+- Verified in browser: specific leg in slip -> match button still "Add to slip", 0 IN SLIP badges; clicking it gives slip [over_2.5/specific, home/match] and the button then reads "In slip".
+
+## 2026-09-27 Correct Score no longer contradicts the match pick
+- Bug: the Correct Score panel highlighted 0-1 while the page called a home win (the raw grid maximum can sit on the other side of the result, and the two engines can disagree).
+- build() now takes the match page's model_pick (server.py passes m["value"]["pick"]) and uses it as the `lead` result; without it the engine falls back to its own highest of p_home/p_draw/p_away. The Correct Score LION pick is chosen only among scorelines that satisfy that result, and the panel note says "consistent with LION's call: <team/draw>". panel() gained a `top_from` argument for this.
+- Verified on Swansea vs Norwich (model pick = home): DC top "Swansea or Draw" 81%, Correct Score top "1 - 0" 12% (was free to pick 0-1 before), note shows the team name.
+
+## 2026-09-27 One view of the game: Specific Bets calibrated to the match model
+- Real root cause of the "1-0 vs away win" contradiction: the two engines started from different expected goals (specific_bets used raw team averages, the analysis model its own pipeline), so alignment could not be cosmetic.
+- specific_bets._calibrate(pred) now solves for the (lam_home, lam_away) whose Poisson grid reproduces the match model's own home/draw/away (+ over 2.5) probabilities — coarse 0.1 pass then a 0.02 refinement, pure arithmetic, no extra API call, ~0.02-0.09s and cached with the payload. server.py passes value.prediction (falls back to value.probabilities).
+- Every grid-derived market (O/U, BTTS, team goals, double chance, handicap, correct score, score-at-any-time, first half) therefore shares one set of expected goals with the match page. Without model probabilities the engine falls back to team averages; payload exposes model.basis ("calibrated to LION's match model" | "team averages").
+- Verified on fixture 1563187: pred away 25/22/53 -> xG 1.14-1.78, correct score top 1-2, handicap Norwich -1; pred home 58/24/18 -> xG 1.82-0.92, correct score top 1-0, DC "Swansea or Draw" 81%. Calibration recovered the model's own xG (1.44/1.61 -> 1.44/1.62) on a control case.
+
+## 2026-09-27 Live matches now appear in every Matches view
+- Why they were missing: once a fixture kicks off the bookmakers pull their pre-match 1X2 prices, and live_values skips any fixture without odds ("never show empty odds"), so an in-play match dropped out of the value lists. The Live chip counts a different source (/fixtures?live=all), hence "Live (10)" with none of them in Strong / Worth Watching / All Matches — the "Live now" block was only rendered when view === "all".
+- Fix (MatchesPage.jsx): the "Live now" section renders in every non-live view, and the main grid now uses `upcoming` = filtered minus the ids already shown live, so a match never appears twice. Free-tier 3-card limit and the empty state were re-pointed at `upcoming`.
+- Note: could not be verified visually — no SUPPORTED league was in play at the time (chip showed "Live" with no count); logic verified by code path + build.

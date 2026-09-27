@@ -28,6 +28,7 @@ import LeagueDetailPage from "./pages/LeagueDetailPage";
 import NewsPage from "./pages/NewsPage";
 import ComparePage from "./pages/ComparePage";
 import SignInPage from "./pages/SignInPage";
+import SpecificBetsPage from "./pages/SpecificBetsPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import SlipFab from "./components/SlipFab";
 import DevLoginPanel from "./components/DevLoginPanel";
@@ -77,6 +78,7 @@ function AppRouter() {
       <Route path="/sports" element={<Gated element={<SportsPage />} />} />
       <Route path="/teams" element={<Gated element={<TeamsPage />} />} />
       <Route path="/analysis/:id" element={<Gated element={<MatchAnalysisPage />} />} />
+      <Route path="/specific-bets/:id" element={<Gated element={<SpecificBetsPage />} />} />
       <Route path="/account" element={<Gated element={<AccountPage />} />} />
       <Route path="/team/:id" element={<Gated element={<TeamPage />} />} />
       <Route path="/match/:id" element={<Gated element={<MatchPage />} />} />

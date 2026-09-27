@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Lock, ChevronDown, ChevronUp, ArrowRight, Clock, Check } from "lucide-react";
 import { aiExplanation, shortExplanation } from "../lib/valueEngine";
 import { UpgradeButton } from "./Gating";
@@ -100,6 +100,7 @@ export default function ValueCard({ entry }) {
   const live = useLiveScores().get(match.id);
   const { lang } = useLang();
   const [adv, setAdv] = useState(false);
+  const navigate = useNavigate();
   const inSlip = usePortfolio().slipHas(match.id, match.home?.name, match.away?.name);
   const probs = value.probabilities || {};
   const isLive = value.liveOnly || match.status === "live";
@@ -177,8 +178,16 @@ export default function ValueCard({ entry }) {
           <p className="text-xs text-zinc-400 mt-2 leading-snug">{shortExplanation(match, value)}</p>
         </>
       )}
-      <div className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-[#39FF14]">
-        See Analysis <ArrowRight className="w-3.5 h-3.5" />
+      <div className="mt-2 flex flex-col items-start gap-1">
+        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#39FF14]" data-testid={`see-analysis-${match.id}`}>
+          See Analysis <ArrowRight className="w-3.5 h-3.5" />
+        </span>
+        <span role="link" tabIndex={0} data-testid={`see-specific-bets-${match.id}`}
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/specific-bets/${match.id}`); }}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); navigate(`/specific-bets/${match.id}`); } }}
+          className="inline-flex items-center gap-1 text-[11px] font-bold text-[#FFD60A] hover:underline cursor-pointer">
+          See Specific Bets <ArrowRight className="w-3.5 h-3.5" />
+        </span>
       </div>
 
       {/* Advanced analysis — hidden by default */}
