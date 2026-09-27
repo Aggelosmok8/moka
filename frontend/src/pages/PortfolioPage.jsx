@@ -218,8 +218,10 @@ function BetSlip({ slip, removeFromSlip, updateSlipLegOdds, clearSlip, placeTick
         <button onClick={clearSlip} data-testid="slip-clear" className="text-xs font-bold text-zinc-500 hover:text-[#FF3B30]">Clear</button>
       </div>
       <div className="space-y-2 mb-4">
-        {slip.map((l) => (
-          <div key={l.matchId} className="flex items-center justify-between gap-2 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2" data-testid={`slip-leg-${l.matchId}`}>
+        {slip.map((l) => {
+          const legId = `${l.matchId}-${l.pick || "pick"}`;
+          return (
+          <div key={legId} className="flex items-center justify-between gap-2 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2" data-testid={`slip-leg-${legId}`}>
             <div className="min-w-0 flex-1">
               <div className="text-xs text-white font-semibold break-words">{l.home} <span className="text-zinc-600">vs</span> {l.away}</div>
               <div className="text-[11px] text-[#39FF14] font-bold break-words">{l.pickName}</div>
@@ -229,15 +231,17 @@ function BetSlip({ slip, removeFromSlip, updateSlipLegOdds, clearSlip, placeTick
                 <label className="text-[9px] text-zinc-500 uppercase leading-none mb-0.5">Your odds</label>
                 <input
                   type="number" min="1" step="0.01" value={l.odds}
-                  onChange={(e) => updateSlipLegOdds(l.matchId, e.target.value)}
-                  data-testid={`slip-odds-${l.matchId}`}
+                  onChange={(e) => updateSlipLegOdds(l.matchId, e.target.value, l.pick)}
+                  placeholder="1.00"
+                  data-testid={`slip-odds-${legId}`}
                   className="w-16 bg-[#161b22] border border-[#30363d] rounded px-2 py-1 text-white font-mono-num text-sm text-right focus:outline-none focus:border-[#39FF14]"
                 />
               </div>
-              <button onClick={() => removeFromSlip(l.matchId)} data-testid={`slip-remove-${l.matchId}`} className="text-zinc-500 hover:text-[#FF3B30]"><X className="w-4 h-4" /></button>
+              <button onClick={() => removeFromSlip(l.matchId, l.home, l.away, l.pick)} data-testid={`slip-remove-${legId}`} className="text-zinc-500 hover:text-[#FF3B30]"><X className="w-4 h-4" /></button>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
       <div>
         <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">Stake per selection (€)</label>

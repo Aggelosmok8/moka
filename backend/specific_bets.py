@@ -206,15 +206,11 @@ def _row(market, selection, lion, market_pct=None, odds=None, book=None,
 
 
 def _best(rows: list) -> Optional[dict]:
-    """Top opportunity: biggest positive edge, else the strongest *meaningful*
-    probability — a 99% "Over 0.5" is not an opportunity, so near-certain and
-    long-shot selections are excluded when no market price exists."""
-    priced = [r for r in rows if r.get("edge") is not None]
-    if priced:
-        return max(priced, key=lambda r: (r["edge"], r["lion"]))
-    band = [r for r in rows if 45 <= r["lion"] <= 82]
-    # No price and nothing meaningful in range -> no highlighted pick at all.
-    return max(band, key=lambda r: r["lion"]) if band else None
+    """LION's pick is always the selection our model rates highest; a better
+    market price only breaks ties between equally likely selections."""
+    if not rows:
+        return None
+    return max(rows, key=lambda r: (r["lion"], r.get("edge") or 0))
 
 
 async def build(fixture_id: str, h2h_odds: Optional[dict] = None) -> dict:
@@ -451,10 +447,8 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None) -> dict:
                 rows.append(_row("Player Cards", "To be carded", _pct(1 - math.exp(-lam_yc)),
                                  pick=f"p{p['id']}_card", **base))
         rows.sort(key=lambda r: -r["lion"])
-        # Highlighted picks avoid near-certainties (Over 0.5 shots) and long shots.
-        top = [r for r in rows if 45 <= r["lion"] <= 82][:4]
         return {"team": fx["home"] if side == "home" else fx["away"], "side": side,
-                "rows": rows, "top": top or rows[:3]}
+                "rows": rows, "top": rows[:4]}
 
     players = []
     for side, tid, lam_team, st in (("home", fx["home_id"], lam_h, hs), ("away", fx["away_id"], lam_a, as_)):

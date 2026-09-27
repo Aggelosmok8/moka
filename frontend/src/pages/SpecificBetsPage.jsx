@@ -90,6 +90,11 @@ const TopStrip = ({ row }) => (
 const Panel = ({ panel, teams, onToggle, isPicked }) => {
   const Icon = ICONS[panel.icon] || Target;
   const top = panel.top;
+  // Grow with the content; only long lists get capped and scroll.
+  const perColumn = panel.split
+    ? Math.max(panel.rows.filter((r) => r.side === "home").length, panel.rows.filter((r) => r.side === "away").length)
+    : panel.rows.length;
+  const scroll = perColumn > 7;
   const body = (rows) => rows.map((r) => (
     <BetRow key={r.pick} row={r} picked={isPicked(r)} onToggle={onToggle} lion={top && r.pick === top.pick} />
   ));
@@ -103,7 +108,7 @@ const Panel = ({ panel, teams, onToggle, isPicked }) => {
       </div>
       {panel.note && <div className="text-[10px] text-zinc-500 mb-2 pl-9">{panel.note}</div>}
       {top && <TopStrip row={top} />}
-      <div className="max-h-72 overflow-y-auto pr-1 sb-scroll">
+      <div className={scroll ? "max-h-72 overflow-y-auto pr-1 sb-scroll" : ""}>
         {panel.split ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3">
             {["home", "away"].map((side) => (
@@ -234,14 +239,14 @@ export default function SpecificBetsPage() {
 
         {data?.available && (
           <>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
               {panels.map((p) => (
                 <Panel key={p.key} panel={p} teams={teams} onToggle={toggle} isPicked={isPicked} />
               ))}
             </div>
 
             {!!(data.players || []).length && (
-              <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
                 {data.players.map((team) => {
                   const open = !!openAll[team.side];
                   const rows = (open ? team.rows : team.top).map(withDemo);
@@ -256,7 +261,7 @@ export default function SpecificBetsPage() {
                         <span className="text-[10px] uppercase tracking-wider text-zinc-600">{team.rows.length} markets</span>
                       </div>
                       {top && <TopStrip row={top} />}
-                      <div className="max-h-72 overflow-y-auto pr-1 sb-scroll">
+                      <div className={rows.length > 7 ? "max-h-72 overflow-y-auto pr-1 sb-scroll" : ""}>
                         {rows.map((r) => (
                           <BetRow key={r.pick} row={r} picked={isPicked(r)} onToggle={toggle} lion={top && r.pick === top.pick} />
                         ))}

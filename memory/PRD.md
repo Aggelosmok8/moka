@@ -635,3 +635,9 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - settleStatus now also settles cs_x_y (correct score) from the final score; fouls/offsides/saves/anytime stay pending.
 - Hidden review mode `?demo=1` (not linked anywhere) fills sample prices + market % with a visible "DEMO PRICES" flag, so the layout can be judged with numbers.
 - Verified: 13 panels with real data on a Premier League fixture, tick -> only that row checked (slip [over_2.5]), second market of same match added ([over_2.5, btts_yes]), untick removed only that leg ([btts_yes]).
+
+## 2026-09-27 Specific Bets v2.1 — panel height, honest LION pick, per-leg odds editing
+- Panels now grow with their content instead of leaving empty space: the max-h-72 scroll cap is applied only when a panel has more than 7 rows (per column for split panels), and both panel grids use `items-start` so a short panel no longer stretches to the height of its taller neighbour.
+- LION's pick is now ALWAYS the highest model probability in that panel (`_best` = max lion%, edge only breaks ties). The old 45-82% band hid an 85% selection and highlighted a 50% one, which the user rightly flagged. The same change applies to the player panels' top list.
+- Bet Slip (PortfolioPage): legs were keyed by matchId only, so with several selections from one match React duplicated keys and editing/removing one leg hit all of them. Legs are now keyed `${matchId}-${pick}` and both updateSlipLegOdds and removeFromSlip receive the leg's pick, so "Your odds" can be edited per selection to the price actually played.
+- Verified in browser (Pro test account, Portfolio > My Tickets): 2 legs from the same match render, editing leg 1 to 2.40 leaves leg 2 at 1.85, removing leg 1 leaves [btts_yes]. `_best` unit check returns the 85% row over a priced 50% row.
