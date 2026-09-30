@@ -663,3 +663,9 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - Why they were missing: once a fixture kicks off the bookmakers pull their pre-match 1X2 prices, and live_values skips any fixture without odds ("never show empty odds"), so an in-play match dropped out of the value lists. The Live chip counts a different source (/fixtures?live=all), hence "Live (10)" with none of them in Strong / Worth Watching / All Matches — the "Live now" block was only rendered when view === "all".
 - Fix (MatchesPage.jsx): the "Live now" section renders in every non-live view, and the main grid now uses `upcoming` = filtered minus the ids already shown live, so a match never appears twice. Free-tier 3-card limit and the empty state were re-pointed at `upcoming`.
 - Note: could not be verified visually — no SUPPORTED league was in play at the time (chip showed "Live" with no count); logic verified by code path + build.
+
+## 2026-09-30 Specific Bets: bet redirect without touching the layout
+- No new column: OddsCell turns the price itself into the bookmaker link (tiny ExternalLink glyph, green on hover), and the LION'S PICK strip gained a green "BET <price>" pill in the empty space on its right.
+- Links use the existing approved-bookmaker allowlist (lib/bookmakers.bookmakerUrl); unapproved providers or missing prices stay plain text / "—". Clicks stopPropagation so they never toggle the slip checkbox.
+- Demo preview prices now use "bet365" so the pill is visible in ?demo=1 review mode.
+- Verified on live_af_1563187?demo=1: 28 panels, 15 BET pills, 88 clickable prices, layout unchanged.

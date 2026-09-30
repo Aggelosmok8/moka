@@ -2,9 +2,10 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft, Sparkles, ShieldAlert, ChevronDown, Users, Loader2, Flag, Target,
-  Hand, AlertTriangle, SquareStack, Clock, Hash, Shuffle, Scale, Repeat, Goal, Move,
+  Hand, AlertTriangle, SquareStack, Clock, Hash, Shuffle, Scale, Repeat, Goal, Move, ExternalLink,
 } from "lucide-react";
 import Header from "../components/Header";
+import { bookmakerUrl } from "../lib/bookmakers";
 import { usePortfolio } from "../contexts/PortfolioContext";
 import { api } from "../lib/api";
 import { toast } from "sonner";
@@ -30,6 +31,19 @@ const Bar = ({ pct }) => (
   </div>
 );
 
+// The price itself is the bet link — no extra column, layout untouched.
+const OddsCell = ({ row }) => {
+  const url = row.odds ? bookmakerUrl(row.bookmaker) : null;
+  if (!url) return <div className="text-[13px] font-black font-mono-num text-white">{row.odds ? Number(row.odds).toFixed(2) : "—"}</div>;
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" title={`Bet with ${row.bookmaker}`}
+      data-testid={`sb-bet-${row.pick}`} onClick={(e) => e.stopPropagation()}
+      className="inline-flex items-center gap-0.5 text-[13px] font-black font-mono-num text-white rounded px-1 -mx-1 border border-transparent hover:border-[#39FF14]/50 hover:text-[#39FF14] transition-colors">
+      {Number(row.odds).toFixed(2)}<ExternalLink className="w-2.5 h-2.5 opacity-60" />
+    </a>
+  );
+};
+
 // One selection — checkbox-style toggle straight into the existing slip.
 const BetRow = ({ row, picked, onToggle, lion }) => (
   <div className={`px-2 py-2 rounded-lg transition-colors ${picked ? "bg-[#FFD60A]/[0.07]" : "hover:bg-white/[0.03]"}`}
@@ -54,7 +68,7 @@ const BetRow = ({ row, picked, onToggle, lion }) => (
         <div className="w-11"><div className="text-[8px] uppercase tracking-wider text-zinc-600">Market</div>
           <div className="text-[13px] font-black font-mono-num text-zinc-400">{row.market_pct != null ? `${row.market_pct}%` : "—"}</div></div>
         <div className="w-11"><div className="text-[8px] uppercase tracking-wider text-zinc-600">Odds</div>
-          <div className="text-[13px] font-black font-mono-num text-white">{row.odds ? Number(row.odds).toFixed(2) : "—"}</div></div>
+          <OddsCell row={row} /></div>
         {row.edge != null && (
           <span className={`w-8 text-[10px] font-black font-mono-num ${row.edge >= 5 ? "text-[#39FF14]" : "text-zinc-500"}`}>
             {row.edge > 0 ? "+" : ""}{row.edge}
@@ -83,6 +97,13 @@ const TopStrip = ({ row }) => (
         <div className="text-base font-black font-mono-num text-[#39FF14]">{row.lion}%</div></div>
       <div className="text-right"><div className="text-[8px] uppercase text-zinc-600">Market</div>
         <div className="text-base font-black font-mono-num text-zinc-400">{row.market_pct != null ? `${row.market_pct}%` : "—"}</div></div>
+      {row.odds && bookmakerUrl(row.bookmaker) && (
+        <a href={bookmakerUrl(row.bookmaker)} target="_blank" rel="noopener noreferrer"
+          data-testid="sb-top-bet" title={`Bet with ${row.bookmaker}`}
+          className="inline-flex items-center gap-1 rounded-full bg-[#39FF14] text-black px-2.5 py-1.5 text-[11px] font-black uppercase tracking-wider hover:brightness-110 transition">
+          Bet {Number(row.odds).toFixed(2)}<ExternalLink className="w-3 h-3" />
+        </a>
+      )}
     </div>
   </div>
 );
@@ -148,7 +169,7 @@ export default function SpecificBetsPage() {
     if (!demo || row.odds || !row.lion) return row;
     const price = Math.max(1.05, Math.round((100 / row.lion) * 1.07 * 100) / 100);
     const mkt = Math.round((1 / price) * 100);
-    return { ...row, odds: price, bookmaker: "DEMO", market_pct: mkt, edge: Math.round((row.lion - mkt) * 10) / 10 };
+    return { ...row, odds: price, bookmaker: "bet365", market_pct: mkt, edge: Math.round((row.lion - mkt) * 10) / 10 };
   };
 
   const panels = useMemo(() => (data?.panels || []).map((p) => ({
