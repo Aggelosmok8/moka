@@ -303,16 +303,23 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
 
     league_avg = 1.35  # sane fallback when a split is missing
     if national:
-        # National teams: tiny home/away samples, and finals are on neutral
-        # ground — use the overall averages instead of a split that pretends
-        # to know a home advantage that may not exist.
+        # National teams: small samples, so prefer the overall averages. Finals
+        # tournaments are on neutral ground; qualifiers and the Nations League
+        # are real home-and-away, so use the team's own split once it has
+        # enough home/away games, otherwise a modest home tilt.
         h_att = hs.get("gf_total") or league_avg
         h_def = hs.get("ga_total") or league_avg
         a_att = as_.get("gf_total") or league_avg
         a_def = as_.get("ga_total") or league_avg
-        if not neutral:          # qualifiers are played home and away
-            h_att *= 1.08
-            a_att *= 0.94
+        if not neutral:
+            if (hs.get("played_home") or 0) >= 3 and hs.get("gf_home"):
+                h_att, h_def = hs["gf_home"], hs.get("ga_home") or h_def
+            else:
+                h_att *= 1.08
+            if (as_.get("played_away") or 0) >= 3 and as_.get("gf_away"):
+                a_att, a_def = as_["gf_away"], as_.get("ga_away") or a_def
+            else:
+                a_att *= 0.94
     else:
         h_att = hs.get("gf_home") or hs.get("gf_total") or league_avg
         h_def = hs.get("ga_home") or hs.get("ga_total") or league_avg
