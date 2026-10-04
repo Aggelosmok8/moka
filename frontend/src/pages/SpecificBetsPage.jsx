@@ -228,6 +228,7 @@ export default function SpecificBetsPage() {
               <div className="flex items-center justify-center gap-4 text-[11px] text-zinc-400 mt-7 flex-wrap">
                 <span>Specific Bets model · expected goals <b className="text-white font-mono-num">{data.model.xg_home}</b> – <b className="text-white font-mono-num">{data.model.xg_away}</b></span>
                 <span className="flex items-center gap-1.5"><QualityDot q={data.quality} /> {data.model.sample_matches} matches sampled</span>
+                {data.national && <span className="text-[#FFD60A]">National teams · player markets open once the line-up is confirmed</span>}
               </div>
             )}
           </div>

@@ -35,6 +35,10 @@ LIVE_LEAGUES = [
     "denmark", "scotland", "ucl", "uel", "uecl",
     "facup", "eflcup", "copadelrey", "coppaitalia", "dfbpokal", "coupedefrance", "greekcup",
     "portugalcup", "knvbbeker", "scottishcup", "danishcup",
+    # National teams — idle tournaments cost one cached fixtures call per 6h.
+    "worldcup", "nationsleague", "euro", "euroqual",
+    "wcq_europe", "wcq_sa", "wcq_asia", "wcq_africa", "wcq_concacaf", "wcq_oceania", "wcq_playoffs",
+    "copaamerica", "afcon", "afcon_qual", "asiancup", "goldcup", "concacafnl",
 ]
 
 STATS_TTL = 24 * 3600
@@ -161,6 +165,41 @@ def _lookup(idx: dict, name: str):
     return None
 
 
+async def _nation_stats(st):
+    """National teams play 6-10 games a cycle, so the group table is a thin
+    sample. Top it up with the team's last 12 matches ACROSS seasons and
+    competitions (one cached call) — exactly the history a qualifier needs."""
+    if not st or not st.get("id") or (st.get("played") or 0) >= 8:
+        return st
+    try:
+        recent = await af.recent_fixtures_for_team(st["id"], 12)
+    except Exception as e:
+        logger.warning("nation form %s: %s", st.get("name"), e)
+        return st
+    gf = ga = n = 0
+    form = []
+    for m in recent:
+        hs_, as_ = m.get("homeScore"), m.get("awayScore")
+        if hs_ is None or as_ is None:
+            continue
+        mine, theirs = (hs_, as_) if m.get("home") == st.get("name") else (as_, hs_)
+        gf += mine
+        ga += theirs
+        n += 1
+        form.append("W" if mine > theirs else ("D" if mine == theirs else "L"))
+    if n < 4:
+        return st
+    out = dict(st)
+    out.update({
+        "played": n,
+        "goalsPerGame": round(gf / n, 2),
+        "concededPerGame": round(ga / n, 2),
+        "form": form[:5],
+        "winPct": round(form.count("W") / n * 100),
+    })
+    return out
+
+
 async def _build_one_league(slug: str) -> list:
     """Build the value-match list for a single league (stats + fixtures + odds)."""
     c = af.CATALOG.get(slug, {})
@@ -206,6 +245,9 @@ async def _build_one_league(slug: str) -> list:
             continue
         hs = _lookup(idx, home)
         as_ = _lookup(idx, away)
+        if c.get("national"):
+            hs = await _nation_stats(hs)
+            as_ = await _nation_stats(as_)
         if dom_idx is not None:
             hs = _blend_stats(_lookup(dom_idx, home), hs)
             as_ = _blend_stats(_lookup(dom_idx, away), as_)
