@@ -167,36 +167,20 @@ def _lookup(idx: dict, name: str):
 
 async def _nation_stats(st):
     """National teams play 6-10 games a cycle, so the group table is a thin
-    sample. Top it up with the team's last 12 matches ACROSS seasons and
-    competitions (one cached call) — exactly the history a qualifier needs."""
+    sample. Replace it with the opponent- and recency-weighted record of the
+    last 12 matches across seasons and competitions (cached, no extra call)."""
     if not st or not st.get("id") or (st.get("played") or 0) >= 8:
         return st
     try:
-        recent = await af.recent_fixtures_for_team(st["id"], 12)
+        f = await af.nation_form(st["id"], st.get("name"))
     except Exception as e:
         logger.warning("nation form %s: %s", st.get("name"), e)
         return st
-    gf = ga = n = 0
-    form = []
-    for m in recent:
-        hs_, as_ = m.get("homeScore"), m.get("awayScore")
-        if hs_ is None or as_ is None:
-            continue
-        mine, theirs = (hs_, as_) if m.get("home") == st.get("name") else (as_, hs_)
-        gf += mine
-        ga += theirs
-        n += 1
-        form.append("W" if mine > theirs else ("D" if mine == theirs else "L"))
-    if n < 4:
+    if not f:
         return st
     out = dict(st)
-    out.update({
-        "played": n,
-        "goalsPerGame": round(gf / n, 2),
-        "concededPerGame": round(ga / n, 2),
-        "form": form[:5],
-        "winPct": round(form.count("W") / n * 100),
-    })
+    out.update({"played": f["played"], "goalsPerGame": f["gf"], "concededPerGame": f["ga"],
+                "form": f["form"], "winPct": f["winPct"]})
     return out
 
 

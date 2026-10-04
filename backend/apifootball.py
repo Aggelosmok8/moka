@@ -284,6 +284,73 @@ async def teams_for_league(slug: str) -> list:
         return m
 
 
+async def nations_strength_index() -> dict:
+    """name -> {gf, ga} per game for every national team we track, plus the
+    averages. Built from the standings tables already cached by the normal
+    build cycle, so it normally costs ZERO extra calls."""
+    ck = "nations_strength"
+    hit = _c_get(ck)
+    if hit is not None:
+        return hit
+    idx = {}
+    for slug, c in CATALOG.items():
+        if not c.get("national"):
+            continue
+        try:
+            for t in await teams_for_league(slug) or []:
+                if (t.get("played") or 0) >= 2 and t.get("goalsPerGame") is not None:
+                    idx[(t.get("name") or "").strip().lower()] = {
+                        "gf": t["goalsPerGame"], "ga": t.get("concededPerGame") or 1.2}
+        except Exception as e:
+            logger.warning("nations_strength(%s): %s", slug, e)
+    out = {"teams": idx,
+           "avg_gf": round(sum(v["gf"] for v in idx.values()) / len(idx), 2) if idx else 1.3,
+           "avg_ga": round(sum(v["ga"] for v in idx.values()) / len(idx), 2) if idx else 1.3}
+    _c_set(ck, out, ttl=12 * 3600)
+    return out
+
+
+async def nation_form(team_id, name: str, last: int = 12):
+    """Opponent- and recency-weighted scoring record of a national team over its
+    last N matches across seasons and competitions.
+
+    A goal against Andorra is not a goal against France: each match is weighted
+    by how leaky/potent the opponent actually is, by recency, and friendlies
+    count half. No extra API call beyond the cached fixtures list.
+    """
+    recent = await recent_fixtures_for_team(team_id, last)
+    if not recent:
+        return None
+    si = await nations_strength_index()
+    teams, avg_gf, avg_ga = si["teams"], si["avg_gf"], si["avg_ga"]
+    me = (name or "").strip().lower()
+    gf = ga = wsum = 0.0
+    n = 0
+    form = []
+    for k, m in enumerate(recent):
+        h, a = m.get("homeScore"), m.get("awayScore")
+        if h is None or a is None:
+            continue
+        at_home = (m.get("home") or "").strip().lower() == me
+        mine, theirs = (h, a) if at_home else (a, h)
+        opp = ((m.get("away") if at_home else m.get("home")) or "").strip().lower()
+        o = teams.get(opp) or {}
+        # Scoring is discounted against a leaky defence, conceding against a
+        # weak attack; clamped so one freak opponent cannot dominate.
+        s_att = min(1.6, max(0.6, avg_ga / max(0.4, o.get("ga", avg_ga))))
+        s_def = min(1.6, max(0.6, avg_gf / max(0.4, o.get("gf", avg_gf))))
+        w = (0.92 ** k) * (0.5 if "friendl" in (m.get("league") or "").lower() else 1.0)
+        gf += mine * s_att * w
+        ga += theirs * s_def * w
+        wsum += w
+        n += 1
+        form.append("W" if mine > theirs else ("D" if mine == theirs else "L"))
+    if n < 4 or wsum <= 0:
+        return None
+    return {"played": n, "gf": round(gf / wsum, 2), "ga": round(ga / wsum, 2),
+            "form": form[:5], "winPct": round(form.count("W") / n * 100)}
+
+
 async def players_for_team(team_id: str) -> list:
     """Football squad (api-football). Basketball squads not on free plan."""
     if team_id.startswith("m_"):

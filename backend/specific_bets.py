@@ -261,26 +261,19 @@ def _calibrate(pred: dict) -> Optional[tuple]:
 
 
 async def _nation_topup(st, team_id, name):
-    """A qualifying group gives 3-10 games. Top the sample up with the national
-    team's last 12 matches across seasons and competitions (cached call)."""
+    """A qualifying group gives 3-10 games. Use the opponent- and recency-
+    weighted record of the national team's last 12 matches instead (cached)."""
     if not team_id or (st and (st.get("played") or 0) >= 8):
         return st
     try:
-        recent = await af.recent_fixtures_for_team(team_id, 12)
+        f = await af.nation_form(team_id, name)
     except Exception as e:
         logger.warning("sb nation form %s: %s", name, e)
         return st
-    gf = ga = n = 0
-    for m in recent:
-        h, a = m.get("homeScore"), m.get("awayScore")
-        if h is None or a is None:
-            continue
-        mine, theirs = (h, a) if m.get("home") == name else (a, h)
-        gf, ga, n = gf + mine, ga + theirs, n + 1
-    if n < 4:
+    if not f:
         return st
     out = dict(st or {})
-    out.update({"played": n, "gf_total": round(gf / n, 2), "ga_total": round(ga / n, 2)})
+    out.update({"played": f["played"], "gf_total": f["gf"], "ga_total": f["ga"]})
     return out
 
 
