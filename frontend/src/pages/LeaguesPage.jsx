@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Lock } from "lucide-react";
 import Header from "../components/Header";
 import { useEntitlements } from "../hooks/useEntitlements";
-import { fetchCatalogMatches } from "../lib/catalogApi";
+import { fetchValueMatches } from "../lib/catalogApi";
 import { fetchLeagues } from "../lib/api";
 import { SPORTS, leaguesForSport } from "../lib/sportsCatalog";
 
@@ -13,8 +13,9 @@ const CUPS = new Set(["facup", "eflcup", "copadelrey", "coppaitalia", "dfbpokal"
 
 // Country leagues first, then European competitions, then national cups.
 const groupLeagues = (list) => [
-  { key: "country-leagues", title: "Country Leagues", items: list.filter((l) => !EUROPE.has(l.id) && !CUPS.has(l.id)) },
+  { key: "country-leagues", title: "Country Leagues", items: list.filter((l) => !EUROPE.has(l.id) && !CUPS.has(l.id) && l.group !== "Nations Tournaments") },
   { key: "europe", title: "Europe Competitions", items: list.filter((l) => EUROPE.has(l.id)) },
+  { key: "nations", title: "Nations Tournaments", items: list.filter((l) => l.group === "Nations Tournaments") },
   { key: "country-cups", title: "Country Cups", items: list.filter((l) => CUPS.has(l.id)) },
 ].filter((g) => g.items.length > 0);
 
@@ -25,8 +26,8 @@ export default function LeaguesPage() {
 
   useEffect(() => {
     let active = true;
-    fetchCatalogMatches()
-      .then((d) => active && setMatches(Array.isArray(d && d.matches) ? d.matches : []))
+    fetchValueMatches({ limit: 400 })
+      .then((d) => active && setMatches((Array.isArray(d && d.matches) ? d.matches : []).map((e) => e.match || e)))
       .catch(() => {});
     return () => {
       active = false;

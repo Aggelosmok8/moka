@@ -81,6 +81,26 @@ CATALOG = {
     "knvbbeker":    {"name": "KNVB Beker (Netherlands)", "sport": "football", "league_id": 90},
     "scottishcup":  {"name": "Scottish Cup",             "sport": "football", "league_id": 181},
     "danishcup":    {"name": "DBU Pokalen (Denmark)",    "sport": "football", "league_id": 121},
+    # National teams ("Nations Tournaments"). `season` is the tournament year —
+    # it differs from the club season, and `national` switches off club-only
+    # logic (player markets, home advantage on neutral ground).
+    "worldcup":     {"name": "World Cup", "sport": "football", "league_id": 1, "season": 2026, "national": True, "neutral": True},
+    "nationsleague": {"name": "UEFA Nations League", "sport": "football", "league_id": 5, "season": 2026, "national": True},
+    "euro":         {"name": "Euro Championship", "sport": "football", "league_id": 4, "season": 2024, "national": True, "neutral": True},
+    "euroqual":     {"name": "Euro Qualification", "sport": "football", "league_id": 960, "season": 2027, "national": True},
+    "wcq_europe":   {"name": "World Cup Qual. — Europe", "sport": "football", "league_id": 32, "season": 2024, "national": True},
+    "wcq_sa":       {"name": "World Cup Qual. — South America", "sport": "football", "league_id": 34, "season": 2026, "national": True},
+    "wcq_asia":     {"name": "World Cup Qual. — Asia", "sport": "football", "league_id": 30, "season": 2026, "national": True},
+    "wcq_africa":   {"name": "World Cup Qual. — Africa", "sport": "football", "league_id": 29, "season": 2023, "national": True},
+    "wcq_concacaf": {"name": "World Cup Qual. — CONCACAF", "sport": "football", "league_id": 31, "season": 2026, "national": True},
+    "wcq_oceania":  {"name": "World Cup Qual. — Oceania", "sport": "football", "league_id": 33, "season": 2026, "national": True},
+    "wcq_playoffs": {"name": "World Cup Qual. — Play-offs", "sport": "football", "league_id": 37, "season": 2026, "national": True, "neutral": True},
+    "copaamerica":  {"name": "Copa América", "sport": "football", "league_id": 9, "season": 2024, "national": True, "neutral": True},
+    "afcon":        {"name": "Africa Cup of Nations", "sport": "football", "league_id": 6, "season": 2025, "national": True, "neutral": True},
+    "afcon_qual":   {"name": "Africa Cup of Nations Qual.", "sport": "football", "league_id": 36, "season": 2027, "national": True},
+    "asiancup":     {"name": "AFC Asian Cup", "sport": "football", "league_id": 7, "season": 2027, "national": True, "neutral": True},
+    "goldcup":      {"name": "CONCACAF Gold Cup", "sport": "football", "league_id": 22, "season": 2025, "national": True, "neutral": True},
+    "concacafnl":   {"name": "CONCACAF Nations League", "sport": "football", "league_id": 536, "season": 2025, "national": True},
     # Basketball
     "nba":          {"name": "NBA (USA)",                "sport": "basketball", "league_id": 12},
     "euroleague":   {"name": "EuroLeague",               "sport": "basketball", "league_id": 120},
@@ -89,6 +109,16 @@ CATALOG = {
 SUPPORTED_FOOTBALL_LEAGUE_IDS = {
     c["league_id"] for c in CATALOG.values() if c["sport"] == "football"
 }
+
+# National-team competitions: no club player markets, flatter home advantage.
+NATION_LEAGUE_IDS = {c["league_id"] for c in CATALOG.values() if c.get("national")}
+NEUTRAL_LEAGUE_IDS = {c["league_id"] for c in CATALOG.values() if c.get("neutral")}
+
+
+def season_for(slug: str) -> int:
+    """Tournament year for national competitions, club season otherwise."""
+    c = CATALOG.get(slug) or {}
+    return c.get("season") or (BASKETBALL_SEASON if c.get("sport") == "basketball" else FOOTBALL_SEASON)
 
 
 def _key() -> str:
@@ -180,9 +210,13 @@ async def teams_for_league(slug: str) -> list:
     try:
         if c["sport"] == "football":
             d = await _get(FOOTBALL_BASE, "/standings",
-                           {"league": c["league_id"], "season": FOOTBALL_SEASON})
+                           {"league": c["league_id"], "season": season_for(slug)})
             resp = d.get("response") or []
-            table = resp[0]["league"]["standings"][0] if resp else []
+            # Every group, not just the first: qualifying rounds and group-stage
+            # tournaments have one table per group.
+            table = []
+            for grp in (resp[0]["league"]["standings"] if resp else []):
+                table.extend(grp or [])
             teams = []
             for t in table:
                 played = (t.get("all") or {}).get("played") or 0
@@ -248,6 +282,73 @@ async def teams_for_league(slug: str) -> list:
         m = mockdata.standings(slug)
         _c_set(ck, m, ttl=300)
         return m
+
+
+async def nations_strength_index() -> dict:
+    """name -> {gf, ga} per game for every national team we track, plus the
+    averages. Built from the standings tables already cached by the normal
+    build cycle, so it normally costs ZERO extra calls."""
+    ck = "nations_strength"
+    hit = _c_get(ck)
+    if hit is not None:
+        return hit
+    idx = {}
+    for slug, c in CATALOG.items():
+        if not c.get("national"):
+            continue
+        try:
+            for t in await teams_for_league(slug) or []:
+                if (t.get("played") or 0) >= 2 and t.get("goalsPerGame") is not None:
+                    idx[(t.get("name") or "").strip().lower()] = {
+                        "gf": t["goalsPerGame"], "ga": t.get("concededPerGame") or 1.2}
+        except Exception as e:
+            logger.warning("nations_strength(%s): %s", slug, e)
+    out = {"teams": idx,
+           "avg_gf": round(sum(v["gf"] for v in idx.values()) / len(idx), 2) if idx else 1.3,
+           "avg_ga": round(sum(v["ga"] for v in idx.values()) / len(idx), 2) if idx else 1.3}
+    _c_set(ck, out, ttl=12 * 3600)
+    return out
+
+
+async def nation_form(team_id, name: str, last: int = 12):
+    """Opponent- and recency-weighted scoring record of a national team over its
+    last N matches across seasons and competitions.
+
+    A goal against Andorra is not a goal against France: each match is weighted
+    by how leaky/potent the opponent actually is, by recency, and friendlies
+    count half. No extra API call beyond the cached fixtures list.
+    """
+    recent = await recent_fixtures_for_team(team_id, last)
+    if not recent:
+        return None
+    si = await nations_strength_index()
+    teams, avg_gf, avg_ga = si["teams"], si["avg_gf"], si["avg_ga"]
+    me = (name or "").strip().lower()
+    gf = ga = wsum = 0.0
+    n = 0
+    form = []
+    for k, m in enumerate(recent):
+        h, a = m.get("homeScore"), m.get("awayScore")
+        if h is None or a is None:
+            continue
+        at_home = (m.get("home") or "").strip().lower() == me
+        mine, theirs = (h, a) if at_home else (a, h)
+        opp = ((m.get("away") if at_home else m.get("home")) or "").strip().lower()
+        o = teams.get(opp) or {}
+        # Scoring is discounted against a leaky defence, conceding against a
+        # weak attack; clamped so one freak opponent cannot dominate.
+        s_att = min(1.6, max(0.6, avg_ga / max(0.4, o.get("ga", avg_ga))))
+        s_def = min(1.6, max(0.6, avg_gf / max(0.4, o.get("gf", avg_gf))))
+        w = (0.92 ** k) * (0.5 if "friendl" in (m.get("league") or "").lower() else 1.0)
+        gf += mine * s_att * w
+        ga += theirs * s_def * w
+        wsum += w
+        n += 1
+        form.append("W" if mine > theirs else ("D" if mine == theirs else "L"))
+    if n < 4 or wsum <= 0:
+        return None
+    return {"played": n, "gf": round(gf / wsum, 2), "ga": round(ga / wsum, 2),
+            "form": form[:5], "winPct": round(form.count("W") / n * 100)}
 
 
 async def players_for_team(team_id: str) -> list:
@@ -660,7 +761,7 @@ async def fixtures_for_league(slug: str) -> dict:
         return hit
     try:
         d = await _get(FOOTBALL_BASE, "/fixtures",
-                       {"league": c["league_id"], "season": FOOTBALL_SEASON})
+                       {"league": c["league_id"], "season": season_for(slug)})
         rows = [_fx_shape(f) for f in (d.get("response") or [])]
         results = [x for x in rows if x["finished"] and x["homeScore"] is not None]
         upcoming = [x for x in rows if not x["finished"]]
@@ -749,7 +850,7 @@ async def upcoming_fixtures_raw(slug: str, n: int = 8) -> list:
             })
     except Exception as e:
         logger.warning("apifootball.upcoming_fixtures_raw(%s): %s", slug, e)
-    _c_set(ck, out, ttl=12 * 3600 if out else 300)
+    _c_set(ck, out, ttl=12 * 3600 if out else (6 * 3600 if c.get("national") else 300))
     return out
 
 
@@ -766,9 +867,9 @@ async def odds_for_dates(slug: str, dates: list) -> dict:
         # to a stale value in the environment.
         try:
             yr, mo = int(d[:4]), int(d[5:7])
-            season = yr if mo >= 7 else yr - 1
+            season = c.get("season") or (yr if mo >= 7 else yr - 1)
         except (ValueError, IndexError):
-            season = FOOTBALL_SEASON
+            season = season_for(slug)
         ck = f"afodds_{slug}_{d}"
         hit = _c_get(ck)
         if hit is None:
@@ -809,7 +910,7 @@ async def odds_by_fixture(slug: str) -> dict:
     out = {}
     try:
         d = await _get(FOOTBALL_BASE, "/odds",
-                       {"league": c["league_id"], "season": FOOTBALL_SEASON, "page": 1})
+                       {"league": c["league_id"], "season": season_for(slug), "page": 1})
         for e in d.get("response") or []:
             fid = str((e.get("fixture") or {}).get("id"))
             ent = _mw_entries(e.get("bookmakers"))

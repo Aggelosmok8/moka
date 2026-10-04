@@ -260,6 +260,23 @@ def _calibrate(pred: dict) -> Optional[tuple]:
     return (best[1], best[2]) if best else None
 
 
+async def _nation_topup(st, team_id, name):
+    """A qualifying group gives 3-10 games. Use the opponent- and recency-
+    weighted record of the national team's last 12 matches instead (cached)."""
+    if not team_id or (st and (st.get("played") or 0) >= 8):
+        return st
+    try:
+        f = await af.nation_form(team_id, name)
+    except Exception as e:
+        logger.warning("sb nation form %s: %s", name, e)
+        return st
+    if not f:
+        return st
+    out = dict(st or {})
+    out.update({"played": f["played"], "gf_total": f["gf"], "ga_total": f["ga"]})
+    return out
+
+
 async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
                 model_pick: Optional[str] = None,
                 model_pred: Optional[dict] = None) -> dict:
@@ -269,14 +286,38 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
         return {"available": False, "reason": "Fixture data unavailable"}
     hs = await _stats(fx["home_id"], fx["league_id"], fx["season"])
     as_ = await _stats(fx["away_id"], fx["league_id"], fx["season"])
+    national = fx.get("league_id") in af.NATION_LEAGUE_IDS
+    neutral = fx.get("league_id") in af.NEUTRAL_LEAGUE_IDS
+    if national:
+        hs = await _nation_topup(hs, fx["home_id"], fx["home"])
+        as_ = await _nation_topup(as_, fx["away_id"], fx["away"])
     if not hs or not as_ or not (hs.get("played") or 0) or not (as_.get("played") or 0):
         return {"available": False, "reason": "Not enough league data for this fixture yet"}
 
     league_avg = 1.35  # sane fallback when a split is missing
-    h_att = hs.get("gf_home") or hs.get("gf_total") or league_avg
-    h_def = hs.get("ga_home") or hs.get("ga_total") or league_avg
-    a_att = as_.get("gf_away") or as_.get("gf_total") or league_avg
-    a_def = as_.get("ga_away") or as_.get("ga_total") or league_avg
+    if national:
+        # National teams: small samples, so prefer the overall averages. Finals
+        # tournaments are on neutral ground; qualifiers and the Nations League
+        # are real home-and-away, so use the team's own split once it has
+        # enough home/away games, otherwise a modest home tilt.
+        h_att = hs.get("gf_total") or league_avg
+        h_def = hs.get("ga_total") or league_avg
+        a_att = as_.get("gf_total") or league_avg
+        a_def = as_.get("ga_total") or league_avg
+        if not neutral:
+            if (hs.get("played_home") or 0) >= 3 and hs.get("gf_home"):
+                h_att, h_def = hs["gf_home"], hs.get("ga_home") or h_def
+            else:
+                h_att *= 1.08
+            if (as_.get("played_away") or 0) >= 3 and as_.get("gf_away"):
+                a_att, a_def = as_["gf_away"], as_.get("ga_away") or a_def
+            else:
+                a_att *= 0.94
+    else:
+        h_att = hs.get("gf_home") or hs.get("gf_total") or league_avg
+        h_def = hs.get("ga_home") or hs.get("ga_total") or league_avg
+        a_att = as_.get("gf_away") or as_.get("gf_total") or league_avg
+        a_def = as_.get("ga_away") or as_.get("ga_total") or league_avg
     # Attack vs opponent defence, averaged — the classic transparent approach.
     lam_h = max(0.15, (h_att + a_def) / 2)
     lam_a = max(0.15, (a_att + h_def) / 2)
@@ -290,6 +331,9 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
     lam_t = lam_h + lam_a
     sample = min(hs["played"], as_["played"])
     q_goals = HIGH if sample >= 8 else (MEDIUM if sample >= 4 else INSUFFICIENT)
+    if national and q_goals == HIGH:
+        # Squads and coaches change between windows — never claim HIGH here.
+        q_goals = MEDIUM
     if q_goals == INSUFFICIENT:
         return {"available": False, "reason": "Only a few league matches played so far"}
 
@@ -518,7 +562,7 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
                 "rows": rows, "top": rows[:4]}
 
     players = []
-    for side, tid, lam_team, st in (("home", fx["home_id"], lam_h, hs), ("away", fx["away_id"], lam_a, as_)):
+    for side, tid, lam_team, st in () if national else (("home", fx["home_id"], lam_h, hs), ("away", fx["away_id"], lam_a, as_)):
         try:
             block = await team_players(tid, lam_team, st, side)
             if block["rows"]:
@@ -534,6 +578,7 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
         "model": {"xg_home": round(lam_h, 2), "xg_away": round(lam_a, 2),
                   "xg_total": round(lam_t, 2), "sample_matches": sample, "basis": basis},
         "quality": q_goals,
+        "national": national,
         "panels": panels,
         "categories": [
             {"key": "core", "title": "Core Markets", "rows": core, "top": _best(core)},

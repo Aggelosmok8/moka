@@ -35,6 +35,10 @@ LIVE_LEAGUES = [
     "denmark", "scotland", "ucl", "uel", "uecl",
     "facup", "eflcup", "copadelrey", "coppaitalia", "dfbpokal", "coupedefrance", "greekcup",
     "portugalcup", "knvbbeker", "scottishcup", "danishcup",
+    # National teams — idle tournaments cost one cached fixtures call per 6h.
+    "worldcup", "nationsleague", "euro", "euroqual",
+    "wcq_europe", "wcq_sa", "wcq_asia", "wcq_africa", "wcq_concacaf", "wcq_oceania", "wcq_playoffs",
+    "copaamerica", "afcon", "afcon_qual", "asiancup", "goldcup", "concacafnl",
 ]
 
 STATS_TTL = 24 * 3600
@@ -161,6 +165,25 @@ def _lookup(idx: dict, name: str):
     return None
 
 
+async def _nation_stats(st):
+    """National teams play 6-10 games a cycle, so the group table is a thin
+    sample. Replace it with the opponent- and recency-weighted record of the
+    last 12 matches across seasons and competitions (cached, no extra call)."""
+    if not st or not st.get("id") or (st.get("played") or 0) >= 8:
+        return st
+    try:
+        f = await af.nation_form(st["id"], st.get("name"))
+    except Exception as e:
+        logger.warning("nation form %s: %s", st.get("name"), e)
+        return st
+    if not f:
+        return st
+    out = dict(st)
+    out.update({"played": f["played"], "goalsPerGame": f["gf"], "concededPerGame": f["ga"],
+                "form": f["form"], "winPct": f["winPct"]})
+    return out
+
+
 async def _build_one_league(slug: str) -> list:
     """Build the value-match list for a single league (stats + fixtures + odds)."""
     c = af.CATALOG.get(slug, {})
@@ -206,6 +229,9 @@ async def _build_one_league(slug: str) -> list:
             continue
         hs = _lookup(idx, home)
         as_ = _lookup(idx, away)
+        if c.get("national"):
+            hs = await _nation_stats(hs)
+            as_ = await _nation_stats(as_)
         if dom_idx is not None:
             hs = _blend_stats(_lookup(dom_idx, home), hs)
             as_ = _blend_stats(_lookup(dom_idx, away), as_)
