@@ -24,7 +24,7 @@ export const pickChoices = (match, value) => {
   const other = side === "away" ? match?.home?.name : match?.away?.name;
   return [
     { pick: side, pickName: team || value?.pickName || "Win", label: `${team || "Win"} to win`, code: side === "away" ? "2" : "1", outcome: side },
-    { pick: "draw", pickName: "Draw", label: `Draw (${match?.home?.name || "home"} vs ${match?.away?.name || "away"})`, code: "X", outcome: "draw" },
+    { pick: "draw", pickName: "Draw", label: "Draw", code: "X", outcome: "draw" },
     {
       pick: side === "away" ? "away_or_draw" : "home_or_draw",
       pickName: `${team || side} or Draw`,

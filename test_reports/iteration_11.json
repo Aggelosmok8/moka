@@ -1,0 +1,24 @@
+{
+  "summary": "Full backend + frontend verification of the three-option double-chance chooser, in-slip flag persistence (matches card / specific-bets / analysis / lion-tickets), the backend lion_tickets kickoff>now filter, and the LION Ticket add-and-lock flow. All 7 requested scenarios PASS.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_lion_tickets.py",
+    "/app/test_reports/pytest/lion_tickets.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "LionTicketsPage lt-add button uses CSS text-transform:uppercase; it renders 'In slip' but innerText returns 'IN SLIP'. Test code must do case-insensitive comparison - not a product bug but worth noting for future testing agents.",
+    "AddToSlipButton dialog shows the implied double-chance price (e.g. 1.54 for Kifisia or Draw computed from 1/home+1/draw). Toast message already warns the user it's an implied price and asks them to edit if different — nice.",
+    "pickChoices draw option label includes the home-vs-away teams ('Draw (Kifisia vs Aris Thessalonikis)') while the other two use team names - minor UX inconsistency.",
+    "removeFromSlip filter by matchId only (observed in iteration_10) still stands - unchanged in this release but not triggered by any of the scenarios tested."
+  ],
+  "updated_files": ["/app/backend/tests/test_lion_tickets.py (new)"],
+  "success_rate": {"backend": "100% (6/6 pytest)", "frontend": "100% (all 7 scenarios)"},
+  "test_credentials": "localStorage moka_session_token = test-pro-monthly-token (Pro Monthly from /app/memory/test_credentials.md).",
+  "seed_data_creation": "None. localStorage key moka_bet_slip cleared between scenarios. Double-chance fixture used for UI assertions: live_af_1593333 (Kifisia vs Aris Thessalonikis, 'Home or Draw'). First LION ticket available at test time: lt_live_af_1557426 (Sunderland vs Brighton, 3 legs: away/over_2.5/btts_yes, totalOdds 6.92).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Preview URL from frontend/.env VITE_BACKEND_URL. Backend endpoint GET /api/lion-tickets returns {count, tickets[]}; each ticket passed kickoff>now, legCount>=2, totalOdds==product(odds) within 0.02, sorted by kickoff day. UI testids verified: add-to-slip-<matchId>, pick-market-dialog, pick-option-{home|draw|home_or_draw}, sb-toggle-<pick>, sb-row-<pick> (background turns yellow when in slip), lion-ticket-<matchId>, lt-add-<matchId>, lt-leg-<pick>, slip-leg-<matchId>-<pick>, slip-odds-<matchId>-<pick> (readOnly=true when locked), portfolio shows 'LION TICKET' tag + 'LOCKED' label on ticket legs. 3-option chooser now returns exactly 3 options (sideWin, draw, doubleChance) each with implied price (verified: Kifisia 2.92 / Draw 3.25 / Kifisia or Draw 1.54, bookmakers Stoiximan). Draw adds leg with pick='draw' pickName='Draw' odds=3.25. In-slip flag persisted across hard navigation on all three places (matches card, specific-bets row, analysis page) and on lion-tickets. Locked ticket odds inputs truly uneditable (page.fill blocked; value unchanged).",
+  "rca of the issue": "N/A - no bugs found. All fixes from this iteration (lib/picks.js pickChoices returning 3 outcomes, bestOddsByOutcome double-chance implied pricing, AddToSlipButton showing prices in chooser, backend lion_tickets.py kickoff>now filter) work as specified."
+}
