@@ -1,6 +1,6 @@
-"""Moka AI match-analysis (GPT-5.6 Luna via the direct OpenAI API).
+"""LION AI match-analysis (GPT-5.6 Luna via the direct OpenAI API).
 
-The deterministic Moka engine computes ALL numbers. This module only turns the
+The deterministic LION engine computes ALL numbers. This module only turns the
 already-computed structured data into a short natural-language explanation.
 It never recalculates probabilities and never invents facts. Results are cached
 (reusing apifootball's cache) keyed by match id + a hash of the input data, so
@@ -9,6 +9,7 @@ opening the same match again does NOT trigger another OpenAI request.
 from __future__ import annotations
 
 import hashlib
+import re
 import json
 import logging
 import os
@@ -39,10 +40,14 @@ SYSTEM = (
     "stories. Never invent news and never double-count the same item.\n"
     "- Cover, as short flowing paragraphs (no headers, no bullet symbols): the home "
     "team's strengths and weaknesses, the away team's strengths and weaknesses, and "
-    "an overall outlook. The outlook MUST centre on 'moka_pick' — explain that LION "
-    "predicts this outcome, comparing 'moka_pick_probability_pct' with "
+    "an overall outlook. The outlook MUST centre on 'lion_pick' — explain that LION "
+    "predicts this outcome, comparing 'lion_pick_probability_pct' with "
     "'market_probability_pct' at 'pick_odds' when present. Refer only to that same "
-    "outcome; never argue for a different result than moka_pick.\n"
+    "outcome; never argue for a different result than lion_pick.\n"
+    "- Call the model LION (or LION.STATS) — never any other product name.\n"
+    "- Describe the opportunity strictly as 'opportunity_level' says: only HIGH may "
+    "be called a strong/clear opportunity, MEDIUM is 'worth watching', and LOW must "
+    "not be presented as an opportunity at all.\n"
     "- NUMBERS ARE CANONICAL: when you cite any figure (probability %, expected "
     "goals, odds, market %), use the EXACT value from the data with the same "
     "rounding. Never state a percentage/xG/odds that differs from what is provided.\n"
@@ -50,6 +55,15 @@ SYSTEM = (
     "or statistical jargon (do NOT say 'Poisson', 'expected value', 'variance', "
     "'regression'); instead explain what the numbers mean in practice."
 )
+
+
+# Safety net: the product is LION.STATS, the old name must never reach a user
+# (older cached analyses can still contain it).
+_BRAND = re.compile(r"\bmoka\b", re.IGNORECASE)
+
+
+def _brand(text: str) -> str:
+    return _BRAND.sub("LION", text or "")
 
 
 def _clean(d):
@@ -70,7 +84,7 @@ def build_input(match: dict, value: dict) -> dict:
         "league": match.get("leagueName"),
         "home_team": home.get("name"),
         "away_team": away.get("name"),
-        "moka_probabilities_pct": {
+        "lion_probabilities_pct": {
             "home": pred.get("home"), "draw": pred.get("draw"), "away": pred.get("away"),
         },
         "goal_markets_pct": {
@@ -82,13 +96,14 @@ def build_input(match: dict, value: dict) -> dict:
             "total": pred.get("xg_total"),
         },
         "possible_outcome": value.get("possible_outcome"),
-        "moka_pick": value.get("pick_name"),
-        "moka_pick_probability_pct": value.get("confidence"),
+        "lion_pick": value.get("pick_name"),
+        "lion_pick_probability_pct": value.get("confidence"),
         "market_probability_pct": (round((value.get("market_prob") or 0) * 100)
                                    if value.get("market_prob") else None),
         "pick_odds": value.get("best_odds"),
         "edge_pts": value.get("edge"),
         "opportunity_level": value.get("value_level"),
+        "opportunity_score_out_of_10": value.get("opportunity_score"),
         "home_stats": {
             "goals_per_game": hstat.get("goalsScored"),
             "conceded_per_game": hstat.get("goalsConceded"),
@@ -118,7 +133,7 @@ async def match_analysis(match: dict, value: dict, news: list | None = None, lan
 
     cached = af._c_get(ck)
     if cached is not None:
-        return {"analysis": cached, "possible_outcome": possible, "cached": True}
+        return {"analysis": _brand(cached), "possible_outcome": possible, "cached": True}
 
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
@@ -146,5 +161,6 @@ async def match_analysis(match: dict, value: dict, news: list | None = None, lan
 
     if not text:
         return {"analysis": None, "possible_outcome": possible, "error": True}
+    text = _brand(text)
     af._c_set(ck, text, ttl=24 * 3600)
     return {"analysis": text, "possible_outcome": possible, "cached": False}

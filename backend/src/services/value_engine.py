@@ -106,6 +106,20 @@ def opportunity_level(edge: float, odds: float) -> str:
     return "LOW"
 
 
+def opportunity_score(level: str, edge_pts: float) -> int:
+    """1-10 score that can never contradict the badge the user sees.
+
+    HIGH ("Strong") always lands in 7-10, MEDIUM ("Worth Watching") in 4-6 and
+    LOW in 1-3, with the edge deciding the position inside the band.
+    """
+    e = max(0.0, float(edge_pts or 0))
+    if level == "HIGH":          # edge >= 8 pts
+        return min(10, 7 + int((e - 8) // 4))
+    if level == "MEDIUM":        # 4 <= edge < 8 pts
+        return min(6, 4 + int((e - 4) // 1.5))
+    return max(1, min(3, 1 + int(e // 1.5)))
+
+
 def evaluate_match(match: dict):
     """Return the value block for a match.
 
@@ -153,6 +167,7 @@ def evaluate_match(match: dict):
         "value_level": level,
         "confidence": confidence,
         "value_score": value_score,
+        "opportunity_score": opportunity_score(level, edge_pts),
         "probabilities": pct,
         "prediction": {
             **pct,
@@ -212,6 +227,7 @@ def reevaluate_pick(value: dict, probs: dict, match: dict) -> dict:
     edge_pts = round((model_p - implied) * 100, 1)
     pct = pct100(probs)
     confidence = pct[pick]  # match the chart integers (edge/EV keep the float)
+    _lvl = opportunity_level(edge_pts / 100.0, odds) if odds and odds > 0 else "LOW"
     value.update({
         "pick": pick,
         "pick_name": (match["home"]["name"] if pick == "home"
@@ -223,8 +239,9 @@ def reevaluate_pick(value: dict, probs: dict, match: dict) -> dict:
         "edge": edge_pts,
         "ev_score": round(ev * 100, 1),
         "confidence": confidence,
-        "value_level": opportunity_level(edge_pts / 100.0, odds) if odds and odds > 0 else "LOW",
+        "value_level": _lvl,
         "value_score": max(0, round(edge_pts * 4 + confidence * 0.2)),
+        "opportunity_score": opportunity_score(_lvl, edge_pts),
     })
     return value
 
