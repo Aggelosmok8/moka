@@ -25,6 +25,7 @@ import unicodedata
 
 import apifootball as af
 import odds_api_io as oaio
+import stoiximan as stox
 
 logger = logging.getLogger(__name__)
 
@@ -216,6 +217,8 @@ async def _build_one_league(slug: str) -> list:
     # when ODDS_API_IO_KEY is set; otherwise this is an empty {} (no behaviour
     # change). Shared 12h cache means one fetch covers every league.
     greek_idx = await oaio.greek_odds_index("football")
+    # Stoiximan's own pregame snapshot (RapidAPI free tier, one shared 12h fetch).
+    stox_idx = await stox.odds_index()
 
     league_matches = []
     count = 0
@@ -224,7 +227,10 @@ async def _build_one_league(slug: str) -> list:
             break
         home, away = f["home"], f["away"]
         # One unified, de-duplicated odds list from both providers.
-        odds = oaio.merge_odds(odds_map.get(f["id"]) or [], oaio.lookup(greek_idx, home, away))
+        odds = oaio.merge_odds(
+            odds_map.get(f["id"]) or [],
+            oaio.lookup(greek_idx, home, away) + oaio.lookup(stox_idx, home, away),
+        )
         if not odds:                     # no odds -> skip (never show empty odds)
             continue
         hs = _lookup(idx, home)
