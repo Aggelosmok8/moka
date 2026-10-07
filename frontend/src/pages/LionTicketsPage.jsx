@@ -70,9 +70,11 @@ const TicketCard = ({ t, onAdd, inSlip }) => (
 
     <div className="px-4 py-3 bg-[#0d1117] border-t border-white/5 flex items-center justify-between gap-3">
       <div>
-        <div className="text-[9px] uppercase tracking-wider text-zinc-500">Total odds</div>
+        <div className="text-[9px] uppercase tracking-wider text-zinc-500">Total odds ({t.legCount} picks combined)</div>
         <div className="font-display font-black text-2xl text-[#39FF14] font-mono-num leading-none">{t.totalOdds.toFixed(2)}</div>
-        <div className="text-[10px] text-zinc-500 mt-0.5">~{t.combinedProb}% model chance</div>
+        <div className="text-[10px] text-zinc-500 mt-0.5 font-mono-num" data-testid={`lt-maths-${t.match.id}`}>
+          {t.legs.map((l) => l.odds.toFixed(2)).join(" × ")} · ~{t.combinedProb}% model chance
+        </div>
       </div>
       <button onClick={() => onAdd(t)} disabled={inSlip} data-testid={`lt-add-${t.match.id}`}
         className={`rounded-full px-4 py-2 text-[11px] font-black uppercase tracking-wider transition ${inSlip
