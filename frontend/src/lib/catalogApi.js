@@ -8,8 +8,8 @@ export const fetchValueMatches = (opts = {}) =>
 export const fetchMatches = () => api.get("/matches").then((r) => r.data);
 export const fetchMatchById = (id) => api.get(`/matches/${id}`).then((r) => r.data);
 export const fetchLive = () => api.get(`/live`).then((r) => r.data.matches || []);
-export const fetchResults = (ids) =>
-  api.get(`/results`, { params: { ids: (ids || []).join(",") } }).then((r) => r.data.results || {});
+export const fetchResults = (ids, detail) =>
+  api.get(`/results`, { params: { ids: (ids || []).join(","), detail: (detail || []).join(",") } }).then((r) => r.data.results || {});
 export const fetchMatchAi = (id, lang = "en") =>
   api.get(`/matches/${id}/ai-analysis`, { params: { lang }, timeout: 90000 }).then((r) => r.data);
 export const fetchNews = (params = {}) =>

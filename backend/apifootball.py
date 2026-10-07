@@ -478,9 +478,11 @@ async def fixture_results(ids: list) -> dict:
                 fid = str(fx.get("id"))
                 status = ((fx.get("status") or {}).get("short")) or ""
                 goals = item.get("goals") or {}
+                ht = ((item.get("score") or {}).get("halftime")) or {}
                 hs, a = goals.get("home"), goals.get("away")
                 finished = status in _FINISHED
                 res = {"finished": finished, "home": hs, "away": a,
+                       "ht_home": ht.get("home"), "ht_away": ht.get("away"),
                        "outcome": _outcome(hs, a) if finished else None, "status": status}
                 mid = fid_map.get(fid)
                 if mid:
@@ -488,6 +490,90 @@ async def fixture_results(ids: list) -> dict:
                     _c_set(f"result_{fid}", res, ttl=(7 * 24 * 3600 if finished else 120))
         except Exception as e:
             logger.warning("apifootball.fixture_results: %s", e)
+    return out
+
+
+async def fixture_settlement_detail(fixture_id) -> dict:
+    """Everything needed to settle a specific bet on a FINISHED fixture.
+
+    Team stat totals, the running goal sequence (for "score at any time") and
+    per-player numbers. Three calls, cached 7 days, and only ever fetched for a
+    fixture the user actually has a pending specific bet on.
+    """
+    fid = str(fixture_id)
+    ck = f"settle_detail_{fid}"
+    hit = _c_get(ck)
+    if hit is not None:
+        return hit
+    out = {"totals": {}, "goal_seq": [], "players": {}}
+    try:
+        d = await _get(FOOTBALL_BASE, "/fixtures/statistics", {"fixture": fid})
+        resp = d.get("response") or []
+
+        def _m(block):
+            return {s.get("type"): s.get("value")
+                    for s in (block or {}).get("statistics") or [] if s.get("value") is not None}
+
+        if len(resp) >= 2:
+            h, a = _m(resp[0]), _m(resp[1])
+
+            def num(m, key):
+                try:
+                    return float(str(m.get(key, 0) or 0).replace("%", ""))
+                except (TypeError, ValueError):
+                    return 0.0
+
+            out["totals"] = {
+                "corners": num(h, "Corner Kicks") + num(a, "Corner Kicks"),
+                "corners_home": num(h, "Corner Kicks"), "corners_away": num(a, "Corner Kicks"),
+                "cards": sum(num(m, k) for m in (h, a) for k in ("Yellow Cards", "Red Cards")),
+                "fouls": num(h, "Fouls") + num(a, "Fouls"),
+                "fouls_home": num(h, "Fouls"), "fouls_away": num(a, "Fouls"),
+                "offsides": num(h, "Offsides") + num(a, "Offsides"),
+                "saves_home": num(h, "Goalkeeper Saves"), "saves_away": num(a, "Goalkeeper Saves"),
+            }
+    except Exception as e:
+        logger.warning("settlement stats(%s): %s", fid, e)
+    try:
+        d = await _get(FOOTBALL_BASE, "/fixtures/events", {"fixture": fid})
+        evs = [e for e in (d.get("response") or []) if (e.get("type") or "") == "Goal"]
+        evs.sort(key=lambda e: ((e.get("time") or {}).get("elapsed") or 0,
+                                (e.get("time") or {}).get("extra") or 0))
+        home_id = None
+        seq, h, a = [], 0, 0
+        for e in evs:
+            tid = ((e.get("team") or {}).get("id"))
+            if home_id is None:
+                home_id = tid
+            own = (e.get("detail") or "") == "Own Goal"
+            scored_home = (tid == home_id) != own
+            if scored_home:
+                h += 1
+            else:
+                a += 1
+            seq.append([h, a])
+        out["goal_seq"] = seq
+    except Exception as e:
+        logger.warning("settlement events(%s): %s", fid, e)
+    try:
+        d = await _get(FOOTBALL_BASE, "/fixtures/players", {"fixture": fid})
+        for team in d.get("response") or []:
+            for p in team.get("players") or []:
+                pid = str(((p.get("player") or {}).get("id")) or "")
+                st = (p.get("statistics") or [{}])[0] or {}
+                if not pid:
+                    continue
+                out["players"][pid] = {
+                    "goals": ((st.get("goals") or {}).get("total")) or 0,
+                    "assists": ((st.get("goals") or {}).get("assists")) or 0,
+                    "shots": ((st.get("shots") or {}).get("total")) or 0,
+                    "sot": ((st.get("shots") or {}).get("on")) or 0,
+                    "cards": (((st.get("cards") or {}).get("yellow")) or 0)
+                             + (((st.get("cards") or {}).get("red")) or 0),
+                }
+    except Exception as e:
+        logger.warning("settlement players(%s): %s", fid, e)
+    _c_set(ck, out, ttl=7 * 24 * 3600)
     return out
 
 
