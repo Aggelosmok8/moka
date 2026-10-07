@@ -279,7 +279,8 @@ async def _nation_topup(st, team_id, name):
 
 async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
                 model_pick: Optional[str] = None,
-                model_pred: Optional[dict] = None) -> dict:
+                model_pred: Optional[dict] = None,
+                pick_odds: Optional[dict] = None) -> dict:
     """Full Specific Bets payload for one fixture."""
     fx = await _fixture(fixture_id)
     if not fx or not fx.get("home_id"):
@@ -570,6 +571,42 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
         except Exception as e:
             logger.warning("sb players %s: %s", tid, e)
 
+    # --- Real bookmaker prices per selection ---------------------------------
+    # Priced from the SAME cached Greek-book snapshots used for 1X2 (no extra
+    # call). Opposite lines are de-vigged against each other so MARKET % is the
+    # bookmaker's true view; a lone price falls back to raw implied odds.
+    po = {k: v for k, v in (pick_odds or {}).items() if v and v.get("odds")}
+    if po:
+        def _opp(pk):
+            if pk.startswith("btts_"):
+                return "btts_no" if pk.endswith("_yes") else "btts_yes"
+            for a, b in (("over_", "under_"), ("under_", "over_")):
+                i = pk.find(a)
+                if i >= 0:
+                    return pk[:i] + b + pk[i + len(a):]
+            return None
+
+        def _apply(rows):
+            for r in rows:
+                hit = po.get(r.get("pick"))
+                if not hit:
+                    continue
+                r["odds"], r["bookmaker"] = hit["odds"], hit["bookmaker"]
+                own = 1.0 / hit["odds"]
+                opp = po.get(_opp(r["pick"]) or "")
+                tot = own + (1.0 / opp["odds"]) if opp else 0
+                r["market_pct"] = _pct(own / tot) if tot > 1 else _pct(own)
+                r["edge"] = round(r["lion"] - r["market_pct"], 1)
+                r["value"] = bool(r["edge"] >= 5)
+        # panel/category "top" entries are references to these same row dicts,
+        # so mutating the rows prices the highlighted pick too.
+        for _p in panels:
+            _apply(_p["rows"])
+        _apply(core)
+        _apply(game)
+        for blk in players:
+            _apply(blk["rows"])
+
     return {
         "available": True,
         "fixture_id": str(fixture_id),
@@ -585,5 +622,5 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
             {"key": "game", "title": "Game Markets", "rows": game, "top": _best(game)},
         ],
         "players": players,
-        "market_odds_available": bool(imp),
+        "market_odds_available": bool(imp or po),
     }

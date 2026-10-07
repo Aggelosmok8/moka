@@ -53,45 +53,124 @@ def _row(idx: dict, book: str, home: str, away: str, o: dict, updated):
         {"bookmaker": book, "odds": o, "source": "rapidapi", "updatedAt": updated})
 
 
+_OU = re.compile(r"^(over|under)\s*([\d.]+)?$", re.I)
+_LINE_IN_NAME = re.compile(r"(\d+(?:\.\d+)?)")
+
+
+def _pick_id(mkt: str, sel: str, line=None):
+    """Map a provider's market+selection to one of our Specific Bets pick ids."""
+    m, s = (mkt or "").lower(), (sel or "").strip().lower()
+    g = _OU.match(s)
+    if g:
+        side = g.group(1).lower()
+        ln = g.group(2) or line
+        if ln is None:
+            hit = _LINE_IN_NAME.search(m)
+            ln = hit.group(1) if hit else None
+        if ln is None:
+            return None
+        try:
+            ln = float(str(ln).replace(",", "."))
+        except ValueError:
+            return None
+        if "corner" in m:
+            return f"corners_{side}_{ln}"
+        if "card" in m or "booking" in m:
+            return f"cards_{side}_{ln}"
+        if "half" in m:
+            return f"fh_{side}_{ln}"
+        if "goal" in m or "total" in m or "over" in m or "under" in m:
+            return f"{side}_{ln}"
+        return None
+    if "both teams" in m or "btts" in m or "goal/no goal" in m:
+        if s in ("yes", "goal", "gg", "both teams to score"):
+            return "btts_yes"
+        if s in ("no", "no goal", "ng"):
+            return "btts_no"
+    return None
+
+
+def _extra(pidx: dict, key: str, book: str, mkt: str, sel: str, price, line=None):
+    p = _price(price)
+    if not p or not key:
+        return
+    pick = _pick_id(mkt, sel, line)
+    if not pick:
+        return
+    cur = pidx.setdefault(key, {}).get(pick)
+    if cur is None or p > cur["odds"]:          # keep the best price on offer
+        pidx[key][pick] = {"odds": p, "bookmaker": book}
+
+
 # --- One parser per provider (their JSON shapes have nothing in common) -----
 
-def _p_stoiximan(payload, book, idx):
+def _p_stoiximan(payload, book, idx, pidx):
     up = payload.get("updated_at")
     for blk in payload.get("data") or []:
         for b in ((blk or {}).get("data") or {}).get("blocks") or []:
             for ev in b.get("events") or []:
+                key = ""
                 for mkt in ev.get("markets") or []:
-                    if mkt.get("type") != "MRES":
+                    sels = {x.get("name"): x for x in mkt.get("selections") or []}
+                    if mkt.get("type") == "MRES":
+                        h = (sels.get("1") or {}).get("fullName")
+                        a = (sels.get("2") or {}).get("fullName")
+                        key = f"{_norm(h)}|{_norm(a)}" if h and a else key
+                        _row(idx, book, h, a,
+                             {k: _price((sels.get(n) or {}).get("price"))
+                              for k, n in (("home", "1"), ("draw", "X"), ("away", "2"))}, up)
                         continue
-                    s = {x.get("name"): x for x in mkt.get("selections") or []}
-                    _row(idx, book, (s.get("1") or {}).get("fullName"),
-                         (s.get("2") or {}).get("fullName"),
-                         {k: _price((s.get(n) or {}).get("price"))
-                          for k, n in (("home", "1"), ("draw", "X"), ("away", "2"))}, up)
+                    for x in mkt.get("selections") or []:
+                        _extra(pidx, key, book, mkt.get("name") or "",
+                               x.get("name") or "", x.get("price"), mkt.get("handicap"))
 
 
-def _p_novibet(payload, book, idx):
+_NOVI_MKT = {"SOCCER_UNDER_OVER": "Goals Over/Under",
+             "SOCCER_BOTH_TEAMS_TO_SCORE": "Both Teams To Score",
+             "SOCCER_CORNERS_UNDER_OVER": "Corners Over/Under",
+             "SOCCER_FIRST_HALF_UNDER_OVER": "1st Half Goals Over/Under"}
+
+
+def _p_novibet(payload, book, idx, pidx):
     up = payload.get("updated_at")
     for view in payload.get("data") or []:
         for bv in (view or {}).get("betViews") or []:
             for it in bv.get("items") or []:
                 cap = it.get("additionalCaptions") or {}
+                h, a = cap.get("competitor1"), cap.get("competitor2")
+                key = f"{_norm(h)}|{_norm(a)}" if h and a else ""
                 for mkt in it.get("markets") or []:
-                    if mkt.get("betTypeSysname") != "SOCCER_MATCH_RESULT":
+                    sys_name = mkt.get("betTypeSysname")
+                    items = mkt.get("betItems") or []
+                    if sys_name == "SOCCER_MATCH_RESULT":
+                        s = {x.get("code"): x for x in items}
+                        _row(idx, book, h, a,
+                             {k: _price((s.get(n) or {}).get("price"))
+                              for k, n in (("home", "1"), ("draw", "X"), ("away", "2"))}, up)
                         continue
-                    s = {x.get("code"): x for x in mkt.get("betItems") or []}
-                    _row(idx, book, cap.get("competitor1"), cap.get("competitor2"),
-                         {k: _price((s.get(n) or {}).get("price"))
-                          for k, n in (("home", "1"), ("draw", "X"), ("away", "2"))}, up)
+                    name = _NOVI_MKT.get(sys_name)
+                    if not name:
+                        continue
+                    for x in items:
+                        # Novibet puts the line in the selection caption, e.g. "Over 2.5".
+                        _extra(pidx, key, book, name,
+                               x.get("betDisplayCaption") or x.get("instanceCaption") or x.get("caption") or "",
+                               x.get("price"), mkt.get("instanceCaption"))
 
 
-def _p_bwin(payload, book, idx):
+def _p_bwin(payload, book, idx, pidx):
     up = payload.get("updated_at")
     for fx in ((payload.get("data") or {}).get("fixtures")) or []:
         parts = {((p.get("properties") or {}).get("type")): ((p.get("name") or {}).get("value"))
                  for p in fx.get("participants") or []}
+        key = f"{_norm(parts.get('HomeTeam'))}|{_norm(parts.get('AwayTeam'))}"
         for mkt in fx.get("optionMarkets") or []:
-            if ((mkt.get("name") or {}).get("value")) != "Match Result":
+            mname = ((mkt.get("name") or {}).get("value")) or ""
+            if mname != "Match Result":
+                for opt in mkt.get("options") or []:
+                    _extra(pidx, key, book, mname, ((opt.get("name") or {}).get("value")) or "",
+                           ((opt.get("price") or {}).get("odds")),
+                           (opt.get("parameters") or {}).get("attribute"))
                 continue
             o = {}
             for opt in mkt.get("options") or []:
@@ -110,7 +189,7 @@ def _p_bwin(payload, book, idx):
             _row(idx, book, parts.get("HomeTeam"), parts.get("AwayTeam"), o, up)
 
 
-def _p_opap(payload, book, idx):
+def _p_opap(payload, book, idx, pidx):
     up = payload.get("updated_at")
     for ev in (((payload.get("data") or {}).get("data")) or {}).get("events") or []:
         name = ev.get("name") or ""
@@ -118,8 +197,14 @@ def _p_opap(payload, book, idx):
         if len(parts) != 2:
             continue
         home, away = parts[0].strip(), parts[1].strip()
+        key = f"{_norm(home)}|{_norm(away)}"
         for mkt in ev.get("markets") or []:
             if mkt.get("groupCode") != "MATCH_RESULT":
+                for out in mkt.get("outcomes") or []:
+                    _extra(pidx, key, book, mkt.get("name") or mkt.get("groupCode") or "",
+                           out.get("name") or "",
+                           ((out.get("prices") or [{}])[0] or {}).get("decimal"),
+                           mkt.get("handicapValue"))
                 continue
             o = {}
             for out in mkt.get("outcomes") or []:
@@ -135,7 +220,7 @@ def _p_opap(payload, book, idx):
             _row(idx, book, home, away, o, up)
 
 
-def _p_elabet(payload, book, idx):
+def _p_elabet(payload, book, idx, pidx):
     up = payload.get("updated_at")
     d = payload.get("data") or {}
     mks = {m.get("id"): m for m in d.get("markets") or []}
@@ -146,9 +231,14 @@ def _p_elabet(payload, book, idx):
         if len(cids) != 2:
             continue
         home, away = comp.get(cids[0]), comp.get(cids[1])
+        key = f"{_norm(home)}|{_norm(away)}"
         for mid in ev.get("marketIds") or []:
             m = mks.get(mid) or {}
-            if (m.get("name") or "").strip().lower() != "1x2":
+            mname = (m.get("name") or "").strip()
+            if mname.lower() != "1x2":
+                for oid in m.get("oddIds") or []:
+                    od = ods.get(oid) or {}
+                    _extra(pidx, key, book, mname, od.get("name") or "", od.get("price"))
                 continue
             o = {}
             for oid in m.get("oddIds") or []:
@@ -210,12 +300,12 @@ async def _provider_index(slug: str) -> dict:
     now = time.time()
     mem = _mem.get(slug)
     if mem and now - mem["at"] < CACHE_TTL:
-        return mem["idx"]
+        return mem
     disk = _read_disk(slug)
     if disk and now - disk.get("at", 0) < CACHE_TTL:
-        _mem[slug] = {"idx": disk["idx"], "at": disk["at"]}
-        return disk["idx"]
-    stale = (disk or {}).get("idx") or (mem or {}).get("idx") or {}
+        _mem[slug] = {"idx": disk["idx"], "picks": disk.get("picks") or {}, "at": disk["at"]}
+        return _mem[slug]
+    stale = disk or mem or {}
     if _quota_left(slug) <= 0:
         logger.warning("rapid_books[%s]: monthly ceiling reached, serving stale", slug)
         return stale
@@ -230,22 +320,26 @@ async def _provider_index(slug: str) -> dict:
             logger.warning("rapid_books[%s]: HTTP %s (call %s/%s this month)",
                            slug, r.status_code, _usage[slug]["count"], MAX_MONTHLY)
             return stale
-        idx: dict = {}
-        parser(r.json(), book, idx)
+        idx, pidx = {}, {}
+        parser(r.json(), book, idx, pidx)
     except Exception as e:
         logger.warning("rapid_books[%s]: %s", slug, type(e).__name__)
         return stale
     if not idx:
         return stale
-    _mem[slug] = {"idx": idx, "at": now}
+    _mem[slug] = {"idx": idx, "picks": pidx, "at": now}
     try:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        _disk(slug).write_text(json.dumps({"idx": idx, "at": now}))
+        _disk(slug).write_text(json.dumps({"idx": idx, "picks": pidx, "at": now}))
     except Exception:
         pass
-    logger.info("rapid_books[%s]: %s matches priced (call %s/%s this month)",
-                slug, len(idx), _usage[slug]["count"], MAX_MONTHLY)
-    return idx
+    logger.info("rapid_books[%s]: %s matches priced, %s with extra markets (call %s/%s this month)",
+                slug, len(idx), len(pidx), _usage[slug]["count"], MAX_MONTHLY)
+    return _mem[slug]
+
+
+async def _provider_bundle(slug: str) -> dict:
+    return await _provider_index(slug)
 
 
 async def provider_indexes() -> list:
@@ -257,13 +351,51 @@ async def provider_indexes() -> list:
     out = []
     for slug in active_slugs():
         try:
-            idx = await _provider_index(slug)
+            b = await _provider_index(slug)
         except Exception as e:
             logger.warning("rapid_books.provider_indexes(%s): %s", slug, type(e).__name__)
             continue
-        if idx:
-            out.append(idx)
+        if (b or {}).get("idx"):
+            out.append(b["idx"])
     return out
+
+
+async def pick_prices(home: str, away: str) -> dict:
+    """Best available price per Specific Bets pick id for one fixture.
+
+    Reads the SAME cached snapshots as the 1X2 index — no extra API call."""
+    if not enabled():
+        return {}
+    out: dict = {}
+    for slug in active_slugs():
+        try:
+            picks = (await _provider_index(slug) or {}).get("picks") or {}
+        except Exception:
+            continue
+        got = _lookup_picks(picks, home, away)
+        for pick, v in got.items():
+            cur = out.get(pick)
+            if cur is None or v["odds"] > cur["odds"]:
+                out[pick] = v
+    return out
+
+
+def _lookup_picks(picks: dict, home: str, away: str) -> dict:
+    """Exact key first, then a contains-match on either side (team naming
+    differs between providers and API-Football)."""
+    hk, ak = _norm(home), _norm(away)
+    if not hk or not ak:
+        return {}
+    hit = picks.get(f"{hk}|{ak}")
+    if hit:
+        return hit
+    for key, v in picks.items():
+        a, b = key.split("|", 1) if "|" in key else ("", "")
+        if not a or not b:
+            continue
+        if (hk in a or a in hk) and (ak in b or b in ak):
+            return v
+    return {}
 
 
 async def odds_index() -> dict:

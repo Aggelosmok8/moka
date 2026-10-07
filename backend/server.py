@@ -502,7 +502,11 @@ async def specific_bets(match_id: str):
     h2h["book"] = best_book
 
     _val = (m or {}).get("value") or {}
-    out = await sb.build(digits[-1], h2h, _val.get("pick"), _val.get("prediction") or _val.get("probabilities"))
+    import rapid_books as _rb
+    _po = await _rb.pick_prices(((m or {}).get("home") or {}).get("name") or "",
+                                ((m or {}).get("away") or {}).get("name") or "")
+    out = await sb.build(digits[-1], h2h, _val.get("pick"),
+                         _val.get("prediction") or _val.get("probabilities"), _po)
     out["match"] = {
         "id": match_id,
         "home": (m or {}).get("home", {}).get("name") or out.get("home"),
@@ -512,7 +516,8 @@ async def specific_bets(match_id: str):
         "commence_time": (m or {}).get("commence_time"),
         "status": (m or {}).get("status"),
     }
-    _af._c_set(ck, out, ttl=1800)
+    # A transient upstream failure must not be cached for half an hour.
+    _af._c_set(ck, out, ttl=1800 if out.get("available") else 60)
     return out
 
 
