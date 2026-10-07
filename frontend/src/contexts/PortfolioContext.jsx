@@ -209,6 +209,7 @@ export function PortfolioProvider({ children }) {
         matchId: leg.matchId, home: leg.home, away: leg.away, league: leg.league,
         pick: leg.pick, pickName: leg.pickName, odds: Number(leg.odds) || 0, bookmaker: leg.bookmaker || "",
         kind: leg.kind || "match",
+        locked: !!leg.locked,          // LION Ticket legs keep the price as played
         // Match start time — Portfolio dates performance by KICKOFF, not settle time (#8).
         kickoff: leg.kickoff || leg.commence_time || null,
       }];

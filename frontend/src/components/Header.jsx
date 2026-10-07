@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Flame, BarChart3, Search, Tag, User, LineChart, Wallet, Star, Dribbble, Menu, X, Newspaper, GitCompare } from "lucide-react";
+import { Flame, BarChart3, Search, Tag, User, LineChart, Wallet, Star, Dribbble, Ticket, Menu, X, Newspaper, GitCompare } from "lucide-react";
 import LiveStatusPill from "./LiveStatusPill";
 import SearchPalette from "./SearchPalette";
 import UserMenu from "./UserMenu";
@@ -35,6 +35,7 @@ const NavLink = ({ to, label, icon: Icon, active, testId, badge }) => (
 
 const NAV_ITEMS = [
   { to: "/matches", label: "Matches", icon: Flame, testId: "nav-matches", isActive: (p) => p.startsWith("/matches") || p.startsWith("/analysis") || p.startsWith("/value") },
+  { to: "/lion-tickets", label: "LION Tickets", icon: Ticket, testId: "nav-lion-tickets", isActive: (p) => p.startsWith("/lion-tickets") },
   { to: "/sports", label: "Sports", icon: Dribbble, testId: "nav-sports", isActive: (p) => p.startsWith("/sports") },
   { to: "/charts", label: "Watchlist", icon: Star, testId: "nav-watchlist", isActive: (p) => p.startsWith("/charts"), badge: "chart" },
   { to: "/portfolio", label: "Portfolio", icon: Wallet, testId: "nav-portfolio", isActive: (p) => p.startsWith("/portfolio"), badge: "pending" },

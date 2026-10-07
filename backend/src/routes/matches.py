@@ -77,6 +77,15 @@ async def match_results(ids: str = "", detail: str = ""):
     return {"results": results}
 
 
+@router.get("/lion-tickets")
+async def lion_tickets():
+    """Ready-made same-match combos (LION Tickets). Pure computation over the
+    cached value feed + cached bookmaker snapshots — no new upstream calls."""
+    import lion_tickets
+    tickets = await lion_tickets.build_tickets()
+    return {"count": len(tickets), "tickets": tickets}
+
+
 @router.get("/teams/{team_id}/stats")
 async def team_stats(team_id: str, league: str = ""):
     """Clean sheets + home/away goal splits for one team (lazy + cached 24h).

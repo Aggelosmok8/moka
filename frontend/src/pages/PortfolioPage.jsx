@@ -226,18 +226,19 @@ function BetSlip({ slip, removeFromSlip, updateSlipLegOdds, clearSlip, placeTick
               <div className="text-xs text-white font-semibold break-words">{l.home} <span className="text-zinc-600">vs</span> {l.away}</div>
               <div className="text-[11px] text-[#39FF14] font-bold break-words">
                 {l.kind === "specific" && <span className="mr-1.5 align-middle text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#39FF14]/15 text-[#39FF14] border border-[#39FF14]/30">Specific</span>}
+                {l.kind === "ticket" && <span className="mr-1.5 align-middle text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#FFD60A]/15 text-[#FFD60A] border border-[#FFD60A]/30">LION Ticket</span>}
                 {l.pickName}
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <div className="flex flex-col items-end">
-                <label className="text-[9px] text-zinc-500 uppercase leading-none mb-0.5">Your odds</label>
+                <label className="text-[9px] text-zinc-500 uppercase leading-none mb-0.5">{l.locked ? "Locked" : "Your odds"}</label>
                 <input
-                  type="number" min="1" step="0.01" value={l.odds}
-                  onChange={(e) => updateSlipLegOdds(l.matchId, e.target.value, l.pick)}
+                  type="number" min="1" step="0.01" value={l.odds} readOnly={!!l.locked}
+                  onChange={(e) => !l.locked && updateSlipLegOdds(l.matchId, e.target.value, l.pick)}
                   placeholder="1.00"
                   data-testid={`slip-odds-${legId}`}
-                  className="w-16 bg-[#161b22] border border-[#30363d] rounded px-2 py-1 text-white font-mono-num text-sm text-right focus:outline-none focus:border-[#39FF14]"
+                  className={`w-16 bg-[#161b22] border border-[#30363d] rounded px-2 py-1 font-mono-num text-sm text-right focus:outline-none ${l.locked ? "text-[#FFD60A] cursor-default" : "text-white focus:border-[#39FF14]"}`}
                 />
               </div>
               <button onClick={() => removeFromSlip(l.matchId, l.home, l.away, l.pick)} data-testid={`slip-remove-${legId}`} className="text-zinc-500 hover:text-[#FF3B30]"><X className="w-4 h-4" /></button>
