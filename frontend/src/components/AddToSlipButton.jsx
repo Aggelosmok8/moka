@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Layers, Check } from "lucide-react";
 import { toast } from "sonner";
 import { usePortfolio } from "../contexts/PortfolioContext";
-import { isDoubleChance, pickChoices } from "../lib/picks";
+import { isDoubleChance, pickChoices, bestOddsByOutcome } from "../lib/picks";
 
 export default function AddToSlipButton({ entry, className = "", size = "sm" }) {
   const { addToSlip, removeFromSlip, slipHas } = usePortfolio();
@@ -15,14 +15,18 @@ export default function AddToSlipButton({ entry, className = "", size = "sm" }) 
   const inSlip = slipHas(id, match.home?.name, match.away?.name);
 
   const add = (choice) => {
+    // Price the scenario the user actually picked, not the model's pick.
+    const priced = choice ? bestOddsByOutcome(match)[choice.outcome] : null;
     addToSlip({
       matchId: id, home: match.home?.name, away: match.away?.name, league: match.leagueName,
       pick: choice?.pick || value.pick, pickName: choice?.pickName || value.pickName,
-      odds: value.bestOdds, bookmaker: value.bookmaker,
+      odds: priced?.odds || value.bestOdds, bookmaker: priced?.bookmaker || value.bookmaker,
       kickoff: match.commence_time || match.kickoff || null,
     });
     setChoosing(false);
-    toast.success(choice?.doubleChance ? "Added as double chance — edit the odds in your slip to the price you played" : "Added to bet slip", {
+    toast.success(choice?.doubleChance
+      ? "Added as double chance at the implied price — edit it in your slip if you got a different one"
+      : `Added to bet slip${choice ? ` — ${choice.pickName}` : ""}`, {
       duration: 4000,
       action: { label: "Go to slip", onClick: () => navigate("/portfolio?tab=tickets") },
     });
@@ -42,6 +46,7 @@ export default function AddToSlipButton({ entry, className = "", size = "sm" }) 
   };
 
   const choices = isDoubleChance(value) ? pickChoices(match, value) : [];
+  const priceFor = (c) => bestOddsByOutcome(match)[c.outcome]?.odds;
 
   return (
     <div className="relative inline-block">
@@ -72,7 +77,10 @@ export default function AddToSlipButton({ entry, className = "", size = "sm" }) 
               <button key={c.pick} onClick={() => add(c)} data-testid={`pick-option-${c.pick}`}
                 className="w-full text-left flex items-center justify-between gap-2 px-3 py-2.5 mb-2 rounded-lg bg-[#0d1117] border border-white/10 hover:border-[#39FF14]/50 hover:bg-[#39FF14]/[0.06] transition-colors">
                 <span className="text-sm text-zinc-200">{c.label}</span>
-                <span className="text-[11px] font-black text-[#39FF14]">{c.code}</span>
+                <span className="flex items-center gap-2 shrink-0">
+                  {priceFor(c) ? <span className="text-xs font-black font-mono-num text-white">{priceFor(c).toFixed(2)}</span> : null}
+                  <span className="text-[11px] font-black text-[#39FF14]">{c.code}</span>
+                </span>
               </button>
             ))}
             <button onClick={() => setChoosing(false)} className="w-full text-xs text-zinc-500 hover:text-white mt-1">Cancel</button>

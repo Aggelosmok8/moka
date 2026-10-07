@@ -16,22 +16,40 @@ export const legWins = (pick, outcome) =>
 
 export const isDoubleChance = (value) => /or\s+draw/i.test(value?.possibleOutcome || "");
 
-// The two things a user could actually have played when the model says
-// "Home or Draw": the straight win, or the double chance.
+// The three things a user could actually have played when the model says
+// "Home or Draw": the straight win, the draw, or the double chance.
 export const pickChoices = (match, value) => {
   const side = NORM(value?.pick) === "away" ? "away" : "home";
   const team = side === "away" ? match?.away?.name : match?.home?.name;
   const other = side === "away" ? match?.home?.name : match?.away?.name;
   return [
-    { pick: side, pickName: team || value?.pickName || "Win", label: `${team || "Win"} to win`, code: side === "away" ? "2" : "1" },
+    { pick: side, pickName: team || value?.pickName || "Win", label: `${team || "Win"} to win`, code: side === "away" ? "2" : "1", outcome: side },
+    { pick: "draw", pickName: "Draw", label: `Draw (${match?.home?.name || "home"} vs ${match?.away?.name || "away"})`, code: "X", outcome: "draw" },
     {
       pick: side === "away" ? "away_or_draw" : "home_or_draw",
       pickName: `${team || side} or Draw`,
       label: `${team || side} or Draw (vs ${other || "opponent"})`,
       code: side === "away" ? "X2" : "1X",
+      outcome: side === "away" ? "away_or_draw" : "home_or_draw",
       doubleChance: true,
     },
   ];
+};
+
+// Best published price per outcome, plus the implied double-chance prices, so a
+// chosen scenario arrives in the slip already priced instead of empty.
+export const bestOddsByOutcome = (match) => {
+  const best = {};
+  for (const e of match?.odds || []) {
+    for (const sel of ["home", "draw", "away"]) {
+      const p = Number(e?.odds?.[sel]);
+      if (p > 1 && (!best[sel] || p > best[sel].odds)) best[sel] = { odds: p, bookmaker: e.bookmaker };
+    }
+  }
+  const dc = (a, b) => (best[a] && best[b]
+    ? { odds: Math.round((1 / (1 / best[a].odds + 1 / best[b].odds)) * 100) / 100, bookmaker: "" }
+    : null);
+  return { ...best, home_or_draw: dc("home", "draw"), away_or_draw: dc("away", "draw") };
 };
 
 export const matchKey = (home, away) =>

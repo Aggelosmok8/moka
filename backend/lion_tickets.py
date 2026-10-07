@@ -8,6 +8,7 @@ at least two legs to be worth showing.
 """
 import logging
 import math
+from datetime import datetime, timezone
 
 import live_values
 import rapid_books as rb
@@ -147,9 +148,13 @@ async def build_tickets() -> list:
         logger.warning("lion_tickets: %s", e)
         return []
     out = []
+    now = datetime.now(timezone.utc).isoformat()
     for e in entries[:MAX_MATCHES]:
         m, v = e.get("match") or {}, e.get("value") or {}
         if not m.get("id") or (m.get("status") or "") != "upcoming":
+            continue
+        # Kicked off (or past)? The ticket is gone, even if the feed lags behind.
+        if (m.get("commence_time") or "") <= now:
             continue
         try:
             prices = await rb.pick_prices(m["home"]["name"], m["away"]["name"])
