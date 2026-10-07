@@ -195,7 +195,8 @@ def lookup(idx: dict, home: str, away: str) -> list:
 
 # Canonical display names for books whose naming differs between providers.
 _BOOK_DISPLAY = {
-    "stoiximan": "Stoiximan", "novibet": "Novibet", "pamestoixima": "Pamestoixima",
+    "stoiximan": "Stoiximan", "novibet": "Novibet", "pamestoixima": "Pame Stoixima",
+    "elabet": "Elabet",
     "betsson": "Betsson", "betano": "Betano", "fonbet": "Fonbet", "bet365": "bet365",
     "unibet": "Unibet", "bwin": "bwin", "williamhill": "William Hill", "betfair": "Betfair",
     "pinnacle": "Pinnacle", "interwetten": "Interwetten", "marathonbet": "Marathonbet",
