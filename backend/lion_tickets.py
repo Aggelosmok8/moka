@@ -77,9 +77,10 @@ _GROUP_ORDER = ("result", "goals", "btts", "team_home", "team_away")
 
 
 def _best_1x2(odds_list: list) -> dict:
-    """Best published price per outcome, in pick_prices shape."""
+    """Published price per outcome, per bookmaker, in pick_prices shape."""
     out = {}
     for e in odds_list or []:
+        book = e.get("bookmaker") or ""
         for sel, price in (e.get("odds") or {}).items():
             if sel not in ("home", "draw", "away"):
                 continue
@@ -87,9 +88,13 @@ def _best_1x2(odds_list: list) -> dict:
                 p = float(price)
             except (TypeError, ValueError):
                 continue
-            cur = out.get(sel)
-            if p > 1.0 and (cur is None or p > cur["odds"]):
-                out[sel] = {"odds": p, "bookmaker": e.get("bookmaker") or ""}
+            if p <= 1.0:
+                continue
+            cur = out.setdefault(sel, {"odds": 0.0, "bookmaker": "", "books": {}})
+            if p > cur["books"].get(book, 0):
+                cur["books"][book] = p
+            if p > cur["odds"]:
+                cur.update(odds=p, bookmaker=book)
     return out
 
 
@@ -108,7 +113,8 @@ def _build_ticket(m: dict, value: dict, prices: dict) -> dict:
         if edge < MIN_EDGE:          # a ticket is only worth showing when every
             continue                 # leg beats the book's own price
         c.update({"odds": round(odds, 2), "bookmaker": px["bookmaker"],
-                  "marketPct": round(implied), "edge": edge})
+                  "marketPct": round(implied), "edge": edge,
+                  "books": px.get("books") or {px["bookmaker"]: odds}})
         cands.append(c)
     legs = []
     for grp in _GROUP_ORDER:
@@ -118,11 +124,25 @@ def _build_ticket(m: dict, value: dict, prices: dict) -> dict:
             legs.append(max(pool, key=lambda c: (c["edge"], c["odds"])))
     if len(legs) < MIN_LEGS:
         return None
-    total = 1.0
     prob = 1.0
     for leg in legs:
-        total *= leg["odds"]
         prob *= leg["prob"] / 100.0
+    # Played as SINGLES (each leg at the book with the best price): you stake one
+    # unit per pick, so the return is the SUM of the prices, not their product.
+    singles_sum = round(sum(l["odds"] for l in legs), 2)
+    singles_mult = round(singles_sum / len(legs), 2)
+    # A parlay only exists inside ONE bookmaker: find the book that prices every
+    # leg and gives the best combined price.
+    parlay = None
+    books = set.intersection(*[set((l.get("books") or {}).keys()) for l in legs]) if legs else set()
+    for book in books:
+        p = 1.0
+        for l in legs:
+            p *= l["books"][book]
+        if parlay is None or p > parlay["odds"]:
+            parlay = {"bookmaker": book, "odds": round(p, 2)}
+    for l in legs:
+        l.pop("books", None)
     return {
         "id": f"lt_{m['id']}",
         "match": {"id": m["id"], "home": m["home"]["name"], "away": m["away"]["name"],
@@ -131,7 +151,9 @@ def _build_ticket(m: dict, value: dict, prices: dict) -> dict:
                   "league": m.get("leagueName"), "kickoff": m.get("commence_time")},
         "legs": legs,
         "legCount": len(legs),
-        "totalOdds": round(total, 2),
+        "singlesReturn": singles_sum,        # units back for 1 unit per pick
+        "singlesMultiple": singles_mult,     # = average price across the legs
+        "parlay": parlay,                    # same-bookmaker combo, or None
         "combinedProb": round(prob * 100),
         "anchor": max(legs, key=lambda x: x["prob"]),
     }
@@ -166,6 +188,6 @@ async def build_tickets() -> list:
         if t:
             out.append(t)
     # Nearest kick-off first; between two the same day, the richer ticket wins.
-    out.sort(key=lambda t: ((t["match"]["kickoff"] or "")[:10], -t["legCount"], -t["totalOdds"]))
+    out.sort(key=lambda t: ((t["match"]["kickoff"] or "")[:10], -t["legCount"], -t["singlesReturn"]))
     live_values._cache_set("lion_tickets", out, CACHE_TTL)
     return out

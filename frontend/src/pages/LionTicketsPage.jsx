@@ -69,12 +69,22 @@ const TicketCard = ({ t, onAdd, inSlip }) => (
     </div>
 
     <div className="px-4 py-3 bg-[#0d1117] border-t border-white/5 flex items-center justify-between gap-3">
-      <div>
-        <div className="text-[9px] uppercase tracking-wider text-zinc-500">Total odds ({t.legCount} picks combined)</div>
-        <div className="font-display font-black text-2xl text-[#39FF14] font-mono-num leading-none">{t.totalOdds.toFixed(2)}</div>
-        <div className="text-[10px] text-zinc-500 mt-0.5 font-mono-num" data-testid={`lt-maths-${t.match.id}`}>
-          {t.legs.map((l) => l.odds.toFixed(2)).join(" × ")} · ~{t.combinedProb}% model chance
+      <div className="min-w-0">
+        <div className="text-[9px] uppercase tracking-wider text-zinc-500">
+          Played as {t.legCount} singles · best price each
         </div>
+        <div className="flex items-baseline gap-1.5">
+          <span className="font-display font-black text-2xl text-[#39FF14] font-mono-num leading-none">{t.singlesReturn.toFixed(2)}</span>
+          <span className="text-[10px] text-zinc-500">back for {t.legCount}.00 staked (×{t.singlesMultiple.toFixed(2)})</span>
+        </div>
+        <div className="text-[10px] text-zinc-500 mt-1 font-mono-num" data-testid={`lt-maths-${t.match.id}`}>
+          {t.legs.map((l) => l.odds.toFixed(2)).join(" + ")} · all win ~{t.combinedProb}%
+        </div>
+        {t.parlay && (
+          <div className="text-[10px] text-[#FFD60A] mt-1" data-testid={`lt-parlay-${t.match.id}`}>
+            Or as one parlay at {t.parlay.bookmaker}: <b className="font-mono-num">{t.parlay.odds.toFixed(2)}</b>
+          </div>
+        )}
       </div>
       <button onClick={() => onAdd(t)} disabled={inSlip} data-testid={`lt-add-${t.match.id}`}
         className={`rounded-full px-4 py-2 text-[11px] font-black uppercase tracking-wider transition ${inSlip
@@ -106,8 +116,8 @@ export default function LionTicketsPage() {
       pick: l.pick, pickName: l.pickName, odds: l.odds, bookmaker: l.bookmaker,
       kind: "ticket", locked: true, kickoff: t.match.kickoff,
     }));
-    toast.success(`LION Ticket added — ${t.legCount} picks @ ${t.totalOdds.toFixed(2)}`, {
-      description: "Prices are locked exactly as played.",
+    toast.success(`LION Ticket added — ${t.legCount} singles, ${t.singlesReturn.toFixed(2)} back for ${t.legCount}.00`, {
+      description: "Each pick keeps its own bookmaker and locked price.",
     });
   };
 
@@ -122,13 +132,14 @@ export default function LionTicketsPage() {
             </h1>
             <p className="text-sm text-zinc-400 mt-2 max-w-xl">
               Ready-made combos from a single match: only the scenarios our model rates most
-              likely AND better priced than the bookmaker. Richest tickets first, kicking off soonest.
+              likely AND better priced than the bookmaker. Each pick is taken at its own best
+              bookmaker, so a ticket is staked as singles — the figure shown is what comes back.
             </p>
           </div>
           <div className="flex items-center gap-2 text-[11px] text-[#FFD60A] bg-[#FFD60A]/10 border border-[#FFD60A]/25 rounded-lg px-3 py-2 max-w-sm">
             <TrendingUp className="w-4 h-4 shrink-0" />
-            Same-match combos are priced through a bet builder, so your bookmaker's total can differ
-            from the straight multiplication shown here.
+            Picks sit at different bookmakers, so they cannot be one slip: stake them as singles.
+            Where a single bookmaker prices every pick, we also show that real parlay price.
           </div>
         </div>
 

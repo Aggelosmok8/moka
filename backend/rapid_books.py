@@ -97,9 +97,12 @@ def _extra(pidx: dict, key: str, book: str, mkt: str, sel: str, price, line=None
     pick = _pick_id(mkt, sel, line)
     if not pick:
         return
-    cur = pidx.setdefault(key, {}).get(pick)
-    if cur is None or p > cur["odds"]:          # keep the best price on offer
-        pidx[key][pick] = {"odds": p, "bookmaker": book}
+    slot = pidx.setdefault(key, {}).setdefault(pick, {"odds": 0.0, "bookmaker": "", "books": {}})
+    # Keep every book's price: a parlay can only be placed inside ONE bookmaker.
+    if p > slot["books"].get(book, 0):
+        slot["books"][book] = p
+    if p > slot["odds"]:
+        slot.update(odds=p, bookmaker=book)
 
 
 # --- One parser per provider (their JSON shapes have nothing in common) -----
@@ -153,9 +156,10 @@ def _p_novibet(payload, book, idx, pidx):
                         continue
                     for x in items:
                         # Novibet puts the line in the selection caption, e.g. "Over 2.5".
+                        # `caption` holds "Over 2.5"; instanceCaption is the bare line.
                         _extra(pidx, key, book, name,
-                               x.get("betDisplayCaption") or x.get("instanceCaption") or x.get("caption") or "",
-                               x.get("price"), mkt.get("instanceCaption"))
+                               x.get("caption") or x.get("betDisplayCaption") or "",
+                               x.get("price"), x.get("instanceCaption"))
 
 
 def _p_bwin(payload, book, idx, pidx):
@@ -374,9 +378,12 @@ async def pick_prices(home: str, away: str) -> dict:
             continue
         got = _lookup_picks(picks, home, away)
         for pick, v in got.items():
-            cur = out.get(pick)
-            if cur is None or v["odds"] > cur["odds"]:
-                out[pick] = v
+            cur = out.setdefault(pick, {"odds": 0.0, "bookmaker": "", "books": {}})
+            for b, p in (v.get("books") or {}).items():
+                if p > cur["books"].get(b, 0):
+                    cur["books"][b] = p
+            if v["odds"] > cur["odds"]:
+                cur.update(odds=v["odds"], bookmaker=v["bookmaker"])
     return out
 
 
