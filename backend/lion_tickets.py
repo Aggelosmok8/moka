@@ -125,14 +125,16 @@ def _build_ticket(m: dict, value: dict, prices: dict) -> dict:
         px = prices.get(c["pick"])
         if not px:
             continue
-        odds = float(px["odds"])
+        odds = round(float(px["odds"]), 2)
         if c["prob"] < MIN_PROB or odds < MIN_ODDS:
             continue
+        # Derived from the SAME rounded odds we publish, so edge always equals
+        # prob - 100/odds for whoever re-checks it.
         implied = 100.0 / odds
         edge = round(c["prob"] - implied, 1)
         if edge < MIN_EDGE:          # a ticket is only worth showing when every
             continue                 # leg beats the book's own price
-        c.update({"odds": round(odds, 2), "bookmaker": px["bookmaker"],
+        c.update({"odds": odds, "bookmaker": px["bookmaker"],
                   "marketPct": round(implied), "edge": edge,
                   "books": px.get("books") or {px["bookmaker"]: odds}})
         cands.append(c)

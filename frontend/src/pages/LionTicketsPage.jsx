@@ -65,7 +65,7 @@ const TicketCard = ({ t, onAdd, inSlip }) => (
     </div>
 
     <div className="px-4 pb-3 space-y-1.5">
-      {t.legs.map((l) => <Leg key={l.pick} leg={l} anchor={l.pick === t.anchor.pick} />)}
+      {t.legs.map((l) => <Leg key={l.pick} leg={l} anchor={l.pick === t.anchor?.pick} />)}
     </div>
 
     <div className="px-4 py-3 bg-[#0d1117] border-t border-white/5 flex items-center justify-between gap-3">
