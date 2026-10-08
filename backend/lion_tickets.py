@@ -62,6 +62,12 @@ def _candidates(m: dict, value: dict) -> list:
         po = 1 - sum(_pmf(k, lam_t) for k in range(int(line) + 1))
         add("goals", f"over_{line}", f"Over {line} goals", po)
         add("goals", f"under_{line}", f"Under {line} goals", 1 - po)
+    # First half goals — about 45% of a match's goals land before the break.
+    lam_fh = lam_t * 0.45
+    for line in (0.5, 1.5):
+        po = 1 - sum(_pmf(k, lam_fh) for k in range(int(line) + 1))
+        add("fh", f"fh_over_{line}", f"Over {line} goals in 1st half", po)
+        add("fh", f"fh_under_{line}", f"Under {line} goals in 1st half", 1 - po)
     # Both teams to score
     btts = (1 - _pmf(0, lh)) * (1 - _pmf(0, la))
     add("btts", "btts_yes", "Both teams to score", btts)
@@ -73,7 +79,7 @@ def _candidates(m: dict, value: dict) -> list:
 
 
 # One leg per group keeps a ticket from stacking markets that contain each other.
-_GROUP_ORDER = ("result", "goals", "btts", "team_home", "team_away")
+_GROUP_ORDER = ("result", "goals", "btts", "fh", "team_home", "team_away")
 
 
 def _best_1x2(odds_list: list) -> dict:
