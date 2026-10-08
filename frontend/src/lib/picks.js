@@ -60,7 +60,7 @@ export const matchKey = (home, away) =>
 // player markets) — those stay pending instead of being wrongly marked lost.
 // Picks that cannot be settled from the final score alone — they need the
 // match's stat totals / goal sequence / player numbers.
-export const needsDetail = (pick) => /^(cards|corners|fouls|offsides|fh|anyt|p\d+|home_fouls|away_fouls|home_saves|away_saves)_/.test(NORM(pick));
+export const needsDetail = (pick) => /^(cards|corners|fouls|offsides|fh|anyt|fts|p\d+|home_fouls|away_fouls|home_saves|away_saves)_/.test(NORM(pick));
 
 const ou = (kind, line, value) => {
   if (!Number.isFinite(value)) return null;
@@ -92,6 +92,22 @@ export const settleStatus = (pick, r) => {
     const h = Number(r?.ht_home), a = Number(r?.ht_away);
     if (!Number.isFinite(h) || !Number.isFinite(a)) return null;
     return h > 0 && a > 0 ? "won" : "lost";
+  }
+  if ((m = p.match(/^ht_(home|draw|away)$/))) {
+    const h = Number(r?.ht_home), a = Number(r?.ht_away);
+    if (!Number.isFinite(h) || !Number.isFinite(a)) return null;
+    const lead = h > a ? "home" : h < a ? "away" : "draw";
+    return m[1] === lead ? "won" : "lost";
+  }
+  if ((m = p.match(/^fts_(home|away|none)$/))) {
+    if (m[1] === "none") return total === 0 ? "won" : "lost";
+    if (total === 0) return "lost";
+    if (hs === 0) return m[1] === "away" ? "won" : "lost";
+    if (as === 0) return m[1] === "home" ? "won" : "lost";
+    const seq = d?.goal_seq;            // both scored: we need the order
+    if (!Array.isArray(seq) || !seq.length) return null;
+    const [fh, fa] = seq[0];
+    return (fh > 0 ? "home" : "away") === m[1] ? "won" : "lost";
   }
   if ((m = p.match(/^anyt_(\d+)_(\d+)$/))) {
     const x = Number(m[1]), y = Number(m[2]);

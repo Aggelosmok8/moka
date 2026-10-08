@@ -57,9 +57,48 @@ _OU = re.compile(r"^(over|under)\s*([\d.]+)?$", re.I)
 _LINE_IN_NAME = re.compile(r"(\d+(?:\.\d+)?)")
 
 
-def _pick_id(mkt: str, sel: str, line=None):
+def _dc_id(s: str, home: str, away: str):
+    """Double chance: providers write it as "1X" / "1 or X" / "<home> or Draw"."""
+    t = re.sub(r"\s+|-", "", s).replace("or", "")
+    h, a = _norm(home), _norm(away)
+    if h:
+        t = t.replace(re.sub(r"\s+", "", h), "1")
+    if a:
+        t = t.replace(re.sub(r"\s+", "", a), "2")
+    t = t.replace("draw", "x")
+    if t in ("1x", "x1"):
+        return "home_or_draw"
+    if t in ("x2", "2x"):
+        return "away_or_draw"
+    if t in ("12", "21"):
+        return "home_or_away"
+    return None
+
+
+def _side_id(s: str, home: str, away: str, prefix: str):
+    """1 / X / 2 or a team name -> <prefix>_home | _draw | _away."""
+    t = re.sub(r"\s+", "", s)
+    h, a = re.sub(r"\s+", "", _norm(home)), re.sub(r"\s+", "", _norm(away))
+    if t == "1" or (h and t == h):
+        return f"{prefix}_home"
+    if t == "2" or (a and t == a):
+        return f"{prefix}_away"
+    if t in ("x", "draw", "tie"):
+        return f"{prefix}_draw"
+    return None
+
+
+def _pick_id(mkt: str, sel: str, line=None, home: str = "", away: str = ""):
     """Map a provider's market+selection to one of our Specific Bets pick ids."""
     m, s = (mkt or "").lower(), (sel or "").strip().lower()
+    if "double chance" in m or "doublechance" in m:
+        return _dc_id(s, home, away)
+    if ("half" in m and "result" in m) or "half time result" in m or "1st half result" in m:
+        return _side_id(s, home, away, "ht")
+    if "first team to score" in m or "first goal" in m:
+        if s in ("no goal", "none", "no goals", "neither"):
+            return "fts_none"
+        return _side_id(s, home, away, "fts")
     g = _OU.match(s)
     if g:
         side = g.group(1).lower()
@@ -90,11 +129,12 @@ def _pick_id(mkt: str, sel: str, line=None):
     return None
 
 
-def _extra(pidx: dict, key: str, book: str, mkt: str, sel: str, price, line=None):
+def _extra(pidx: dict, key: str, book: str, mkt: str, sel: str, price, line=None,
+           home: str = "", away: str = ""):
     p = _price(price)
     if not p or not key:
         return
-    pick = _pick_id(mkt, sel, line)
+    pick = _pick_id(mkt, sel, line, home, away)
     if not pick:
         return
     slot = pidx.setdefault(key, {}).setdefault(pick, {"odds": 0.0, "bookmaker": "", "books": {}})
@@ -113,6 +153,7 @@ def _p_stoiximan(payload, book, idx, pidx):
         for b in ((blk or {}).get("data") or {}).get("blocks") or []:
             for ev in b.get("events") or []:
                 key = ""
+                h = a = ""
                 for mkt in ev.get("markets") or []:
                     sels = {x.get("name"): x for x in mkt.get("selections") or []}
                     if mkt.get("type") == "MRES":
@@ -125,13 +166,16 @@ def _p_stoiximan(payload, book, idx, pidx):
                         continue
                     for x in mkt.get("selections") or []:
                         _extra(pidx, key, book, mkt.get("name") or "",
-                               x.get("name") or "", x.get("price"), mkt.get("handicap"))
+                               x.get("name") or "", x.get("price"), mkt.get("handicap"),
+                               h or "", a or "")
 
 
 _NOVI_MKT = {"SOCCER_UNDER_OVER": "Goals Over/Under",
              "SOCCER_BOTH_TEAMS_TO_SCORE": "Both Teams To Score",
              "SOCCER_CORNERS_UNDER_OVER": "Corners Over/Under",
-             "SOCCER_FIRST_HALF_UNDER_OVER": "1st Half Goals Over/Under"}
+             "SOCCER_FIRST_HALF_UNDER_OVER": "1st Half Goals Over/Under",
+             "SOCCER_DOUBLE_CHANCE": "Double Chance",
+             "SOCCER_FIRST_HALF_RESULT": "Half Time Result"}
 
 
 def _p_novibet(payload, book, idx, pidx):
@@ -157,9 +201,11 @@ def _p_novibet(payload, book, idx, pidx):
                     for x in items:
                         # Novibet puts the line in the selection caption, e.g. "Over 2.5".
                         # `caption` holds "Over 2.5"; instanceCaption is the bare line.
+                        # For 1X2-shaped markets the outcome lives in `code` ("1"/"X"/"2").
                         _extra(pidx, key, book, name,
-                               x.get("caption") or x.get("betDisplayCaption") or "",
-                               x.get("price"), x.get("instanceCaption"))
+                               x.get("caption") or x.get("betDisplayCaption")
+                               or x.get("code") or "",
+                               x.get("price"), x.get("instanceCaption"), h, a)
 
 
 def _p_bwin(payload, book, idx, pidx):
@@ -174,7 +220,8 @@ def _p_bwin(payload, book, idx, pidx):
                 for opt in mkt.get("options") or []:
                     _extra(pidx, key, book, mname, ((opt.get("name") or {}).get("value")) or "",
                            ((opt.get("price") or {}).get("odds")),
-                           (opt.get("parameters") or {}).get("attribute"))
+                           (opt.get("parameters") or {}).get("attribute"),
+                           parts.get("HomeTeam") or "", parts.get("AwayTeam") or "")
                 continue
             o = {}
             for opt in mkt.get("options") or []:
@@ -208,7 +255,7 @@ def _p_opap(payload, book, idx, pidx):
                     _extra(pidx, key, book, mkt.get("name") or mkt.get("groupCode") or "",
                            out.get("name") or "",
                            ((out.get("prices") or [{}])[0] or {}).get("decimal"),
-                           mkt.get("handicapValue"))
+                           mkt.get("handicapValue"), home, away)
                 continue
             o = {}
             for out in mkt.get("outcomes") or []:
@@ -242,7 +289,8 @@ def _p_elabet(payload, book, idx, pidx):
             if mname.lower() != "1x2":
                 for oid in m.get("oddIds") or []:
                     od = ods.get(oid) or {}
-                    _extra(pidx, key, book, mname, od.get("name") or "", od.get("price"))
+                    _extra(pidx, key, book, mname, od.get("name") or "", od.get("price"),
+                           None, home or "", away or "")
                 continue
             o = {}
             for oid in m.get("oddIds") or []:

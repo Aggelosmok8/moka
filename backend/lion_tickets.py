@@ -19,6 +19,7 @@ MIN_PROB = 58          # % — "most likely scenarios" only
 MIN_ODDS = 1.12        # anything shorter adds no return
 MIN_EDGE = 1.0         # only legs our model prices better than the book
 MIN_LEGS = 2
+MAX_LEGS = 6           # more than this and "all of them win" gets unrealistic
 MAX_MATCHES = 40
 CACHE_TTL = 900
 
@@ -68,6 +69,19 @@ def _candidates(m: dict, value: dict) -> list:
         po = 1 - sum(_pmf(k, lam_fh) for k in range(int(line) + 1))
         add("fh", f"fh_over_{line}", f"Over {line} goals in 1st half", po)
         add("fh", f"fh_under_{line}", f"Under {line} goals in 1st half", 1 - po)
+    # Half-time result — the same Poisson, run over 45 minutes per side.
+    gh = _grid(lh * 0.45, la * 0.45, 6)
+    ht_h = sum(gh[i][j] for i in range(6) for j in range(6) if i > j)
+    ht_d = sum(gh[i][i] for i in range(6))
+    ht_a = sum(gh[i][j] for i in range(6) for j in range(6) if i < j)
+    add("ht", "ht_home", f"{home} leading at half time", ht_h)
+    add("ht", "ht_draw", "Level at half time", ht_d)
+    add("ht", "ht_away", f"{away} leading at half time", ht_a)
+    # First team to score — two Poisson processes racing, plus the goalless case.
+    p_any = 1 - math.exp(-lam_t)
+    add("fts", "fts_home", f"{home} to score first", lh / lam_t * p_any)
+    add("fts", "fts_away", f"{away} to score first", la / lam_t * p_any)
+    add("fts", "fts_none", "No goals in the match", 1 - p_any)
     # Both teams to score
     btts = (1 - _pmf(0, lh)) * (1 - _pmf(0, la))
     add("btts", "btts_yes", "Both teams to score", btts)
@@ -79,7 +93,7 @@ def _candidates(m: dict, value: dict) -> list:
 
 
 # One leg per group keeps a ticket from stacking markets that contain each other.
-_GROUP_ORDER = ("result", "goals", "btts", "fh", "team_home", "team_away")
+_GROUP_ORDER = ("result", "goals", "btts", "fh", "ht", "fts", "team_home", "team_away")
 
 
 def _best_1x2(odds_list: list) -> dict:
@@ -130,6 +144,11 @@ def _build_ticket(m: dict, value: dict, prices: dict) -> dict:
             legs.append(max(pool, key=lambda c: (c["edge"], c["odds"])))
     if len(legs) < MIN_LEGS:
         return None
+    # More than the cap? Keep the strongest legs, then put them back in market
+    # order so the ticket always reads result -> goals -> btts -> halves.
+    if len(legs) > MAX_LEGS:
+        keep = sorted(legs, key=lambda c: (c["edge"], c["prob"]), reverse=True)[:MAX_LEGS]
+        legs = [l for l in legs if l in keep]
     prob = 1.0
     for leg in legs:
         prob *= leg["prob"] / 100.0
