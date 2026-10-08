@@ -12,8 +12,7 @@ BASE_URL = os.environ.get(
     "REACT_APP_BACKEND_URL", "https://teams-hub-1.preview.emergentagent.com"
 ).rstrip("/")
 
-# Seeded QA user in Supabase (7-day trial)
-QA_TOKEN = "tok_qa_dcfd52cfd2b949188a5a552d4e55610f"
+from qa_auth import token as qa_token  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -28,7 +27,7 @@ def auth(s):
     sess = requests.Session()
     sess.headers.update({
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {QA_TOKEN}",
+        "Authorization": f"Bearer {qa_token()}",
     })
     return sess
 
@@ -64,7 +63,7 @@ def test_leagues(s):
 
 
 def test_teams(s):
-    r = s.get(f"{BASE_URL}/api/teams")
+    r = s.get(f"{BASE_URL}/api/teams?league=epl")
     assert r.status_code == 200, r.text[:300]
     teams = r.json()["teams"]
     assert isinstance(teams, list) and len(teams) > 0
@@ -93,9 +92,9 @@ def test_auth_me(auth):
     r = auth.get(f"{BASE_URL}/api/auth/me")
     assert r.status_code == 200, r.text[:300]
     u = r.json()
-    assert u["subscription_status"] == "trial"
-    assert u["is_pro"] is True
-    assert 5 <= int(u["trial_days_left"]) <= 7
+    # A freshly registered account: free plan, no trial, and never leaks _id.
+    assert u["subscription_status"] in (None, "", "free")
+    assert u["is_pro"] is False
     assert u["email"] and "@" in u["email"]
     assert "_id" not in u
 

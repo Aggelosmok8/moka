@@ -766,3 +766,20 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - Settlement (picks.js): ht_(home|draw|away) from the half-time score; fts_(home|away|none) from the final score, falling back to detail.goal_seq[0] only when both teams scored. needsDetail now includes fts. Corners/cards already settled from API-Football /fixtures/statistics (cached 7d, fetched only for fixtures with a pending bet).
 - Result: 15 -> 26 live tickets, legCount {2:16, 3:6, 4:4}. ht_* legitimately never appears: a half-time result seldom clears 58% probability. User choices honoured: max 6 legs, no corners for now, "correct score" clarified as the match result (already the `result` family).
 - testing_agent iteration_14: backend 29/29 (21 new + 8 iter13 regression), frontend 100%, zero issues. New regression: tests/test_lion_tickets_scan_iter14.py. Also applied its two review notes: edge is now derived from the published rounded odds so prob - 100/odds reconciles exactly, and t.anchor?.pick is guarded.
+
+## 2026-10-08 Odds quota made restart-proof + QA test users removed
+### Quota (user: "is there a risk we run out of the 200 calls/month? have we planned what the system does?")
+- Real risk found: the monthly counter lived in a module-level dict and the snapshots in /tmp, so EVERY restart/redeploy reset the count to 0 AND lost the cache -> the next request re-fetched all five providers. The MAX_MONTHLY=150 ceiling could never actually bite.
+- Fix: new `odds_cache` table (slug, data, fetched_at, month, calls) in both the SQLite and PG schemas. rapid_books now reads mem -> disk -> DB -> network, mirrors a disk-only snapshot into the DB, and persists the per-month call count there. A redeploy now costs ZERO requests, and the ceiling survives restarts.
+- Budget: 12h TTL = 2 calls/day/provider = ~62/month against each provider's own 200 free plan, ceiling 150. When the ceiling is hit the system keeps serving the last snapshot indefinitely and the UI shows "—" where it has no price; nothing 500s.
+- New `GET /api/admin/odds-quota` (admin only) reports callsThisMonth / ceiling / left / cachedMatches / cachedAt / servingStale per provider, so the budget is visible in-product instead of only on the RapidAPI dashboard.
+### Where cards & corners DATA comes from (not odds)
+- Predictions: API-Football. Corners/fouls/offsides/GK saves from `/fixtures` (last 3 FT) + `/fixtures/statistics` per fixture, 4 calls per team, cached 24h (specific_bets._fixture_stats). Cards from `/teams/statistics` season totals -> cards_per_game (specific_bets._stats).
+- Settlement: `/fixtures/statistics` for the finished fixture -> totals.corners / totals.cards (yellow+red) / fouls / offsides / saves, 3 calls, cached 7 days, fetched ONLY for a fixture someone has a pending bet on (apifootball.fixture_settlement_detail). No third-party source needed.
+- Bookmaker PRICES are the only gap: corners are priced (Novibet/Pame, ~300 fixtures), cards effectively are not (Novibet only, 29 fixtures, and as booking POINTS).
+### Test users removed entirely (user request)
+- Deleted: `DevLoginPanel.jsx` (the floating "Test users" button) + its App.jsx mount, `seed_test_users.py`, `tests/test_dev_login_tokens.py`, and the `tok.startswith("test-")` exemption in auth logout.
+- Purged from the DB with the new `backend/tools/purge_test_users.py` (4 sessions + 4 users deleted; idempotent, MUST be run once on production too).
+- Tests no longer carry a static token: `tests/qa_auth.py` registers one throwaway account per machine through the public /api/auth/register and caches it in /tmp. Updated test_lion_tickets_scan_iter14, test_lion_tickets_singles_iter13, test_review_iter9, test_moka_regression.
+- Also repaired 4 stale assertions unrelated to this change (leagues catalog is 44 not 13 since Nations Tournaments; /api/teams needs a ?league by design; the m_* mock team ids are gone; the Olympiacos-Jagiellonia fixture has been played). Full suite: **70 passed**.
+- ACTION FOR THE OWNER: `ADMIN_EMAILS` in backend/.env is now `qa.owner@lionstats.app` (a real registered account). Set it to the owner's real email on production.

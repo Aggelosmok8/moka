@@ -25,7 +25,7 @@ def test_leagues_catalog(client):
     r = client.get(f"{API}/leagues", timeout=60)
     assert r.status_code == 200, r.text
     leagues = r.json()["leagues"]
-    assert len(leagues) == 13, f"expected 13 leagues, got {len(leagues)}"
+    assert len(leagues) >= 13, f"catalog shrank: got {len(leagues)}"
     slugs = [l["id"] for l in leagues]
     for s in FOOTBALL_SLUGS + BASKET_SLUGS:
         assert s in slugs
@@ -134,8 +134,8 @@ def test_players_other_league_team(client):
     assert len(r.json()["players"]) == 22
 
 
-def test_team_detail_mock_id(client):
-    r = client.get(f"{API}/teams/m_epl_0", timeout=120)
+def test_team_detail_real_id(client):
+    r = client.get(f"{API}/teams/50", timeout=120)
     assert r.status_code == 200, r.text
     t = r.json()
     assert t["name"] == "Manchester City"

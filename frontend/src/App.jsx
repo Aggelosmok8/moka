@@ -32,7 +32,6 @@ import SpecificBetsPage from "./pages/SpecificBetsPage";
 import LionTicketsPage from "./pages/LionTicketsPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import SlipFab from "./components/SlipFab";
-import DevLoginPanel from "./components/DevLoginPanel";
 import { useAuth } from "./contexts/AuthContext";
 import "@/index.css";
 
@@ -105,7 +104,6 @@ function App() {
                   <AppRouter />
                 </ErrorBoundary>
                 <SlipFab />
-                <DevLoginPanel />
               </LiveScoresProvider>
             </PortfolioProvider>
           </ChartProvider>

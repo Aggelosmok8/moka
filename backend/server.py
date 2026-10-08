@@ -528,6 +528,14 @@ async def refresh_cache(scope: str = "all", admin=Depends(require_admin)):
     return {"scope": scope, "source": r["source"], "matches": r["totalCount"]}
 
 
+@api_router.get("/admin/odds-quota")
+async def odds_quota(admin=Depends(require_admin)):
+    """How much of each bookmaker feed's free monthly budget is spent."""
+    import rapid_books
+    return {"providers": await rapid_books.quota_status(),
+            "refreshHours": rapid_books.CACHE_TTL / 3600}
+
+
 @api_router.get("/fsl/status")
 async def fsl_status():
     return {"cache": fsl_cache_meta(), "status": "ok"}

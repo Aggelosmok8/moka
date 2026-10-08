@@ -16,14 +16,14 @@ import pytest
 import requests
 
 BASE_URL = os.environ.get("VITE_BACKEND_URL", "https://teams-hub-1.preview.emergentagent.com").rstrip("/")
-TOKEN = "test-pro-monthly-token"
+from qa_auth import headers as qa_headers  # noqa: E402
 
 
 def _get_tickets():
     last = None
     for _ in range(3):
         r = requests.get(f"{BASE_URL}/api/lion-tickets",
-                         headers={"Authorization": f"Bearer {TOKEN}"}, timeout=30)
+                         headers=qa_headers(), timeout=30)
         last = r
         if r.status_code == 429:
             time.sleep(60)
@@ -125,7 +125,7 @@ def test_parlay_bookmaker_appears_in_odds_feed(tickets):
     """When parlay is set, the named bookmaker should appear in the value-matches
     odds list for that fixture (sanity: that book really prices this match)."""
     r = requests.get(f"{BASE_URL}/api/value-matches",
-                     headers={"Authorization": f"Bearer {TOKEN}"}, timeout=30)
+                     headers=qa_headers(), timeout=30)
     if r.status_code != 200:
         pytest.skip("value-matches unavailable")
     data = r.json()

@@ -347,6 +347,93 @@ def _read_disk(slug: str):
         return None
 
 
+def _write_disk(slug: str, idx: dict, pidx: dict, at: float):
+    try:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        _disk(slug).write_text(json.dumps({"idx": idx, "picks": pidx, "at": at}))
+    except Exception:
+        pass
+
+
+# The month's call count and the parsed snapshot both live in the DB as well as
+# on disk: /tmp is wiped on every redeploy, and an in-memory counter would let a
+# restart storm spend the whole free quota without the ceiling ever noticing.
+
+def _month() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m")
+
+
+def _db():
+    from database import Database
+    return Database().odds_cache
+
+
+async def _read_db(slug: str):
+    try:
+        row = await _db().find_one({"slug": slug})
+    except Exception as e:
+        logger.warning("rapid_books[%s]: db read %s", slug, type(e).__name__)
+        return None
+    if not row:
+        return None
+    data = row.get("data") or {}
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except Exception:
+            return None
+    if not data.get("idx"):
+        return None
+    return {"idx": data["idx"], "picks": data.get("picks") or {},
+            "at": float(row.get("fetched_at") or 0),
+            "month": row.get("month") or "", "calls": int(row.get("calls") or 0)}
+
+
+async def _write_db(slug: str, idx: dict, pidx: dict, at: float, calls: int):
+    try:
+        await _db().update_one(
+            {"slug": slug},
+            {"$set": {"data": json.dumps({"idx": idx, "picks": pidx}),
+                      "fetched_at": str(at), "month": _month(), "calls": calls}},
+            upsert=True)
+    except Exception as e:
+        logger.warning("rapid_books[%s]: db write %s", slug, type(e).__name__)
+
+
+async def _bump_usage(slug: str) -> int:
+    """Count this request against the month, in the DB, and return the new total."""
+    row = await _read_db(slug)
+    calls = (row or {}).get("calls", 0) + 1 if (row or {}).get("month") == _month() else 1
+    _usage[slug] = {"month": _month(), "count": calls}
+    return calls
+
+
+async def _quota_left(slug: str) -> int:
+    m = _month()
+    u = _usage.get(slug)
+    if not u or u["month"] != m:
+        row = await _read_db(slug)
+        used = row["calls"] if row and row.get("month") == m else 0
+        u = _usage[slug] = {"month": m, "count": used}
+    return MAX_MONTHLY - u["count"]
+
+
+async def quota_status() -> list:
+    """Per-provider call budget — what /api/admin/odds-quota reports."""
+    out = []
+    for slug in active_slugs():
+        row = await _read_db(slug)
+        left = await _quota_left(slug)
+        out.append({"provider": PROVIDERS[slug][0], "slug": slug,
+                    "callsThisMonth": MAX_MONTHLY - left, "ceiling": MAX_MONTHLY,
+                    "left": left, "freePlanLimit": 200,
+                    "cachedMatches": len((row or {}).get("idx") or {}),
+                    "cachedAt": (datetime.fromtimestamp((row or {}).get("at") or 0, timezone.utc)
+                                 .isoformat() if (row or {}).get("at") else None),
+                    "servingStale": left <= 0})
+    return out
+
+
 async def _provider_index(slug: str) -> dict:
     book, host, file, parser = PROVIDERS[slug]
     now = time.time()
@@ -356,9 +443,21 @@ async def _provider_index(slug: str) -> dict:
     disk = _read_disk(slug)
     if disk and now - disk.get("at", 0) < CACHE_TTL:
         _mem[slug] = {"idx": disk["idx"], "picks": disk.get("picks") or {}, "at": disk["at"]}
+        # Mirror a disk-only snapshot into the DB so the next redeploy, which
+        # wipes /tmp, still costs no request.
+        row = await _read_db(slug)
+        if not row or row["at"] < disk["at"]:
+            keep = (row or {}).get("calls", 0) if (row or {}).get("month") == _month() else 0
+            await _write_db(slug, disk["idx"], disk.get("picks") or {}, disk["at"], keep)
         return _mem[slug]
-    stale = disk or mem or {}
-    if _quota_left(slug) <= 0:
+    # /tmp is empty after a redeploy — the DB copy means a restart costs no request.
+    row = await _read_db(slug)
+    if row and now - row["at"] < CACHE_TTL:
+        _mem[slug] = {"idx": row["idx"], "picks": row["picks"], "at": row["at"]}
+        _write_disk(slug, row["idx"], row["picks"], row["at"])
+        return _mem[slug]
+    stale = disk or mem or ({"idx": row["idx"], "picks": row["picks"], "at": row["at"]} if row else {})
+    if await _quota_left(slug) <= 0:
         logger.warning("rapid_books[%s]: monthly ceiling reached, serving stale", slug)
         return stale
     try:
@@ -367,10 +466,12 @@ async def _provider_index(slug: str) -> dict:
                                  headers={"x-rapidapi-key": _key(),
                                           "x-rapidapi-host": f"{host}.p.rapidapi.com",
                                           "accept": "application/json"})
-        _usage[slug]["count"] += 1
+        calls = await _bump_usage(slug)
         if r.status_code != 200:
             logger.warning("rapid_books[%s]: HTTP %s (call %s/%s this month)",
-                           slug, r.status_code, _usage[slug]["count"], MAX_MONTHLY)
+                           slug, r.status_code, calls, MAX_MONTHLY)
+            await _write_db(slug, (stale.get("idx") or {}), (stale.get("picks") or {}),
+                            stale.get("at") or 0, calls)
             return stale
         idx, pidx = {}, {}
         parser(r.json(), book, idx, pidx)
@@ -380,13 +481,10 @@ async def _provider_index(slug: str) -> dict:
     if not idx:
         return stale
     _mem[slug] = {"idx": idx, "picks": pidx, "at": now}
-    try:
-        CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        _disk(slug).write_text(json.dumps({"idx": idx, "picks": pidx, "at": now}))
-    except Exception:
-        pass
+    _write_disk(slug, idx, pidx, now)
+    await _write_db(slug, idx, pidx, now, calls)
     logger.info("rapid_books[%s]: %s matches priced, %s with extra markets (call %s/%s this month)",
-                slug, len(idx), len(pidx), _usage[slug]["count"], MAX_MONTHLY)
+                slug, len(idx), len(pidx), calls, MAX_MONTHLY)
     return _mem[slug]
 
 

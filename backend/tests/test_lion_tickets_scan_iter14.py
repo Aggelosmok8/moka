@@ -13,7 +13,7 @@ import pytest
 import requests
 
 BASE_URL = os.environ.get("VITE_BACKEND_URL", "https://teams-hub-1.preview.emergentagent.com").rstrip("/")
-TOKEN = "test-pro-monthly-token"
+from qa_auth import headers as qa_headers  # noqa: E402
 
 MIN_PROB = 58
 MIN_ODDS = 1.12
@@ -30,7 +30,7 @@ NEW_PICK_IDS = {"home_or_draw", "away_or_draw", "home_or_away",
 @pytest.fixture(scope="module")
 def payload():
     r = requests.get(f"{BASE_URL}/api/lion-tickets",
-                     headers={"Authorization": f"Bearer {TOKEN}"}, timeout=30)
+                     headers=qa_headers(), timeout=30)
     assert r.status_code == 200, (r.status_code, r.text[:300])
     return r.json()
 
@@ -136,7 +136,7 @@ def test_parlay_null_or_product_at_one_book(tickets):
     """If parlay is present, bookmaker must price every leg at that odds, and
     the parlay odds must equal product of those per-book prices within 0.05."""
     r = requests.get(f"{BASE_URL}/api/value-matches",
-                     headers={"Authorization": f"Bearer {TOKEN}"}, timeout=30)
+                     headers=qa_headers(), timeout=30)
     if r.status_code != 200:
         pytest.skip("value-matches not available")
     data = r.json()

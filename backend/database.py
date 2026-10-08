@@ -133,6 +133,13 @@ _SQLITE_SCHEMA = """
         used TEXT DEFAULT '',
         created_at TEXT
     );
+    CREATE TABLE IF NOT EXISTS odds_cache (
+        slug TEXT PRIMARY KEY,
+        data TEXT,
+        fetched_at TEXT,
+        month TEXT DEFAULT '',
+        calls INTEGER DEFAULT 0
+    );
     CREATE INDEX IF NOT EXISTS idx_user_sessions_token ON user_sessions(session_token);
     CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_events_user_ts ON events(user_id, ts);
@@ -237,6 +244,13 @@ _PG_SCHEMA = """
         expires_at TEXT,
         used TEXT DEFAULT '',
         created_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS odds_cache (
+        slug TEXT PRIMARY KEY,
+        data TEXT,
+        fetched_at TEXT,
+        month TEXT DEFAULT '',
+        calls INTEGER DEFAULT 0
     );
     CREATE INDEX IF NOT EXISTS idx_user_sessions_token ON user_sessions(session_token);
     CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id);

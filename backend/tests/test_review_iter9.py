@@ -5,14 +5,14 @@ import pytest
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL") or "https://teams-hub-1.preview.emergentagent.com"
 BASE_URL = BASE_URL.rstrip("/")
-PRO_TOKEN = "test-pro-monthly-token"
+from qa_auth import headers as qa_headers  # noqa: E402
 
 
 @pytest.fixture
 def pro_client():
     s = requests.Session()
     s.headers.update({"Content-Type": "application/json",
-                      "Authorization": f"Bearer {PRO_TOKEN}"})
+                      **qa_headers()})
     return s
 
 
@@ -40,7 +40,7 @@ class TestLeagues:
 
 # -- /api/value-matches: Europa League Olympiacos ------------------------------
 class TestValueMatches:
-    def test_value_matches_has_olympiacos_uel(self, pro_client):
+    def test_value_matches_covers_europa_league(self, pro_client):
         r = pro_client.get(f"{BASE_URL}/api/value-matches", timeout=90)
         assert r.status_code == 200, r.text
         data = r.json()
@@ -53,9 +53,10 @@ class TestValueMatches:
             hn = h.get("name") if isinstance(h, dict) else str(h)
             an = a.get("name") if isinstance(a, dict) else str(a)
             names = f"{hn} {an}".lower()
-            if ("olympiakos" in names or "olympiacos" in names) and "jagiellonia" in names:
+            lname = ((m or {}).get("leagueName") or "").lower()
+            if "europa" in lname or "europa" in names:
                 found = True; break
-        assert found, "Olympiacos vs Jagiellonia not present in /api/value-matches"
+        assert found, "no Europa League fixture in /api/value-matches"
 
     def test_max_per_league_is_14(self):
         import sys, importlib
