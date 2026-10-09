@@ -815,3 +815,10 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - Planted three pending bets on that fixture in the browser and let autoSettle run: corners_over_9.5 -> won, cards_under_3.5 -> won, fouls_over_23.5 -> won, each stamped with the 2-0 final score. So the data was never the problem.
 - Why the user's older bets stayed pending: the stat-based settlement path (needsDetail -> /results?detail= -> settleStatus reading detail.totals) was added AFTER those bets were placed. Old pending bets settle on the next autoSettle run, which happens on any page load.
 - No code change needed. Also confirmed the Portfolio history renders `pickName` (the raw pick id only shows for hand-crafted test rows that lack it).
+
+## 2026-10-09 LION Tickets: handicaps join the result pool (not a new category)
+- User was explicit: no standard/fixed categories in tickets, only the best price at the best probability. So handicap candidates were added to the EXISTING `result` group rather than a new family: "home -0.5" IS a home win and "home +0.5" IS a double chance, i.e. alternative prices for the same opinion. They compete for the one result slot and can never form a second, correlated leg.
+- Half lines only (-1.5/-0.5/+0.5/+1.5), probability straight off the score grid (diff + line > 0), same gates as every other leg (prob >= 58, edge >= 1.0).
+- Live result: 25 tickets, 7 of them now take a handicap for the result slot because it beat the 1X2/DC price - e.g. Everton +0.5 @1.57 (77% likely vs 63% implied, edge 13.3), AS Roma +0.5 @1.50 (edge 7.3), FSV Mainz +0.5 @1.71 (edge 3.5). Group uniqueness is asserted by test_lion_tickets_scan_iter14.
+- Settlement needed no change: picks.js already handles `(home|away)_hcp_<line>` as diff + line > 0.
+- Full suite: 75 passed. Screenshot confirms the handicap legs render with their labels and prices.

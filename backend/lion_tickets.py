@@ -57,6 +57,14 @@ def _candidates(m: dict, value: dict) -> list:
     add("result", "home_or_draw", f"{home} or Draw", p_home + p_draw)
     add("result", "away_or_draw", f"{away} or Draw", p_away + p_draw)
     add("result", "home_or_away", "Home or Away (no draw)", p_home + p_away)
+    # Handicaps belong to the SAME group as the result: "home -0.5" IS a home
+    # win and "home +0.5" IS a double chance, so they are alternative prices for
+    # the same opinion, never a second leg. Half lines only (diff + line > 0).
+    for line in (-1.5, -0.5, 0.5, 1.5):
+        add("result", f"home_hcp_{line:g}", f"{home} {line:+g}",
+            sum(g[i][j] for i in range(9) for j in range(9) if i - j + line > 0))
+        add("result", f"away_hcp_{line:g}", f"{away} {line:+g}",
+            sum(g[i][j] for i in range(9) for j in range(9) if j - i + line > 0))
     # Goals
     lam_t = lh + la
     for line in (0.5, 1.5, 2.5, 3.5):
