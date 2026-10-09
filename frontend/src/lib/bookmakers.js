@@ -65,3 +65,9 @@ export function bookmakerUrl(name) {
 }
 
 export const isApprovedBookmaker = (name) => !!bookmakerUrl(name);
+
+// The Greek-licensed books our odds feeds cover: these are the ones a Greek
+// user can actually place the bet at, so the UI keeps them visible.
+const GREEK = new Set(["stoiximan", "novibet", "pame stoixima", "pamestoixima", "bwin", "elabet"]);
+
+export const isGreekBook = (name) => GREEK.has(String(name || "").trim().toLowerCase());

@@ -6,7 +6,7 @@ import Header from "../components/Header";
 import AddToPortfolioButton from "../components/AddToPortfolioButton";
 import AddToChartButton from "../components/AddToChartButton";
 import AddToSlipButton from "../components/AddToSlipButton";
-import { bookmakerUrl } from "../lib/bookmakers";
+import { bookmakerUrl, isGreekBook } from "../lib/bookmakers";
 import { fetchMatchById, fetchMatchAi } from "../lib/catalogApi";
 import { fetchLeagueDetail, fetchTeamRecent } from "../lib/api";
 import { adaptValue, whyMokaReasons } from "../lib/valueEngine";
@@ -340,6 +340,13 @@ export default function MatchAnalysisPage() {
     .map((o) => ({ bookmaker: o.bookmaker, price: (o.odds && o.odds[key]) || 0 }))
     .filter((o) => o.price > 0)
     .sort((a, b) => b.price - a.price);
+  // Best price first, but a Greek book is the one the user can actually bet at,
+  // so never let it fall off the default view just for being a cent cheaper.
+  const defaultRows = (rows) => {
+    const top = rows.slice(0, 6);
+    const shown = new Set(top.map((o) => o.bookmaker));
+    return [...top, ...rows.filter((o) => isGreekBook(o.bookmaker) && !shown.has(o.bookmaker))];
+  };
   // All three outcomes, so the user can also back the draw or the other side.
   const oddsGroups = [
     { key: "home", label: match.home?.name || "Home win" },
@@ -470,7 +477,7 @@ export default function MatchAnalysisPage() {
               {oddsRows.length > 6 && (
                 <button onClick={() => setShowAllOdds((v) => !v)} data-testid="toggle-all-odds"
                   className="text-[11px] font-bold text-zinc-400 hover:text-[#39FF14] border border-white/10 rounded-md px-2 py-1">
-                  {showAllOdds ? "Show best 6" : `View all odds (${oddsRows.length})`}
+                  {showAllOdds ? "Show fewer" : `View all odds (${oddsRows.length})`}
                 </button>
               )}
               <AddToSlipButton entry={{ match, value }} size="sm" />
@@ -492,7 +499,7 @@ export default function MatchAnalysisPage() {
                 )}
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-                {(showAllOdds ? g.rows : g.rows.slice(0, 6)).map((o, i) => {
+                {(showAllOdds ? g.rows : defaultRows(g.rows)).map((o, i) => {
                   const url = bookmakerUrl(o.bookmaker);
                   const best = i === 0;
                   const lion = best && g.isPick;

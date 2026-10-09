@@ -52,7 +52,7 @@ export const SearchPalette = ({ open, onOpenChange }) => {
                 <CommandItem
                   key={m.id}
                   value={`${m.home.name} ${m.away.name} ${m.leagueName}`}
-                  onSelect={() => go(`/match/${m.id}`)}
+                  onSelect={() => go(`/analysis/${m.id}`)}
                   data-testid={`search-match-${m.id}`}
                   className="cursor-pointer"
                 >
