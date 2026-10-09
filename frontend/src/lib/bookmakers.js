@@ -3,6 +3,11 @@
 // / unapproved providers (e.g. 1xBet, Stake) are intentionally NOT here: their
 // odds can still be shown, but with no "Bet Now" redirect.
 const MAP = {
+  "stoiximan": "https://www.stoiximan.gr/sport/podosfairo/",
+  "novibet": "https://www.novibet.gr/stoixima/podosfairo",
+  "pame stoixima": "https://www.pamestoixima.gr/sports/soccer",
+  "pamestoixima": "https://www.pamestoixima.gr/sports/soccer",
+  "elabet": "https://www.elabet.gr/sports/football",
   "bet365": "https://www.bet365.com/#/AS/B1/",
   "pinnacle": "https://www.pinnacle.com/en/soccer/matchups",
   "william hill": "https://sports.williamhill.com/betting/en-gb/football",

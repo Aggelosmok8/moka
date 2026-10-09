@@ -24,6 +24,7 @@ export function adaptValue(v) {
     edge: v.edge,
     confidence: v.confidence,
     valueScore: v.value_score,
+    opportunityScore: v.opportunity_score,
     pick: v.pick,
     pickName: v.pick_name,
     valueLevel: v.value_level,

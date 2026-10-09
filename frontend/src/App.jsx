@@ -29,9 +29,9 @@ import NewsPage from "./pages/NewsPage";
 import ComparePage from "./pages/ComparePage";
 import SignInPage from "./pages/SignInPage";
 import SpecificBetsPage from "./pages/SpecificBetsPage";
+import LionTicketsPage from "./pages/LionTicketsPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import SlipFab from "./components/SlipFab";
-import DevLoginPanel from "./components/DevLoginPanel";
 import { useAuth } from "./contexts/AuthContext";
 import "@/index.css";
 
@@ -78,6 +78,7 @@ function AppRouter() {
       <Route path="/sports" element={<Gated element={<SportsPage />} />} />
       <Route path="/teams" element={<Gated element={<TeamsPage />} />} />
       <Route path="/analysis/:id" element={<Gated element={<MatchAnalysisPage />} />} />
+      <Route path="/lion-tickets" element={<Gated element={<LionTicketsPage />} />} />
       <Route path="/specific-bets/:id" element={<Gated element={<SpecificBetsPage />} />} />
       <Route path="/account" element={<Gated element={<AccountPage />} />} />
       <Route path="/team/:id" element={<Gated element={<TeamPage />} />} />
@@ -103,7 +104,6 @@ function App() {
                   <AppRouter />
                 </ErrorBoundary>
                 <SlipFab />
-                <DevLoginPanel />
               </LiveScoresProvider>
             </PortfolioProvider>
           </ChartProvider>

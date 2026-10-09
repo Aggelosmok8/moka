@@ -6,6 +6,7 @@ enough the market is reported as INSUFFICIENT and simply not shown.
 """
 import math
 import logging
+import re
 from typing import Optional
 
 import apifootball as af
@@ -193,15 +194,29 @@ async def _squad(team_id, season) -> list:
     return players
 
 
+def _lines(default, priced: set, pattern: str) -> list:
+    """Our model lines plus every line the bookmakers price for this fixture."""
+    out = set(default)
+    for p in priced:
+        m = re.match(pattern, p)
+        if m:
+            try:
+                out.add(float(m.group(1)))
+            except ValueError:
+                pass
+    return sorted(out)
+
+
 def _row(market, selection, lion, market_pct=None, odds=None, book=None,
-         line=None, pick=None, quality=HIGH, note=None, player=None, player_id=None, side=None):
+         line=None, pick=None, quality=HIGH, note=None, player=None, player_id=None, side=None,
+         short=None):
     edge = None if market_pct is None else round(lion - market_pct, 1)
     return {
         "market": market, "selection": selection, "line": line, "pick": pick,
         "lion": lion, "market_pct": market_pct, "odds": odds, "bookmaker": book,
         "edge": edge, "value": bool(edge is not None and edge >= 5),
         "quality": quality, "note": note, "player": player, "player_id": player_id,
-        "side": side,
+        "side": side, "short": short,
     }
 
 
@@ -279,7 +294,8 @@ async def _nation_topup(st, team_id, name):
 
 async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
                 model_pick: Optional[str] = None,
-                model_pred: Optional[dict] = None) -> dict:
+                model_pred: Optional[dict] = None,
+                pick_odds: Optional[dict] = None) -> dict:
     """Full Specific Bets payload for one fixture."""
     fx = await _fixture(fixture_id)
     if not fx or not fx.get("home_id"):
@@ -354,8 +370,11 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
 
     # --- Goals over/under -----------------------------------------------------
     o = (h2h_odds or {})
+    # Model lines, plus any line the books actually price for THIS fixture: if a
+    # bookmaker quotes Over 5.5, hiding our own number for it serves nobody.
+    priced = {k for k, v in (pick_odds or {}).items() if v and v.get("odds")}
     goals_rows = []
-    for line in (0.5, 1.5, 2.5, 3.5):
+    for line in _lines((0.5, 1.5, 2.5, 3.5), priced, r"^over_([\d.]+)$"):
         po = _p_over(line, lam_t)
         goals_rows.append(_row("Goals", f"Over {line}", _pct(po), pick=f"over_{line}",
                                line=line, quality=q_goals))
@@ -375,7 +394,7 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
     # --- Team goals -----------------------------------------------------------
     tg = []
     for side, lam, name in (("home", lam_h, fx["home"]), ("away", lam_a, fx["away"])):
-        for line in (0.5, 1.5, 2.5):
+        for line in _lines((0.5, 1.5, 2.5), priced, rf"^{side}_over_([\d.]+)$"):
             tg.append(_row("Team Goals", f"Over {line} goals", _pct(_p_over(line, lam)),
                            line=line, pick=f"{side}_over_{line}", quality=q_goals, side=side))
     core += tg
@@ -399,12 +418,21 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
     panel("double_chance", "Double Chance", "double_chance", dc)
 
     # --- Handicap -------------------------------------------------------------
-    p_h1 = sum(grid[i][j] for i in range(9) for j in range(9) if i - j >= 2)
-    p_a1 = sum(grid[i][j] for i in range(9) for j in range(9) if j - i >= 2)
-    hcp = [_row("Handicap", f"{fx['home']} -1", _pct(p_h1), line=-1, pick="home_hcp_-1", quality=q_goals, side="home"),
-           _row("Handicap", f"{fx['away']} -1", _pct(p_a1), line=-1, pick="away_hcp_-1", quality=q_goals, side="away")]
+    # Half lines only (a side covers when diff + line > 0), which is exactly how
+    # the slip settles them — no pushes to explain.
+    hcp = []
+    for line in _lines((-1.5, -0.5, 0.5, 1.5), priced, r"^home_hcp_(-?[\d.]+)$"):
+        p_cov = sum(grid[i][j] for i in range(9) for j in range(9) if i - j + line > 0)
+        hcp.append(_row("Handicap", f"{fx['home']} {line:+g}", _pct(p_cov), line=line,
+                        pick=f"home_hcp_{line:g}", quality=q_goals, side="home",
+                        short=f"{line:+g}"))
+    for line in _lines((-1.5, -0.5, 0.5, 1.5), priced, r"^away_hcp_(-?[\d.]+)$"):
+        p_cov = sum(grid[i][j] for i in range(9) for j in range(9) if j - i + line > 0)
+        hcp.append(_row("Handicap", f"{fx['away']} {line:+g}", _pct(p_cov), line=line,
+                        pick=f"away_hcp_{line:g}", quality=q_goals, side="away",
+                        short=f"{line:+g}"))
     core += hcp
-    panel("handicap", "Handicap", "handicap", hcp)
+    panel("handicap", "Handicap", "handicap", hcp, split=True)
 
     # --- Correct score (final) ------------------------------------------------
     # The highlighted scoreline must agree with the result the SAME model rates
@@ -454,7 +482,7 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
         sample_note = f"{hc['n'] + ac['n']} recent matches sampled"
         lam_corn = (hc["corners"] + ac["corners_against"]) / 2 + (ac["corners"] + hc["corners_against"]) / 2
         corners = []
-        for line in (8.5, 9.5, 10.5, 11.5):
+        for line in _lines((8.5, 9.5, 10.5, 11.5), priced, r"^corners_over_([\d.]+)$"):
             corners.append(_row("Corners", f"Over {line} corners", _pct(_p_over(line, lam_corn)),
                                 line=line, pick=f"corners_over_{line}", quality=MEDIUM))
             corners.append(_row("Corners", f"Under {line} corners", _pct(1 - _p_over(line, lam_corn)),
@@ -507,7 +535,7 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
         lam_fh = lam_t * share
         lam_fh_h, lam_fh_a = lam_h * share, lam_a * share
         fh = []
-        for line in (0.5, 1.5):
+        for line in _lines((0.5, 1.5), priced, r"^fh_over_([\d.]+)$"):
             fh.append(_row("First Half", f"Over {line} goals (1st half)", _pct(_p_over(line, lam_fh)),
                            line=line, pick=f"fh_over_{line}", quality=MEDIUM))
             fh.append(_row("First Half", f"Under {line} goals (1st half)", _pct(1 - _p_over(line, lam_fh)),
@@ -570,6 +598,42 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
         except Exception as e:
             logger.warning("sb players %s: %s", tid, e)
 
+    # --- Real bookmaker prices per selection ---------------------------------
+    # Priced from the SAME cached Greek-book snapshots used for 1X2 (no extra
+    # call). Opposite lines are de-vigged against each other so MARKET % is the
+    # bookmaker's true view; a lone price falls back to raw implied odds.
+    po = {k: v for k, v in (pick_odds or {}).items() if v and v.get("odds")}
+    if po:
+        def _opp(pk):
+            if pk.startswith("btts_"):
+                return "btts_no" if pk.endswith("_yes") else "btts_yes"
+            for a, b in (("over_", "under_"), ("under_", "over_")):
+                i = pk.find(a)
+                if i >= 0:
+                    return pk[:i] + b + pk[i + len(a):]
+            return None
+
+        def _apply(rows):
+            for r in rows:
+                hit = po.get(r.get("pick"))
+                if not hit:
+                    continue
+                r["odds"], r["bookmaker"] = hit["odds"], hit["bookmaker"]
+                own = 1.0 / hit["odds"]
+                opp = po.get(_opp(r["pick"]) or "")
+                tot = own + (1.0 / opp["odds"]) if opp else 0
+                r["market_pct"] = _pct(own / tot) if tot > 1 else _pct(own)
+                r["edge"] = round(r["lion"] - r["market_pct"], 1)
+                r["value"] = bool(r["edge"] >= 5)
+        # panel/category "top" entries are references to these same row dicts,
+        # so mutating the rows prices the highlighted pick too.
+        for _p in panels:
+            _apply(_p["rows"])
+        _apply(core)
+        _apply(game)
+        for blk in players:
+            _apply(blk["rows"])
+
     return {
         "available": True,
         "fixture_id": str(fixture_id),
@@ -585,5 +649,5 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
             {"key": "game", "title": "Game Markets", "rows": game, "top": _best(game)},
         ],
         "players": players,
-        "market_odds_available": bool(imp),
+        "market_odds_available": bool(imp or po),
     }

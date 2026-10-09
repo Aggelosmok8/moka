@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useCallback, useMemo, useState, useEffect, useRef } from "react";
 import { useAuth } from "./AuthContext";
-import { legWins, settleStatus, matchKey } from "../lib/picks";
+import { legWins, settleStatus, matchKey, needsDetail } from "../lib/picks";
 import { getPortfolioRemote, putPortfolioRemote } from "../lib/api";
 import { fetchResults } from "../lib/catalogApi";
 
@@ -209,6 +209,7 @@ export function PortfolioProvider({ children }) {
         matchId: leg.matchId, home: leg.home, away: leg.away, league: leg.league,
         pick: leg.pick, pickName: leg.pickName, odds: Number(leg.odds) || 0, bookmaker: leg.bookmaker || "",
         kind: leg.kind || "match",
+        locked: !!leg.locked,          // LION Ticket legs keep the price as played
         // Match start time — Portfolio dates performance by KICKOFF, not settle time (#8).
         kickoff: leg.kickoff || leg.commence_time || null,
       }];
@@ -302,15 +303,18 @@ export function PortfolioProvider({ children }) {
   // results in ONE batched (cached) backend call, and marks won/lost by
   // comparing the pick side (home/draw/away) to the real outcome.
   const autoSettle = useCallback(async () => {
-    const ids = [
-      ...bets.filter((b) => b.status === "pending" && b.matchId).map((b) => b.matchId),
-      ...tickets.flatMap((t) => t.legs.filter((l) => l.status === "pending" && l.matchId).map((l) => l.matchId)),
-      ...slip.filter((l) => l.matchId).map((l) => l.matchId),
+    const pending = [
+      ...bets.filter((b) => b.status === "pending" && b.matchId),
+      ...tickets.flatMap((t) => t.legs.filter((l) => l.status === "pending" && l.matchId)),
     ];
+    const ids = [...pending.map((x) => x.matchId), ...slip.filter((l) => l.matchId).map((l) => l.matchId)];
     const unique = [...new Set(ids)];
     if (!unique.length) return { settled: 0 };
+    // Specific bets (cards, corners, fouls, saves, first half, players...) need
+    // the match stats on top of the score — ask for them only where used.
+    const detail = [...new Set(pending.filter((x) => needsDetail(x.pick)).map((x) => x.matchId))];
     let results = {};
-    try { results = await fetchResults(unique); } catch { return { settled: 0 }; }
+    try { results = await fetchResults(unique, detail); } catch { return { settled: 0 }; }
     let settled = 0;
     const settleLegOrBet = (item) => {
       if (item.status !== "pending") return item;

@@ -1,0 +1,47 @@
+{
+  "summary": "Verification of the user's two LION Tickets doubts (Greek UI). CONFIRMED: (a) legCount is NOT hardcoded to 3 — distribution across 14 live tickets is {3 legs: 4 tickets, 2 legs: 10 tickets}; and (b) totalOdds is the PRODUCT of legs' odds, not the sum. For every ticket the product matches totalOdds within 0.02, and clearly differs from the sum. The UI card footer renders the exact label 'Total odds (N picks combined)' plus a maths line (data-testid lt-maths-<matchId>) listing the leg prices joined by ' × ', e.g. '2.40 × 1.77 × 1.63 · ~36% model chance' — the printed product equals the big total on all 5 cards sampled, and the number of factors equals the N in the label. Add-to-slip regression still green: 3 legs added with kind='ticket' locked=true, button flips to 'IN SLIP' and disables, Portfolio > My Tickets shows the 'LION TICKET' tag.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "verification_evidence": {
+    "backend_product_vs_sum": [
+      {"id": "lt_live_af_1557426", "legs": 3, "odds": [2.4, 1.77, 1.63], "product": 6.92, "sum": 5.80, "totalOdds": 6.92},
+      {"id": "lt_live_af_1575182", "legs": 3, "odds": [3.0, 1.57, 1.46], "product": 6.88, "sum": 6.03, "totalOdds": 6.88},
+      {"id": "lt_live_af_1563187", "legs": 3, "odds": [2.5, 1.71, 1.58], "product": 6.75, "sum": 5.79, "totalOdds": 6.75},
+      {"id": "lt_live_af_1563180", "legs": 2, "odds": [1.87, 1.68], "product": 3.14, "sum": 3.55, "totalOdds": 3.14},
+      {"id": "lt_live_af_1575181", "legs": 2, "odds": [2.05, 1.42], "product": 2.91, "sum": 3.47, "totalOdds": 2.91}
+    ],
+    "legCount_distribution": {"3": 4, "2": 10, "total_tickets": 14},
+    "no_duplicate_market_groups": "verified for all 14 tickets — one leg max per group in (result, goals, btts, team_home, team_away)",
+    "qualification_bar": "all legs satisfy prob>=58, odds>=1.12, edge>=1.0, and expose prob/odds/bookmaker/marketPct/edge",
+    "ui_cards_sampled": [
+      {"card": "live_af_1557426", "label": "Total odds (3 picks combined)", "maths": "2.40 × 1.77 × 1.63 · ~36% model chance", "bigTotal": 6.92, "productOfFactors": 6.92},
+      {"card": "live_af_1575182", "label": "Total odds (3 picks combined)", "maths": "3.00 × 1.57 × 1.46 · ~45% model chance", "bigTotal": 6.88, "productOfFactors": 6.88},
+      {"card": "live_af_1563187", "label": "Total odds (3 picks combined)", "maths": "2.50 × 1.71 × 1.58 · ~26% model chance", "bigTotal": 6.75, "productOfFactors": 6.75},
+      {"card": "live_af_1563180", "label": "Total odds (2 picks combined)", "maths": "1.87 × 1.68 · ~48% model chance", "bigTotal": 3.14, "productOfFactors": 3.14},
+      {"card": "live_af_1575181", "label": "Total odds (2 picks combined)", "maths": "2.05 × 1.42 · ~48% model chance", "bigTotal": 2.91, "productOfFactors": 2.91}
+    ],
+    "add_to_slip_regression": "ticket lt_live_af_1557426 (3 legs: away, over_2.5, btts_yes) → slip has 3 entries, all kind='ticket' locked=true matchId=live_af_1557426; button flips 'ADD TO SLIP' → 'IN SLIP' disabled; Portfolio shows 'LION TICKET' tag"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_lion_tickets_math_iter12.py",
+    "/app/test_reports/pytest/iter12_math.xml"
+  ],
+  "action_items": [
+    "No code change required — both of the user's doubts are unfounded. User can be shown an answer in Greek: (1) '3 picks' is not hardcoded; today 10/14 ready-made tickets have 2 legs and 4 have 3 — the engine takes at most one leg per market group among result/goals/btts/team_home/team_away and only publishes tickets with >=2 qualifying legs. (2) The big odds number is the product of the legs; the card now explicitly prints the multiplication (e.g. 2.40 × 1.77 × 1.63 = 6.92) so this is visually obvious."
+  ],
+  "critical_code_review_comments": [
+    "lion_tickets._candidates has a subtle variable-shadow bug at line 70: 'for side, lam, nm in ((\"home\", lh, home), (\"away\", la, la and away))' — the third tuple element 'la and away' evaluates to the away team name when la>0 (truthy) but to la (a float) if la==0; cosmetic only since xg==0 is filtered earlier at line 41, but the intent 'away' would be clearer and safer.",
+    "LION Tickets 'add to slip' button renders 'In slip' with CSS text-transform:uppercase — innerText returns 'IN SLIP'. Not a bug; future test authors should keep case-insensitive comparisons.",
+    "No breaking issues found."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_lion_tickets_math_iter12.py (new)"
+  ],
+  "success_rate": {"backend": "100% (5/5 pytest)", "frontend": "100% (5/5 cards + add-to-slip regression)"},
+  "test_credentials": "localStorage moka_session_token = test-pro-monthly-token (Pro Monthly)",
+  "seed_data_creation": "None. localStorage 'moka_bet_slip' cleared before slip regression.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Preview URL from VITE_BACKEND_URL. GET /api/lion-tickets consistently returns 14 tickets with mixed legCounts (mostly 2). Backend math is correct and the LION Tickets card now shows an explicit multiplication under label 'Total odds (N picks combined)' at data-testid lt-maths-<matchId>, so user confusion between sum and product is addressed by UI. iter12 pytest file verifies product==totalOdds, legCount distribution, no duplicate group per ticket, qualification bar, and combinedProb==product(prob/100).",
+  "rca of the issue": "N/A — user's hypotheses are both wrong, confirmed empirically from live data. The maths-line UI change (lt-maths) makes the product explicit."
+}

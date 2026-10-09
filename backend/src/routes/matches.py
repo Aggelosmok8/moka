@@ -56,13 +56,34 @@ async def live_ticker():
 
 
 @router.get("/results")
-async def match_results(ids: str = ""):
-    """Final results for a comma-separated list of live match ids (batched+cached)."""
+async def match_results(ids: str = "", detail: str = ""):
+    """Final results for a comma-separated list of live match ids (batched+cached).
+
+    `detail` is a subset of those ids for which the caller also needs stat
+    totals / goal sequence / player numbers to settle a specific bet."""
     id_list = [x for x in ids.split(",") if x]
     if not id_list:
         return {"results": {}}
     import apifootball
-    return {"results": await apifootball.fixture_results(id_list)}
+    results = await apifootball.fixture_results(id_list)
+    want = {x for x in detail.split(",") if x}
+    for mid in want:
+        r = results.get(mid)
+        if not (r and r.get("finished")):
+            continue
+        fid = str(mid).split("live_af_")[-1]
+        if fid.isdigit():
+            r["detail"] = await apifootball.fixture_settlement_detail(fid)
+    return {"results": results}
+
+
+@router.get("/lion-tickets")
+async def lion_tickets():
+    """Ready-made same-match combos (LION Tickets). Pure computation over the
+    cached value feed + cached bookmaker snapshots — no new upstream calls."""
+    import lion_tickets
+    tickets = await lion_tickets.build_tickets()
+    return {"count": len(tickets), "tickets": tickets}
 
 
 @router.get("/teams/{team_id}/stats")

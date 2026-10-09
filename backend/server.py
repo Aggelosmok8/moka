@@ -502,7 +502,11 @@ async def specific_bets(match_id: str):
     h2h["book"] = best_book
 
     _val = (m or {}).get("value") or {}
-    out = await sb.build(digits[-1], h2h, _val.get("pick"), _val.get("prediction") or _val.get("probabilities"))
+    import rapid_books as _rb
+    _po = await _rb.pick_prices(((m or {}).get("home") or {}).get("name") or "",
+                                ((m or {}).get("away") or {}).get("name") or "")
+    out = await sb.build(digits[-1], h2h, _val.get("pick"),
+                         _val.get("prediction") or _val.get("probabilities"), _po)
     out["match"] = {
         "id": match_id,
         "home": (m or {}).get("home", {}).get("name") or out.get("home"),
@@ -512,7 +516,8 @@ async def specific_bets(match_id: str):
         "commence_time": (m or {}).get("commence_time"),
         "status": (m or {}).get("status"),
     }
-    _af._c_set(ck, out, ttl=1800)
+    # A transient upstream failure must not be cached for half an hour.
+    _af._c_set(ck, out, ttl=1800 if out.get("available") else 60)
     return out
 
 
@@ -521,6 +526,25 @@ async def refresh_cache(scope: str = "all", admin=Depends(require_admin)):
     fsl_cache_clear()
     r = await fsl_get_matches(force_refresh=True)
     return {"scope": scope, "source": r["source"], "matches": r["totalCount"]}
+
+
+@api_router.get("/admin/odds-quota")
+async def odds_quota(admin=Depends(require_admin)):
+    """How much of each bookmaker feed's free monthly budget is spent."""
+    import apifootball as _af
+    import rapid_books
+    stats = None
+    try:
+        r = (await _af._get(_af.FOOTBALL_BASE, "/status", {})).get("response") or {}
+        stats = {"plan": (r.get("subscription") or {}).get("plan"),
+                 "renews": (r.get("subscription") or {}).get("end"),
+                 "today": (r.get("requests") or {}).get("current"),
+                 "perDay": (r.get("requests") or {}).get("limit_day")}
+    except Exception as e:
+        logger.warning("odds_quota apifootball status: %s", e)
+    return {"providers": await rapid_books.quota_status(),
+            "refreshHours": rapid_books.CACHE_TTL / 3600,
+            "apiFootball": stats}
 
 
 @api_router.get("/fsl/status")

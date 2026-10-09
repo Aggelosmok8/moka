@@ -442,8 +442,8 @@ export default function MatchAnalysisPage() {
               <div className="flex items-center gap-2">
                 <Target className="w-6 h-6 text-[#39FF14] shrink-0" />
                 <div className="min-w-0">
-                  <div className="text-[9px] uppercase tracking-wider text-zinc-500">Confidence</div>
-                  <div className="font-display font-black text-white text-lg font-mono-num">{value.confidence != null ? `${Math.round(value.confidence / 10)}/10` : "—"}</div>
+                  <div className="text-[9px] uppercase tracking-wider text-zinc-500">Opportunity</div>
+                  <div className="font-display font-black text-white text-lg font-mono-num" data-testid="opportunity-score">{value.opportunityScore != null ? `${value.opportunityScore}/10` : "—"}</div>
                 </div>
               </div>
               <div className="flex items-center gap-2">

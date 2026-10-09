@@ -1,0 +1,28 @@
+{
+  "summary": "Verified the new singles/parlay model on /api/lion-tickets and /lion-tickets end-to-end. 18 live tickets returned; all pass the new assertions. Backend 8/8 pytest cases pass. Frontend: 6 cards sampled all show correct headline (singlesReturn), ×avg equal to singlesReturn/legCount, 'Played as N singles · best price each' label (rendered uppercase by CSS), lt-maths line with ' + '-joined leg prices summing to headline, and lt-parlay line (every ticket today has one — Novibet) matching the API's parlay.odds and bookmaker. 'Add to slip' pushes one leg per pick with kind='ticket' + locked=true, odds and bookmaker preserved per leg; button flips to 'In slip'. Portfolio > My Tickets shows 'LION TICKET' tag and 'LOCKED' label, odds inputs are readOnly with the leg's locked price, and computeTicket() computes potentialReturn as Σ(stake×odds) i.e. singles math (not parlay). No cross-bookmaker product is exposed anywhere. The obsolete iter12 test_lion_tickets.py::test_total_odds_matches_product is now wrong vs the current API (totalOdds removed) — superseded by test_lion_tickets_singles_iter13.py.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_lion_tickets_singles_iter13.py",
+    "/app/test_reports/pytest/iter13_lion_tickets.xml"
+  ],
+  "action_items": [
+    "Delete or rewrite the stale /app/backend/tests/test_lion_tickets.py — its test_total_odds_matches_product still references the removed `totalOdds` field and will fail if ever re-run. The iter13 file is the canonical regression now."
+  ],
+  "critical_code_review_comments": [
+    "lion_tickets._build_ticket: `set.intersection(*[...])` would raise on an empty legs list, but the earlier `if len(legs) < MIN_LEGS: return None` prevents that path — safe.",
+    "lion_tickets.py line 70: `('away', la, la and away)` — the `la and away` short-circuit uses the away xG as a truthiness test for the away team name; if la == 0 this would print the number 0 as team name. Edge case, unlikely but worth cleaning up to just `away`.",
+    "LionTicketsPage line 68: `key={l.pick}` is safe because _GROUP_ORDER yields at most one leg per group, so picks are unique within a ticket.",
+    "PortfolioContext.computeTicket correctly treats legs as independent singles (potentialReturn = Σ stakePer × odds), matching the backend's singlesReturn semantics — no parlay math leaks into the UI."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_lion_tickets_singles_iter13.py (new)"
+  ],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100% (6/6 cards + slip + portfolio)"},
+  "test_credentials": "localStorage.setItem('moka_session_token','test-pro-monthly-token')",
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The /api/lion-tickets payload now exposes singlesReturn, singlesMultiple, parlay={bookmaker,odds}|null — never totalOdds. UI data-testids: lion-ticket-<matchId>, lt-maths-<matchId> (' + '-joined), lt-parlay-<matchId> (only when parlay != null), lt-add-<matchId>. The old test file /app/backend/tests/test_lion_tickets.py should be considered deprecated; use test_lion_tickets_singles_iter13.py. Pro token test-pro-monthly-token.",
+  "rca of the issue": "Not a bug reproduction task — fix verification only. All five requested checks pass: (1) totalOdds absent, singles math correct, (2) parlay bounded by [max(leg), product(legs)] and the named bookmaker is present in the value-matches odds feed for the fixture, (3) at least 6 cards show headline==sum, label 'Played as N singles · best price each', ×avg correct, (4) lt-parlay card matches API parlay (bookmaker + odds), (5) Add-to-slip stores legs as locked ticket entries, Portfolio My Tickets renders LION TICKET tag + LOCKED + readonly odds, and potential return uses singles math."
+}
