@@ -208,14 +208,15 @@ def _lines(default, priced: set, pattern: str) -> list:
 
 
 def _row(market, selection, lion, market_pct=None, odds=None, book=None,
-         line=None, pick=None, quality=HIGH, note=None, player=None, player_id=None, side=None):
+         line=None, pick=None, quality=HIGH, note=None, player=None, player_id=None, side=None,
+         short=None):
     edge = None if market_pct is None else round(lion - market_pct, 1)
     return {
         "market": market, "selection": selection, "line": line, "pick": pick,
         "lion": lion, "market_pct": market_pct, "odds": odds, "bookmaker": book,
         "edge": edge, "value": bool(edge is not None and edge >= 5),
         "quality": quality, "note": note, "player": player, "player_id": player_id,
-        "side": side,
+        "side": side, "short": short,
     }
 
 
@@ -417,12 +418,21 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
     panel("double_chance", "Double Chance", "double_chance", dc)
 
     # --- Handicap -------------------------------------------------------------
-    p_h1 = sum(grid[i][j] for i in range(9) for j in range(9) if i - j >= 2)
-    p_a1 = sum(grid[i][j] for i in range(9) for j in range(9) if j - i >= 2)
-    hcp = [_row("Handicap", f"{fx['home']} -1", _pct(p_h1), line=-1, pick="home_hcp_-1", quality=q_goals, side="home"),
-           _row("Handicap", f"{fx['away']} -1", _pct(p_a1), line=-1, pick="away_hcp_-1", quality=q_goals, side="away")]
+    # Half lines only (a side covers when diff + line > 0), which is exactly how
+    # the slip settles them — no pushes to explain.
+    hcp = []
+    for line in _lines((-1.5, -0.5, 0.5, 1.5), priced, r"^home_hcp_(-?[\d.]+)$"):
+        p_cov = sum(grid[i][j] for i in range(9) for j in range(9) if i - j + line > 0)
+        hcp.append(_row("Handicap", f"{fx['home']} {line:+g}", _pct(p_cov), line=line,
+                        pick=f"home_hcp_{line:g}", quality=q_goals, side="home",
+                        short=f"{line:+g}"))
+    for line in _lines((-1.5, -0.5, 0.5, 1.5), priced, r"^away_hcp_(-?[\d.]+)$"):
+        p_cov = sum(grid[i][j] for i in range(9) for j in range(9) if j - i + line > 0)
+        hcp.append(_row("Handicap", f"{fx['away']} {line:+g}", _pct(p_cov), line=line,
+                        pick=f"away_hcp_{line:g}", quality=q_goals, side="away",
+                        short=f"{line:+g}"))
     core += hcp
-    panel("handicap", "Handicap", "handicap", hcp)
+    panel("handicap", "Handicap", "handicap", hcp, split=True)
 
     # --- Correct score (final) ------------------------------------------------
     # The highlighted scoreline must agree with the result the SAME model rates

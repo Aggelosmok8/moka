@@ -59,12 +59,12 @@ _LINE_IN_NAME = re.compile(r"(\d+(?:\.\d+)?)")
 
 def _dc_id(s: str, home: str, away: str):
     """Double chance: providers write it as "1X" / "1 or X" / "<home> or Draw"."""
-    t = re.sub(r"\s+|-", "", s).replace("or", "")
+    t = _norm(s.replace(" or ", ""))
     h, a = _norm(home), _norm(away)
     if h:
-        t = t.replace(re.sub(r"\s+", "", h), "1")
+        t = t.replace(h, "1")
     if a:
-        t = t.replace(re.sub(r"\s+", "", a), "2")
+        t = t.replace(a, "2")
     t = t.replace("draw", "x")
     if t in ("1x", "x1"):
         return "home_or_draw"
@@ -77,8 +77,7 @@ def _dc_id(s: str, home: str, away: str):
 
 def _side_id(s: str, home: str, away: str, prefix: str):
     """1 / X / 2 or a team name -> <prefix>_home | _draw | _away."""
-    t = re.sub(r"\s+", "", s)
-    h, a = re.sub(r"\s+", "", _norm(home)), re.sub(r"\s+", "", _norm(away))
+    t, h, a = _norm(s), _norm(home), _norm(away)
     if t == "1" or (h and t == h):
         return f"{prefix}_home"
     if t == "2" or (a and t == a):
@@ -99,6 +98,23 @@ def _pick_id(mkt: str, sel: str, line=None, home: str = "", away: str = ""):
         if s in ("no goal", "none", "no goals", "neither"):
             return "fts_none"
         return _side_id(s, home, away, "fts")
+    if "handicap" in m:
+        # Only clean half lines: a quarter line (±0.25/±0.75) splits the stake
+        # and an integer line can push, neither of which we can settle.
+        tail = re.search(r"\(([+-]?\d+(?:\.\d+)?)\)\s*$", s)
+        raw = tail.group(1) if tail else (str(line) if line is not None else "")
+        try:
+            lv = float(raw)
+        except ValueError:
+            return None
+        if abs(lv) * 2 % 2 != 1:
+            return None
+        mname = re.search(r"([+-]?\d+(?:\.\d+)?)", m)   # "asian handicap 0.75"
+        if mname and abs(float(mname.group(1))) != abs(lv):
+            return None                                  # quarter-line market
+        side = _side_id(re.sub(r"\(([+-]?\d+(?:\.\d+)?)\)\s*$", "", s).strip(),
+                        home, away, "")
+        return f"{side.lstrip('_')}_hcp_{lv:g}" if side else None
     g = _OU.match(s)
     if g:
         side = g.group(1).lower()
@@ -252,10 +268,12 @@ def _p_opap(payload, book, idx, pidx):
         for mkt in ev.get("markets") or []:
             if mkt.get("groupCode") != "MATCH_RESULT":
                 for out in mkt.get("outcomes") or []:
+                    pr = (out.get("prices") or [{}])[0] or {}
                     _extra(pidx, key, book, mkt.get("name") or mkt.get("groupCode") or "",
-                           out.get("name") or "",
-                           ((out.get("prices") or [{}])[0] or {}).get("decimal"),
-                           mkt.get("handicapValue"), home, away)
+                           out.get("name") or "", pr.get("decimal"),
+                           # each side carries its own signed line; handicapValue
+                           # is just the market's display index
+                           pr.get("handicapLow") or mkt.get("handicapValue"), home, away)
                 continue
             o = {}
             for out in mkt.get("outcomes") or []:

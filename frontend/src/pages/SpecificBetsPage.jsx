@@ -45,7 +45,7 @@ const OddsCell = ({ row }) => {
 };
 
 // One selection — checkbox-style toggle straight into the existing slip.
-const BetRow = ({ row, picked, onToggle, lion }) => (
+const BetRow = ({ row, picked, onToggle, lion, compact }) => (
   <div className={`px-2 py-2 rounded-lg transition-colors ${picked ? "bg-[#FFD60A]/[0.07]" : "hover:bg-white/[0.03]"}`}
     data-testid={`sb-row-${row.pick}`}>
     <div className="flex items-center justify-between gap-2">
@@ -59,7 +59,7 @@ const BetRow = ({ row, picked, onToggle, lion }) => (
           {lion && <img src="/lion-crest.png" alt="LION's pick" className="w-4 h-4 object-contain" data-testid={`sb-lion-${row.pick}`} />}
           <QualityDot q={row.quality} />
           {row.player ? <span className="text-zinc-400">{row.player} · </span> : null}
-          {row.selection}
+          {(compact && row.short) || row.selection}
         </span>
       </button>
       <div className="flex items-center gap-2.5 shrink-0 text-right">
@@ -116,8 +116,11 @@ const Panel = ({ panel, teams, onToggle, isPicked }) => {
     ? Math.max(panel.rows.filter((r) => r.side === "home").length, panel.rows.filter((r) => r.side === "away").length)
     : panel.rows.length;
   const scroll = perColumn > 7;
-  const body = (rows) => rows.map((r) => (
-    <BetRow key={r.pick} row={r} picked={isPicked(r)} onToggle={onToggle} lion={top && r.pick === top.pick} />
+  // Inside a split panel the team is already the column header, so the row
+  // label drops it instead of truncating ("Sunde…").
+  const body = (rows, compact) => rows.map((r) => (
+    <BetRow key={r.pick} row={r} picked={isPicked(r)} onToggle={onToggle}
+      lion={top && r.pick === top.pick} compact={compact} />
   ));
   return (
     <div className="rounded-2xl border border-white/10 bg-[#11161d] p-4" data-testid={`sb-panel-${panel.key}`}>
@@ -137,7 +140,7 @@ const Panel = ({ panel, teams, onToggle, isPicked }) => {
                 <div className="text-[9px] font-black uppercase tracking-widest text-zinc-500 py-1 sticky top-0 bg-[#11161d]">
                   {side === "home" ? teams.home : teams.away}
                 </div>
-                {body(panel.rows.filter((r) => r.side === side))}
+                {body(panel.rows.filter((r) => r.side === side), true)}
               </div>
             ))}
           </div>

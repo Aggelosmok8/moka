@@ -33,10 +33,10 @@ FOOTBALL_SEASON = _current_football_season()
 BASKETBALL_SEASON = "2023-2024"
 
 # ── API-Football request budget (safety cap + daily logging) ──────────────────
-# 100/day was the implementation/testing cap. Production serves 11 leagues, so
-# the default is higher (still a tiny fraction of the Pro 7500/day limit) and is
-# env-overridable. Aggressive caching keeps real usage ~50-70/day.
-MAX_CALLS = int(os.environ.get("API_FOOTBALL_MAX_CALLS", "500"))
+# Hitting this raises, so it must sit comfortably above real demand: the whole
+# catalogue (~170 fixtures) having its Specific Bets built in one day is roughly
+# 1,900 calls. 5,000 leaves headroom and is still well under the Pro 7,500/day.
+MAX_CALLS = int(os.environ.get("API_FOOTBALL_MAX_CALLS", "5000"))
 _usage = {"date": None, "count": 0}
 
 
@@ -47,6 +47,9 @@ def _bump_usage() -> int:
     if _usage["count"] >= MAX_CALLS:
         raise RuntimeError(f"API-Football daily call budget reached ({MAX_CALLS})")
     _usage["count"] += 1
+    if _usage["count"] == int(MAX_CALLS * 0.8):
+        logger.warning("api-football: 80%% of the daily budget used (%s/%s)",
+                       _usage["count"], MAX_CALLS)
     return _usage["count"]
 
 
