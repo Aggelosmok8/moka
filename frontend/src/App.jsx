@@ -10,7 +10,6 @@ import AutoTranslate from "./components/AutoTranslate";
 import ErrorBoundary from "./components/ErrorBoundary";
 import HomePage from "./pages/HomePage";
 import TeamPage from "./pages/TeamPage";
-import MatchPage from "./pages/MatchPage";
 import PricingPage from "./pages/PricingPage";
 import PricingSuccessPage from "./pages/PricingSuccessPage";
 import AuthCallback from "./pages/AuthCallback";
@@ -82,7 +81,8 @@ function AppRouter() {
       <Route path="/specific-bets/:id" element={<Gated element={<SpecificBetsPage />} />} />
       <Route path="/account" element={<Gated element={<AccountPage />} />} />
       <Route path="/team/:id" element={<Gated element={<TeamPage />} />} />
-      <Route path="/match/:id" element={<Gated element={<MatchPage />} />} />
+      {/* legacy path kept for old links/bookmarks */}
+      <Route path="/match/:id" element={<Gated element={<MatchAnalysisPage />} />} />
       <Route path="/pricing" element={<PricingPage />} />
       <Route path="/pricing/success" element={<PricingSuccessPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
