@@ -169,9 +169,12 @@ def test_parlay_bounds(tickets):
         prod = 1.0
         for x in legs:
             prod *= x
-        lo, hi = max(legs), round(prod, 2)
-        if not (lo - 0.02 <= float(p["odds"]) <= hi + 0.02):
-            bad.append((t["id"], p["odds"], lo, hi))
+        # The parlay multiplies ONE book's own prices, which are usually worse
+        # than the best-of-market price shown per leg, so the only hard ceiling
+        # is the product of the best prices.
+        hi = round(prod, 2)
+        if not (1.01 <= float(p["odds"]) <= hi + 0.02):
+            bad.append((t["id"], p["odds"], hi))
     assert not bad, bad
 
 

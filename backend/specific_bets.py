@@ -6,6 +6,7 @@ enough the market is reported as INSUFFICIENT and simply not shown.
 """
 import math
 import logging
+import re
 from typing import Optional
 
 import apifootball as af
@@ -193,6 +194,19 @@ async def _squad(team_id, season) -> list:
     return players
 
 
+def _lines(default, priced: set, pattern: str) -> list:
+    """Our model lines plus every line the bookmakers price for this fixture."""
+    out = set(default)
+    for p in priced:
+        m = re.match(pattern, p)
+        if m:
+            try:
+                out.add(float(m.group(1)))
+            except ValueError:
+                pass
+    return sorted(out)
+
+
 def _row(market, selection, lion, market_pct=None, odds=None, book=None,
          line=None, pick=None, quality=HIGH, note=None, player=None, player_id=None, side=None):
     edge = None if market_pct is None else round(lion - market_pct, 1)
@@ -355,8 +369,11 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
 
     # --- Goals over/under -----------------------------------------------------
     o = (h2h_odds or {})
+    # Model lines, plus any line the books actually price for THIS fixture: if a
+    # bookmaker quotes Over 5.5, hiding our own number for it serves nobody.
+    priced = {k for k, v in (pick_odds or {}).items() if v and v.get("odds")}
     goals_rows = []
-    for line in (0.5, 1.5, 2.5, 3.5):
+    for line in _lines((0.5, 1.5, 2.5, 3.5), priced, r"^over_([\d.]+)$"):
         po = _p_over(line, lam_t)
         goals_rows.append(_row("Goals", f"Over {line}", _pct(po), pick=f"over_{line}",
                                line=line, quality=q_goals))
@@ -376,7 +393,7 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
     # --- Team goals -----------------------------------------------------------
     tg = []
     for side, lam, name in (("home", lam_h, fx["home"]), ("away", lam_a, fx["away"])):
-        for line in (0.5, 1.5, 2.5):
+        for line in _lines((0.5, 1.5, 2.5), priced, rf"^{side}_over_([\d.]+)$"):
             tg.append(_row("Team Goals", f"Over {line} goals", _pct(_p_over(line, lam)),
                            line=line, pick=f"{side}_over_{line}", quality=q_goals, side=side))
     core += tg
@@ -455,7 +472,7 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
         sample_note = f"{hc['n'] + ac['n']} recent matches sampled"
         lam_corn = (hc["corners"] + ac["corners_against"]) / 2 + (ac["corners"] + hc["corners_against"]) / 2
         corners = []
-        for line in (8.5, 9.5, 10.5, 11.5):
+        for line in _lines((8.5, 9.5, 10.5, 11.5), priced, r"^corners_over_([\d.]+)$"):
             corners.append(_row("Corners", f"Over {line} corners", _pct(_p_over(line, lam_corn)),
                                 line=line, pick=f"corners_over_{line}", quality=MEDIUM))
             corners.append(_row("Corners", f"Under {line} corners", _pct(1 - _p_over(line, lam_corn)),
@@ -508,7 +525,7 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
         lam_fh = lam_t * share
         lam_fh_h, lam_fh_a = lam_h * share, lam_a * share
         fh = []
-        for line in (0.5, 1.5):
+        for line in _lines((0.5, 1.5), priced, r"^fh_over_([\d.]+)$"):
             fh.append(_row("First Half", f"Over {line} goals (1st half)", _pct(_p_over(line, lam_fh)),
                            line=line, pick=f"fh_over_{line}", quality=MEDIUM))
             fh.append(_row("First Half", f"Under {line} goals (1st half)", _pct(1 - _p_over(line, lam_fh)),

@@ -783,3 +783,19 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - Tests no longer carry a static token: `tests/qa_auth.py` registers one throwaway account per machine through the public /api/auth/register and caches it in /tmp. Updated test_lion_tickets_scan_iter14, test_lion_tickets_singles_iter13, test_review_iter9, test_moka_regression.
 - Also repaired 4 stale assertions unrelated to this change (leagues catalog is 44 not 13 since Nations Tournaments; /api/teams needs a ?league by design; the m_* mock team ids are gone; the Olympiacos-Jagiellonia fixture has been played). Full suite: **70 passed**.
 - ACTION FOR THE OWNER: `ADMIN_EMAILS` in backend/.env is now `qa.owner@lionstats.app` (a real registered account). Set it to the owner's real email on production.
+
+## 2026-10-09 Specific Bets: every priced line is now shown + quota headroom answered
+### "why do so many Specific Bets rows have no odds?"
+- Measured coverage on a real fixture: 11 priced rows out of 80. Breakdown of WHY, per category:
+  - Priced by the feeds, and now shown: goals O/U (lines 0.5-8.5 depending on fixture), BTTS, double chance (unlocked yesterday), corners (5.5-15.5), 1st-half goals.
+  - NOT in any of the five feeds, so they can never show a price: team goals (home/away to score), correct score, score-at-any-time, fouls, offsides, goalkeeper saves. Cards exist only at Novibet, in 29 fixtures, and as booking POINTS.
+  - Asian handicap IS priced (Pame 379 / Elabet 53) but our Handicap panel emits European `home_hcp_-1`, which does not line up with the feeds' -0.5/-1.5 lines -> still unpriced. Backlog item.
+- The real bug found: the panels generated a FIXED line set (goals 0.5-3.5, corners 8.5-11.5, 1st half 0.5-1.5) while the books price more (over_4.5 x451, over_5.5 x263, over_6.5 x74, corners 5.5/6.5/7.5 and 12.5-15.5). Those prices were being thrown away.
+- Fix: new `specific_bets._lines(default, priced, pattern)` unions our model lines with every line priced for THAT fixture, applied to goals, team goals, corners and 1st-half goals. Verified on Sunderland-Brighton: goals panel went from 8 rows / 2 priced to **12 rows / 12 priced** (Over 4.5 @5.25, Over 5.5 @9.75, Pame Stoixima). Screenshot confirms the new rows render with their prices.
+### "can we go live on the free plan, even with 100 users?"
+- Bookmaker odds: YES, and the user count is irrelevant. The snapshot cache is global (one fetch serves every user), so the cost is fixed at 2 calls/day/provider = ~62/month against each provider's own 200 free plan. 100 users or 10,000 - same 62.
+- API-Football: `/status` reports plan **Pro, 7500 requests/day**, 1243 used today. Per-user cost is also near zero because everything is cached server-side (team stats 24h, Specific Bets output 30min, settlement detail 7 days); cost scales with DISTINCT fixtures opened, not users. Worst case - every one of the ~170 catalogue fixtures gets its Specific Bets built in one day - is ~11 calls x 170 = ~1,900/day, well inside 7,500.
+- `/api/admin/odds-quota` now also reports the API-Football plan, daily limit and today's usage.
+### Test suite
+- Fixed a wrong assertion in test_parlay_bounds (both iter13 + iter14): it required the one-book parlay to be >= the best single leg price, but the parlay multiplies THAT book's own prices, which are usually worse than best-of-market (real case: Real Madrid-Villarreal, Novibet parlay 2.06 vs best single 2.29 - correct, 1.37 x 1.50). Only the product of best prices is a valid ceiling.
+- Full suite: **70 passed**.

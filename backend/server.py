@@ -531,9 +531,20 @@ async def refresh_cache(scope: str = "all", admin=Depends(require_admin)):
 @api_router.get("/admin/odds-quota")
 async def odds_quota(admin=Depends(require_admin)):
     """How much of each bookmaker feed's free monthly budget is spent."""
+    import apifootball as _af
     import rapid_books
+    stats = None
+    try:
+        r = (await _af._get(_af.FOOTBALL_BASE, "/status", {})).get("response") or {}
+        stats = {"plan": (r.get("subscription") or {}).get("plan"),
+                 "renews": (r.get("subscription") or {}).get("end"),
+                 "today": (r.get("requests") or {}).get("current"),
+                 "perDay": (r.get("requests") or {}).get("limit_day")}
+    except Exception as e:
+        logger.warning("odds_quota apifootball status: %s", e)
     return {"providers": await rapid_books.quota_status(),
-            "refreshHours": rapid_books.CACHE_TTL / 3600}
+            "refreshHours": rapid_books.CACHE_TTL / 3600,
+            "apiFootball": stats}
 
 
 @api_router.get("/fsl/status")
