@@ -173,7 +173,8 @@ async def greek_odds_index(sport: str = "football") -> dict:
 
 
 def lookup(idx: dict, home: str, away: str) -> list:
-    """Fuzzy match a fixture to Greek-book entries (exact key, else substring)."""
+    """Fuzzy match a fixture to Greek-book entries (exact key, else a tolerant
+    match that still refuses youth/reserve/esports fixtures)."""
     if not idx:
         return []
     hk, ak = _norm(home), _norm(away)
@@ -182,11 +183,10 @@ def lookup(idx: dict, home: str, away: str) -> list:
     key = f"{hk}|{ak}"
     if key in idx:
         return idx[key]
+    from rapid_books import _same_team
     for k, v in idx.items():
         eh, _, ea = k.partition("|")
-        home_ok = len(hk) >= 4 and (hk in eh or eh in hk)
-        away_ok = len(ak) >= 4 and (ak in ea or ea in ak)
-        if home_ok and away_ok:
+        if len(hk) >= 4 and len(ak) >= 4 and _same_team(hk, eh) and _same_team(ak, ea):
             return v
     return []
 

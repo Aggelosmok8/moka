@@ -255,6 +255,17 @@ export default function SpecificBetsPage() {
           </div>
         )}
 
+        {data && data.available && !data.market_odds_available && (
+          <div className="rounded-xl border border-[#FFD60A]/30 bg-[#FFD60A]/5 p-3 mb-4 text-xs text-[#FFD60A] flex items-start gap-2"
+            data-testid="sb-no-prices">
+            <ShieldAlert className="w-4 h-4 shrink-0 mt-px" />
+            <span>
+              No bookmaker has opened these markets for this fixture yet — they usually go live 5-7 days before
+              kick-off. LION's probabilities are below; prices will fill in automatically.
+            </span>
+          </div>
+        )}
+
         {data && !data.available && (
           <div className="rounded-2xl border border-white/10 bg-[#11161d] p-8 text-center" data-testid="sb-insufficient">
             <ShieldAlert className="w-7 h-7 text-[#FFD60A] mx-auto mb-3" />

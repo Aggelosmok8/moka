@@ -67,6 +67,12 @@ const ou = (kind, line, value) => {
   return (kind === "over" ? value > line : value < line) ? "won" : "lost";
 };
 
+// A player prop where the player never took the field: once the fixture's
+// player stats are in, his absence means he did not feature, which every book
+// settles as void (stake returned) rather than a loss.
+const playerMissing = (d) =>
+  d?.players && Object.keys(d.players).length ? "void" : null;
+
 export const settleStatus = (pick, r) => {
   const p = NORM(pick);
   if (WINNING_OUTCOMES[p]) return legWins(p, r?.outcome) ? "won" : "lost";
@@ -118,13 +124,13 @@ export const settleStatus = (pick, r) => {
   }
   if ((m = p.match(/^p(\d+)_(score|assist|card)$/))) {
     const ps = d?.players?.[m[1]];
-    if (!ps) return null;
+    if (!ps) return playerMissing(d);
     const v = m[2] === "score" ? ps.goals : m[2] === "assist" ? ps.assists : ps.cards;
     return Number(v) > 0 ? "won" : "lost";
   }
   if ((m = p.match(/^p(\d+)_(shots|sot)_over_([\d.]+)$/))) {
     const ps = d?.players?.[m[1]];
-    if (!ps) return null;
+    if (!ps) return playerMissing(d);
     return ou("over", parseFloat(m[3]), Number(m[2] === "shots" ? ps.shots : ps.sot));
   }
   // --- Score-based markets --------------------------------------------------

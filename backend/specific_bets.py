@@ -550,12 +550,15 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
     # --- Players intelligence -------------------------------------------------
     async def team_players(team_id, lam_team, stats, side):
         squad = await _squad(team_id, fx["season"])
+        # Never suggest a player who is injured or suspended (cached 12h, and
+        # usually already warm from the team page).
+        out_of_squad = await af.injuries_for_team(str(team_id))
         scale = (lam_team / stats["gf_total"]) if stats.get("gf_total") else 1.0
         scale = max(0.5, min(1.8, scale))
         rows = []
         for p in squad:
             mins, apps = p["minutes"], max(1, p["apps"])
-            if mins < 180:
+            if mins < 180 or str(p["id"]) in out_of_squad:
                 continue
             q = HIGH if mins >= 450 and apps >= 6 else MEDIUM
             exp_min = min(90.0, mins / apps)

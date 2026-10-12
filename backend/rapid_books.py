@@ -175,6 +175,8 @@ def _p_stoiximan(payload, book, idx, pidx):
                     if mkt.get("type") == "MRES":
                         h = (sels.get("1") or {}).get("fullName")
                         a = (sels.get("2") or {}).get("fullName")
+                        if _esports(h) or _esports(a):
+                            continue
                         key = f"{_norm(h)}|{_norm(a)}" if h and a else key
                         _row(idx, book, h, a,
                              {k: _price((sels.get(n) or {}).get("price"))
@@ -201,6 +203,8 @@ def _p_novibet(payload, book, idx, pidx):
             for it in bv.get("items") or []:
                 cap = it.get("additionalCaptions") or {}
                 h, a = cap.get("competitor1"), cap.get("competitor2")
+                if _esports(h) or _esports(a):
+                    continue
                 key = f"{_norm(h)}|{_norm(a)}" if h and a else ""
                 for mkt in it.get("markets") or []:
                     sys_name = mkt.get("betTypeSysname")
@@ -229,6 +233,8 @@ def _p_bwin(payload, book, idx, pidx):
     for fx in ((payload.get("data") or {}).get("fixtures")) or []:
         parts = {((p.get("properties") or {}).get("type")): ((p.get("name") or {}).get("value"))
                  for p in fx.get("participants") or []}
+        if _esports(parts.get("HomeTeam")) or _esports(parts.get("AwayTeam")):
+            continue
         key = f"{_norm(parts.get('HomeTeam'))}|{_norm(parts.get('AwayTeam'))}"
         for mkt in fx.get("optionMarkets") or []:
             mname = ((mkt.get("name") or {}).get("value")) or ""
@@ -264,6 +270,8 @@ def _p_opap(payload, book, idx, pidx):
         if len(parts) != 2:
             continue
         home, away = parts[0].strip(), parts[1].strip()
+        if _esports(home) or _esports(away):
+            continue
         key = f"{_norm(home)}|{_norm(away)}"
         for mkt in ev.get("markets") or []:
             if mkt.get("groupCode") != "MATCH_RESULT":
@@ -300,6 +308,8 @@ def _p_elabet(payload, book, idx, pidx):
         if len(cids) != 2:
             continue
         home, away = comp.get(cids[0]), comp.get(cids[1])
+        if _esports(home) or _esports(away):
+            continue
         key = f"{_norm(home)}|{_norm(away)}"
         for mid in ev.get("marketIds") or []:
             m = mks.get(mid) or {}
@@ -551,9 +561,37 @@ async def pick_prices(home: str, away: str) -> dict:
     return out
 
 
+# A provider may add or drop club words around a team name ("Gent" / "KAA Gent",
+# "Lyon" / "Olympique Lyonnais"), but an age, reserve or women's marker makes it
+# a DIFFERENT team and must never fuzzy-match the senior fixture.
+_VARIANT_TOKEN = re.compile(r"u\d{1,2}|^w$|women|ladies|^fem|^i{2,3}$|reserve|^res$|youth|academy|^b$")
+
+# "Aston Villa (Haiko)" is an esports FIFA fixture: the parenthesis holds a
+# player handle, not a qualifier we recognise. Those fixtures are dropped.
+_PARENS = re.compile(r"\(([^)]*)\)")
+_KEEP_IN_PARENS = {"w", "women", "ladies", "u17", "u18", "u19", "u20", "u21", "u23",
+                   "res", "b", "ii", "youth"}
+
+
+def _esports(name: str) -> bool:
+    return any(m.group(1).strip().lower() not in _KEEP_IN_PARENS
+               for m in _PARENS.finditer(name or ""))
+
+
+def _same_team(q: str, cand: str) -> bool:
+    if q == cand:
+        return True
+    if not q or not cand:
+        return False
+    long, short = (cand, q) if len(cand) > len(q) else (q, cand)
+    if short not in long:
+        return False
+    return not _VARIANT_TOKEN.search(long.replace(short, "", 1))
+
+
 def _lookup_picks(picks: dict, home: str, away: str) -> dict:
-    """Exact key first, then a contains-match on either side (team naming
-    differs between providers and API-Football)."""
+    """Exact key first, then a tolerant match (providers and API-Football spell
+    team names differently) that still refuses youth/reserve/women fixtures."""
     hk, ak = _norm(home), _norm(away)
     if not hk or not ak:
         return {}
@@ -562,9 +600,7 @@ def _lookup_picks(picks: dict, home: str, away: str) -> dict:
         return hit
     for key, v in picks.items():
         a, b = key.split("|", 1) if "|" in key else ("", "")
-        if not a or not b:
-            continue
-        if (hk in a or a in hk) and (ak in b or b in ak):
+        if a and b and _same_team(hk, a) and _same_team(ak, b):
             return v
     return {}
 
