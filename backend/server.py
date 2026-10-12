@@ -507,6 +507,7 @@ async def specific_bets(match_id: str):
                                 ((m or {}).get("away") or {}).get("name") or "")
     out = await sb.build(digits[-1], h2h, _val.get("pick"),
                          _val.get("prediction") or _val.get("probabilities"), _po)
+    out["pricesAt"] = await _rb.snapshot_at()
     out["match"] = {
         "id": match_id,
         "home": (m or {}).get("home", {}).get("name") or out.get("home"),

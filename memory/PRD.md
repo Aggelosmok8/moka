@@ -842,3 +842,10 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - `settleStatus` returned null whenever `detail.players[id]` was missing, which is exactly what happens when the player does not play (injured) - so the bet never settled. Now returns **void** (stake returned, as every book does) once the fixture's player stats are present, and still null while they are missing. New test: frontend/tests/picks_player.mjs (6 cases, `node tests/picks_player.mjs`).
 - Also relaxed a stale assertion: a league's "upcoming" list legitimately contains a match that is in play and already has a score.
 - Backend suite 75 passed, frontend build clean.
+
+## 2026-10-12 Prices drifting from the bookmaker's own page (credibility fix)
+- User checked Sevilla-Levante in LION Tickets and our figures did not match Elabet's site. Measured the drift directly: against a snapshot only **18 minutes** old, 215 of ~6,400 Elabet prices had already moved, and that fixture had moved on EVERY market (over 2.5: 2.17 -> 2.05, home_or_draw 1.44 -> 1.48, away_hcp_-0.5 2.60 -> 2.55). Cause is snapshot age, not a parsing bug.
+- `CACHE_TTL` 12h -> **6h** (`RAPID_BOOKS_TTL_HOURS`, env-overridable): 4 refreshes a day = ~120 calls/month per provider, under the RAPID_BOOKS_MAX_MONTHLY=150 ceiling and the provider's own 200 free plan. Worst-case staleness halves.
+- Freshness alone can never equal a live ticker on a free plan, so the honest half of the fix is transparency: new `rapid_books.snapshot_at()` (oldest snapshot in play) is returned as `pricesAt` by `/api/lion-tickets` and `/api/specific-bets/{id}`, and the new `PriceStamp` component (data-testid `price-stamp`) renders "Prices taken 18:00 (24 min ago) - always confirm the live price at the bookmaker before you place the bet." on both pages. The price itself is already an outbound link to the book.
+- Verified on /lion-tickets: stamp renders with the real snapshot time; 19 tickets, one of them a 6-pick (the MAX_LEGS cap in action). Backend 75 passed, frontend player-settlement test passes.
+- NOTE for future answers: the odds budget is now ~120/month per provider, not the ~62 quoted on 2026-10-08.

@@ -20,7 +20,10 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-CACHE_TTL = 12 * 3600                        # ~62 requests/month per provider
+# Prices move: a measured 18-minute gap already shifted 3.4% of Elabet's lines.
+# 4 refreshes a day (~124/month per provider) is the most the 200/month free plan
+# takes while leaving room under RAPID_BOOKS_MAX_MONTHLY.
+CACHE_TTL = int(os.environ.get("RAPID_BOOKS_TTL_HOURS", "6")) * 3600
 MAX_MONTHLY = int(os.environ.get("RAPID_BOOKS_MAX_MONTHLY", "150"))
 CACHE_DIR = Path("/tmp/rapid_books")
 
@@ -444,6 +447,19 @@ async def _quota_left(slug: str) -> int:
         used = row["calls"] if row and row.get("month") == m else 0
         u = _usage[slug] = {"month": m, "count": used}
     return MAX_MONTHLY - u["count"]
+
+
+async def snapshot_at() -> float:
+    """Unix time of the OLDEST snapshot in play — what the UI dates prices by."""
+    ats = []
+    for slug in active_slugs():
+        try:
+            at = (await _provider_index(slug) or {}).get("at")
+        except Exception:
+            at = None
+        if at:
+            ats.append(float(at))
+    return min(ats) if ats else 0.0
 
 
 async def quota_status() -> list:

@@ -82,8 +82,10 @@ async def lion_tickets():
     """Ready-made same-match combos (LION Tickets). Pure computation over the
     cached value feed + cached bookmaker snapshots — no new upstream calls."""
     import lion_tickets
+    import rapid_books
     tickets = await lion_tickets.build_tickets()
-    return {"count": len(tickets), "tickets": tickets}
+    return {"count": len(tickets), "tickets": tickets,
+            "pricesAt": await rapid_books.snapshot_at()}
 
 
 @router.get("/teams/{team_id}/stats")

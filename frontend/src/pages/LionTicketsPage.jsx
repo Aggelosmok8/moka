@@ -3,6 +3,7 @@ import { Ticket, ExternalLink, Layers, Loader2, Clock, TrendingUp } from "lucide
 import Header from "../components/Header";
 import { api } from "../lib/api";
 import { bookmakerUrl } from "../lib/bookmakers";
+import { PriceStamp } from "../components/PriceStamp";
 import { usePortfolio } from "../contexts/PortfolioContext";
 import { toast } from "sonner";
 
@@ -98,13 +99,18 @@ const TicketCard = ({ t, onAdd, inSlip }) => (
 
 export default function LionTicketsPage() {
   const [tickets, setTickets] = useState([]);
+  const [pricesAt, setPricesAt] = useState(0);
   const [loading, setLoading] = useState(true);
   const { addToSlip, slipHasPick } = usePortfolio();
 
   useEffect(() => {
     let active = true;
     api.get("/lion-tickets", { timeout: 120000 })
-      .then((r) => active && setTickets(r.data?.tickets || []))
+      .then((r) => {
+        if (!active) return;
+        setTickets(r.data?.tickets || []);
+        setPricesAt(r.data?.pricesAt || 0);
+      })
       .catch(() => active && setTickets([]))
       .finally(() => active && setLoading(false));
     return () => { active = false; };
@@ -135,6 +141,7 @@ export default function LionTicketsPage() {
               likely AND better priced than the bookmaker. Each pick is taken at its own best
               bookmaker, so a ticket is staked as singles — the figure shown is what comes back.
             </p>
+            <PriceStamp at={pricesAt} className="mt-2" />
           </div>
           <div className="flex items-center gap-2 text-[11px] text-[#FFD60A] bg-[#FFD60A]/10 border border-[#FFD60A]/25 rounded-lg px-3 py-2 max-w-sm">
             <TrendingUp className="w-4 h-4 shrink-0" />

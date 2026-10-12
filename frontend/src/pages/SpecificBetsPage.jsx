@@ -5,6 +5,7 @@ import {
   Hand, AlertTriangle, SquareStack, Clock, Hash, Shuffle, Scale, Repeat, Goal, Move, ExternalLink,
 } from "lucide-react";
 import Header from "../components/Header";
+import { PriceStamp } from "../components/PriceStamp";
 import { bookmakerUrl } from "../lib/bookmakers";
 import { usePortfolio } from "../contexts/PortfolioContext";
 import { api } from "../lib/api";
@@ -253,6 +254,10 @@ export default function SpecificBetsPage() {
           <div className="flex items-center gap-2 text-zinc-500 text-sm py-10 justify-center" data-testid="sb-loading">
             <Loader2 className="w-4 h-4 animate-spin" /> Calculating specific bets…
           </div>
+        )}
+
+        {data && data.available && data.market_odds_available && (
+          <PriceStamp at={data.pricesAt} className="mb-4" />
         )}
 
         {data && data.available && !data.market_odds_available && (
