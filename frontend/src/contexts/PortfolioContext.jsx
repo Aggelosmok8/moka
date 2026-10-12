@@ -242,6 +242,18 @@ export function PortfolioProvider({ children }) {
   }, []);
 
   const clearSlip = useCallback(() => saveSlip([]), []);
+  // A pick the user has ALREADY played (slip legs are a separate thing): any
+  // single bet or ticket leg, whatever its status. Pages use this so the
+  // "you played this" highlight survives navigation and a fresh login.
+  const playedPick = useCallback((matchId, pick, home, away) => {
+    const key = home || away ? matchKey(home, away) : "";
+    const hit = (l) => (l.pick || "") === pick
+      && ((matchId && l.matchId === matchId) || (key && matchKey(l.home, l.away) === key));
+    const found = bets.find(hit)
+      || tickets.flatMap((t) => t.legs || []).find(hit);
+    return found ? (found.status || "pending") : null;
+  }, [bets, tickets]);
+
   const slipHasPick = useCallback((matchId, pick, home, away) => {
     const key = home || away ? matchKey(home, away) : "";
     return slip.some((l) => (l.pick || "") === pick
@@ -255,6 +267,15 @@ export function PortfolioProvider({ children }) {
     return slip.some((l) => l.kind !== "specific"
       && ((matchId && l.matchId === matchId) || (key && matchKey(l.home, l.away) === key)));
   }, [slip]);
+
+  // Match-level twin of playedPick, for the main 1X2 "add to slip" button.
+  const playedMatch = useCallback((matchId, home, away) => {
+    const key = home || away ? matchKey(home, away) : "";
+    const hit = (l) => l.kind !== "specific"
+      && ((matchId && l.matchId === matchId) || (key && matchKey(l.home, l.away) === key));
+    const found = bets.find(hit) || tickets.flatMap((t) => t.legs || []).find(hit);
+    return found ? (found.status || "pending") : null;
+  }, [bets, tickets]);
 
   const placeTicket = useCallback((stake) => {
     let placed = false;
@@ -449,7 +470,8 @@ export function PortfolioProvider({ children }) {
   return (
     <Ctx.Provider value={{
       bets, addBet, settle, updateStake, remove, clear, pendingCount, stats,
-      slip, addToSlip, removeFromSlip, updateSlipLegOdds, clearSlip, slipHas, slipHasPick, slipCount: slip.length,
+      slip, addToSlip, removeFromSlip, updateSlipLegOdds, clearSlip, slipHas, slipHasPick,
+      playedPick, playedMatch, slipCount: slip.length,
       tickets, placeTicket, settleLeg, removeTicket, clearTickets, autoSettle,
       newlySettled, clearNewlySettled,
     }}>
