@@ -1,0 +1,25 @@
+{
+  "summary": "Frontend verification of played/pending persistence across navigation, hard reload, and page re-visit using real server-synced portfolio. All five flows from the bug report are working: LION Tickets, Specific Bets badges, main AddToSlipButton (Analysis), non-destructive click on 'Played', and distinct In-slip vs Played states.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "PortfolioContext.playedPick/playedMatch correctly search both single bets and ticket legs, so the highlight is derived from the server-persisted portfolio (not from the local slip). Survives reload + re-login as required.",
+    "AddToSlipButton early-returns on played with only a toast — no mutation of slip, matches the spec.",
+    "LionTicketsPage disables the button and recolors green when ANY leg of the ticket matches a placed leg (bets/tickets). Verified disabled=True.",
+    "SpecificBetsPage: BetRow renders sb-played-<pick> badge and ring; isolated per row (verified only placed picks show PLAYED, others plain)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (not tested)", "frontend": "100%"},
+  "test_credentials": "qa.owner@lionstats.app / Qa-593ca402f165abc1!",
+  "seed_data_creation": "Placed a LION ticket (Torino vs Udinese, 4 legs) and a single bet from Analysis page via the UI through the server-synced portfolio. State persists across hard reload.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Observed scenarios verified: (1) /lion-tickets lt-add-<id> turns to 'PLAYED' (green, disabled) after nav away/back AND after hard reload. (2) /matches add-to-slip-<id> button turns to 'Played' and clicking it only shows toast 'You already played this match — Played / Open portfolio' (non-destructive). (3) /specific-bets/{matchId} shows per-row sb-played-<pick> PLAYED badges plus green ring tint; non-played rows remain unmarked. (4) Distinct amber 'In slip' state verified. The /specific-bets/live_af_1557426 fixture (Sunderland-Brighton) shows the yellow sb-no-prices banner (markets not yet opened by bookmaker) — this is intended per the request. The 'Prices taken HH:MM' PriceStamp line is rendered and intended.",
+  "rca of the issue": "N/A — issue is already fixed and verified; nothing left to reproduce."
+}

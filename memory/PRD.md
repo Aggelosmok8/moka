@@ -849,3 +849,13 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - Freshness alone can never equal a live ticker on a free plan, so the honest half of the fix is transparency: new `rapid_books.snapshot_at()` (oldest snapshot in play) is returned as `pricesAt` by `/api/lion-tickets` and `/api/specific-bets/{id}`, and the new `PriceStamp` component (data-testid `price-stamp`) renders "Prices taken 18:00 (24 min ago) - always confirm the live price at the bookmaker before you place the bet." on both pages. The price itself is already an outbound link to the book.
 - Verified on /lion-tickets: stamp renders with the real snapshot time; 19 tickets, one of them a 6-pick (the MAX_LEGS cap in action). Backend 75 passed, frontend player-settlement test passes.
 - NOTE for future answers: the odds budget is now ~120/month per provider, not the ~62 quoted on 2026-10-08.
+
+## 2026-10-12 "What have I played?" — the highlight now persists (user-reported bug)
+- Symptom: a pick highlighted the moment you clicked it, then went plain again after changing page or signing in again, so the user could not tell what they had already played.
+- Root cause: every "marked" state was computed from the BET SLIP alone (`slipHasPick` / `slipHas`). Placing the bet empties the slip by design, so the mark vanished exactly when it mattered most.
+- Fix (PortfolioContext): new `playedPick(matchId, pick, home, away)` and `playedMatch(matchId, home, away)` that search the PLACED bets - both single `bets` and every ticket's `legs` - and return the status ('pending'|'won'|'lost'|'void'). Those are server-synced (user_portfolios), so the mark survives navigation, a hard reload and a fresh login.
+  - SpecificBetsPage: per-row green ring + badge `sb-played-<pick>` reading PLAYED / WON / LOST / VOID, kept distinct from the amber "in slip" tick.
+  - LionTicketsPage: the ticket button reads "Played" (green, disabled) when any leg is already placed.
+  - AddToSlipButton (Analysis + match cards): green "Played"/"Won"/"Lost"/"Void", and clicking it is non-destructive - it only toasts "You already played this match" with an "Open portfolio" action instead of adding a duplicate or silently removing the slip entry.
+- testing_agent iteration_15: frontend 100%, zero issues, `retest_needed: false`. Verified by placing a real 4-leg LION Ticket (Torino-Udinese) and a single from Analysis through the UI, then navigating away and hard-reloading: all marks persisted.
+- NOTE for future work: signed-in portfolio state comes from the server, so seeding `localStorage` in a test does not work - the context overwrites it. Drive the UI instead.
