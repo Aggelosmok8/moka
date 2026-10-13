@@ -174,7 +174,9 @@ def _build_ticket(m: dict, value: dict, prices: dict) -> dict:
     for book in books:
         p = 1.0
         for l in legs:
-            p *= l["books"][book]
+            # Round exactly like the prices we publish, so the parlay can never
+            # read higher than the legs on screen multiplied out.
+            p *= round(float(l["books"][book]), 2)
         if parlay is None or p > parlay["odds"]:
             parlay = {"bookmaker": book, "odds": round(p, 2)}
     for l in legs:
@@ -196,7 +198,11 @@ def _build_ticket(m: dict, value: dict, prices: dict) -> dict:
 
 
 async def build_tickets() -> list:
-    cached = live_values._cache_get("lion_tickets")
+    # Cache keyed on the odds snapshot: the instant new prices land, every
+    # ticket is rebuilt and re-valued (a leg whose price dropped loses its edge
+    # and falls out) instead of being served off stale odds.
+    ck = f"lion_tickets_{await rb.odds_version()}"
+    cached = live_values._cache_get(ck)
     if cached is not None:
         return cached
     try:
@@ -229,5 +235,5 @@ async def build_tickets() -> list:
             out.append(t)
     # Nearest kick-off first; between two the same day, the richer ticket wins.
     out.sort(key=lambda t: ((t["match"]["kickoff"] or "")[:10], -t["legCount"], -t["singlesReturn"]))
-    live_values._cache_set("lion_tickets", out, CACHE_TTL)
+    live_values._cache_set(ck, out, CACHE_TTL)
     return out

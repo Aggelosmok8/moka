@@ -31,8 +31,11 @@ def walk_markets(slug, payload):
     """Yield (market_name, selection_name) pairs as the parsers see them."""
     out = []
     if slug == "stoiximan":
-        for blk in payload.get("data") or []:
-            for b in ((blk or {}).get("data") or {}).get("blocks") or []:
+        data = payload.get("data")
+        blocks = ((data.get("data") or {}).get("blocks") or []) if isinstance(data, dict) else [
+            b for blk in (data or []) for b in ((((blk or {}).get("data")) or {}).get("blocks") or [])]
+        for b in blocks:
+            if True:
                 for ev in b.get("events") or []:
                     for m in ev.get("markets") or []:
                         for s in m.get("selections") or []:

@@ -619,6 +619,13 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
         def _apply(rows):
             for r in rows:
                 hit = po.get(r.get("pick"))
+                if not hit and r.get("player"):
+                    # Player markets come keyed by NAME (the odds feed has no
+                    # player ids), e.g. pn:a|idah:score.
+                    pk = r.get("pick") or ""
+                    key = af.player_key(r["player"])
+                    if key and "_" in pk:
+                        hit = po.get(f"pn:{key}:{pk.split('_', 1)[1]}")
                 if not hit:
                     continue
                 r["odds"], r["bookmaker"] = hit["odds"], hit["bookmaker"]
@@ -636,6 +643,13 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
         _apply(game)
         for blk in players:
             _apply(blk["rows"])
+
+    # Tell the user WHY a panel is blank instead of leaving a column of dashes:
+    # no licensed Greek bookmaker quotes fouls, offsides or keeper saves.
+    for _p in panels:
+        if not any(r.get("odds") for r in _p["rows"]):
+            msg = "No bookmaker prices this market for this fixture — LION's own probability only."
+            _p["note"] = f"{_p['note']} · {msg}" if _p.get("note") else msg
 
     return {
         "available": True,

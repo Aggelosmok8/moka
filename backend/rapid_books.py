@@ -497,6 +497,23 @@ async def snapshot_at() -> float:
     return min(ats) if ats else 0.0
 
 
+async def odds_version() -> str:
+    """Changes the moment ANY provider snapshot is refreshed, so everything we
+    derive from prices (value, edge, LION Tickets) is recomputed instead of
+    being served from a cache built on older odds."""
+    ats = []
+    for slug in active_slugs():
+        try:
+            at = (await _provider_index(slug) or {}).get("at")
+        except Exception:
+            at = None
+        if at:
+            ats.append(int(float(at)))
+    # The API-Football per-fixture odds sit on a 30-minute cache, so bucket time
+    # at the same resolution — a newer price set always gets a new key.
+    return f"{max(ats) if ats else 0}_{int(time.time() // 1800)}"
+
+
 async def quota_status() -> list:
     """Per-provider call budget — what /api/admin/odds-quota reports."""
     out = []

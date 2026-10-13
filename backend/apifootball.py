@@ -11,6 +11,7 @@ import time as _time
 import datetime as _dt
 import logging
 import re
+import unicodedata
 import httpx
 import mockdata
 
@@ -892,6 +893,46 @@ def _bookmaker_approved(name: str) -> bool:
 
 
 _AF_OU = re.compile(r"^(over|under)\s+([\d.]+)$")
+_AF_CS = re.compile(r"^(\d{1,2})\s*[:\-]\s*(\d{1,2})$")
+_AF_PLAYER_N = re.compile(r"^(.+?)\s*-\s*(\d+)\s*$")
+_AF_CORNERS = ("corners over under", "corners over/under", "total corners",
+               "total corners (3 way)", "corners. total")
+_AF_SCORER = ("anytime goal scorer", "home anytime goal scorer",
+              "away anytime goal scorer")
+_AF_SHOTS = ("home player shots", "away player shots", "player shots")
+_AF_SOT = ("home player shots on target total", "away player shots on target total",
+           "player shots on target total")
+
+
+def player_key(name: str) -> str:
+    """'Zan Vipotnik', 'Ž. Vipotnik' and 'Vipotnik, Zan' all collapse to the same
+    key, because squads give us initials while bookmakers give full names."""
+    s = unicodedata.normalize("NFKD", str(name or "")).encode("ascii", "ignore").decode()
+    parts = [p for p in re.split(r"[\s,]+", s) if p]
+    if len(parts) < 2:
+        return ""
+    first = re.sub(r"[^a-z]", "", parts[0].lower())
+    last = re.sub(r"[^a-z]", "", parts[-1].lower())
+    return f"{first[:1]}|{last}" if first and last else ""
+
+
+def _af_player_pick(bet, value):
+    """Player markets are keyed by NAME (`pn:<key>:<market>`) because the odds
+    feed has no player ids; Specific Bets resolves them against its squad rows."""
+    b, v = str(bet or "").strip().lower(), str(value or "").strip()
+    if not b or not v:
+        return None
+    if b in _AF_SCORER:
+        k = player_key(v)
+        return f"pn:{k}:score" if k else None
+    kind = "shots" if b in _AF_SHOTS else "sot" if b in _AF_SOT else None
+    if not kind:
+        return None
+    g = _AF_PLAYER_N.match(v)          # "Ryan Leonard - 2" == 2 or more
+    if not g:
+        return None
+    k, n = player_key(g.group(1)), int(g.group(2))
+    return f"pn:{k}:{kind}_over_{n - 0.5:g}" if k and n >= 1 else None
 _AF_HCP = re.compile(r"^(home|away)\s*([+-][\d.]+)$")
 
 
@@ -913,20 +954,32 @@ def _af_pick(bet, value):
                 "draw/away": "away_or_draw"}.get(v)
     if b == "both teams score":
         return {"yes": "btts_yes", "no": "btts_no"}.get(v)
+    if b in ("exact score", "correct score"):
+        g = _AF_CS.match(v)
+        if g:
+            return f"cs_{int(g.group(1))}_{int(g.group(2))}"
+        return None
     g = _AF_OU.match(v)
     if g:
         side, line = g.group(1), g.group(2)
+        # Half lines only: an integer line ("Over 10" corners) is a push/void at
+        # the bookmaker but a straight win/loss in our settlement, so pricing it
+        # would misstate the bet.
+        if float(line) * 2 % 2 != 1:
+            return None
         if b == "goals over/under":
             return f"{side}_{line}"
         if b == "goals over/under first half":
             return f"fh_{side}_{line}"
-        if b == "corners over under":
+        if b in _AF_CORNERS:
             return f"corners_{side}_{line}"
-        if b in ("total - home", "home corners over/under"):
-            return f"home_{side}_{line}" if b == "total - home" else None
+        if b == "total - home":
+            return f"home_{side}_{line}"
         if b == "total - away":
             return f"away_{side}_{line}"
-        if "card" in b:
+        # Only the MATCH total — "Home Team Total Cards" is a different bet and
+        # used to be mislabelled as the match line by a loose "card in b" test.
+        if b in ("cards over/under", "cards over under", "total cards"):
             return f"cards_{side}_{line}"
     if b == "asian handicap":
         g = _AF_HCP.match(v)
@@ -955,7 +1008,8 @@ async def pick_odds_for_fixture(fixture_id: str) -> dict:
                     continue
                 for bet in bk.get("bets") or []:
                     for val in bet.get("values") or []:
-                        pick = _af_pick(bet.get("name"), val.get("value"))
+                        pick = _af_pick(bet.get("name"), val.get("value")) \
+                            or _af_player_pick(bet.get("name"), val.get("value"))
                         if not pick:
                             continue
                         try:

@@ -462,13 +462,15 @@ async def match_odds(match_id: str, user=Depends(current_user_optional)):
 async def specific_bets(match_id: str):
     """Specific Bets payload — separate deterministic engine, cached 30 min."""
     import apifootball as _af
+    import rapid_books as _rb
     import specific_bets as sb
 
-    ck = f"sb_out_{match_id}"
+    # Keyed by the odds snapshot in play: when prices are refreshed, the whole
+    # payload (model %, market %, edge, value) is recalculated, never reused.
+    ck = f"sb_out_{match_id}_{await _rb.odds_version()}"
     hit = _af._c_get(ck)
     if hit is not None:
         return hit
-
     m = None
     try:
         m = await fsl_get_match_detail(match_id)
@@ -502,7 +504,6 @@ async def specific_bets(match_id: str):
     h2h["book"] = best_book
 
     _val = (m or {}).get("value") or {}
-    import rapid_books as _rb
     _po = await _rb.pick_prices(((m or {}).get("home") or {}).get("name") or "",
                                 ((m or {}).get("away") or {}).get("name") or "")
     # The /odds response API-Football already serves for this fixture carries
