@@ -509,9 +509,10 @@ async def odds_version() -> str:
             at = None
         if at:
             ats.append(int(float(at)))
-    # The API-Football per-fixture odds sit on a 30-minute cache, so bucket time
-    # at the same resolution — a newer price set always gets a new key.
-    return f"{max(ats) if ats else 0}_{int(time.time() // 1800)}"
+    # The API-Football per-fixture odds sit on a 1-hour cache, so bucket time at
+    # the same resolution — a newer price set always gets a new key, without
+    # rebuilding (and re-fetching 40 fixtures) more often than prices change.
+    return f"{max(ats) if ats else 0}_{int(time.time() // 3600)}"
 
 
 async def quota_status() -> list:

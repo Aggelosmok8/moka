@@ -46,6 +46,7 @@ export default function MatchesPage() {
   const { role, loading: entLoading } = useEntitlements();
   const isPro = role === "pro";
   const [entries, setEntries] = useState([]);
+  const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(true);
   // Filters initialise from the URL so returning via Back restores them (#15).
   const [fLeague, setFLeague] = useState(params.get("league") || "");
@@ -74,7 +75,11 @@ export default function MatchesPage() {
     let active = true;
     setLoading(true);
     fetchValueMatches()
-      .then((d) => active && setEntries(adaptValueMatches(d)))
+      .then((d) => {
+        if (!active) return;
+        setEntries(adaptValueMatches(d));
+        setNotice(d?.notice || "");
+      })
       // Keep the previous list on a failed/limited refresh instead of emptying the page.
       .catch(() => {})
       .finally(() => active && setLoading(false));
@@ -246,7 +251,7 @@ export default function MatchesPage() {
           <Skel />
         ) : upcoming.length === 0 && liveFiltered.length === 0 ? (
           <div className="text-center py-16 text-zinc-400" data-testid="matches-empty">
-            {hasFilters ? "No matches match your filters." : "No matches in this category right now."}
+            {hasFilters ? "No matches match your filters." : (notice || "No matches in this category right now.")}
           </div>
         ) : (
           <>

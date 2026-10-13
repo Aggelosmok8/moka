@@ -11,6 +11,7 @@ import time as _time
 import datetime as _dt
 import logging
 import re
+import json
 import unicodedata
 import httpx
 import mockdata
@@ -39,7 +40,49 @@ BASKETBALL_SEASON = "2023-2024"
 # catalogue (~170 fixtures) having its Specific Bets built in one day is roughly
 # 1,900 calls. 5,000 leaves headroom and is still well under the Pro 7,500/day.
 MAX_CALLS = int(os.environ.get("API_FOOTBALL_MAX_CALLS", "5000"))
-_usage = {"date": None, "count": 0}
+_usage = {"date": None, "count": 0, "synced": False, "flushed": 0}
+
+
+def _usage_db():
+    from database import Database
+    return Database().odds_cache
+
+
+async def _sync_usage():
+    """Pull today's count from the DB once per process. The counter used to live
+    only in memory, so every restart and every environment (preview / preprod /
+    prod share one key) started from zero — which is how a whole day's quota got
+    spent without the ceiling ever noticing."""
+    today = _dt.date.today().isoformat()
+    if _usage["synced"] and _usage["date"] == today:
+        return
+    _usage["date"], _usage["synced"], _usage["flushed"] = today, True, 0
+    try:
+        row = await _usage_db().find_one({"slug": "af_usage"})
+        data = (row or {}).get("data")
+        if isinstance(data, str):
+            data = json.loads(data)
+        if (data or {}).get("date") == today:
+            _usage["count"] = max(_usage["count"], int(data.get("count") or 0))
+            _usage["flushed"] = _usage["count"]
+        else:
+            _usage["count"] = 0
+    except Exception as e:
+        logger.warning("api-football usage sync: %s", type(e).__name__)
+
+
+async def _flush_usage(force: bool = False):
+    if not force and _usage["count"] - _usage["flushed"] < 10:
+        return
+    _usage["flushed"] = _usage["count"]
+    try:
+        await _usage_db().update_one(
+            {"slug": "af_usage"},
+            {"$set": {"data": json.dumps({"date": _usage["date"], "count": _usage["count"]}),
+                      "fetched_at": str(_dt.datetime.now(_dt.timezone.utc).timestamp()),
+                      "month": "", "calls": _usage["count"]}}, upsert=True)
+    except Exception as e:
+        logger.warning("api-football usage flush: %s", type(e).__name__)
 
 
 def _bump_usage() -> int:
@@ -56,7 +99,8 @@ def _bump_usage() -> int:
 
 
 def usage() -> dict:
-    return {"date": _usage["date"], "count": _usage["count"], "max": MAX_CALLS}
+    return {"date": _usage["date"], "count": _usage["count"], "max": MAX_CALLS,
+            "exhausted": _usage["count"] >= MAX_CALLS}
 
 # slug -> catalog entry. Verified league ids against api-sports.io.
 CATALOG = {
@@ -161,12 +205,22 @@ async def _get(base: str, path: str, params: dict) -> dict:
     key = _key()
     if not key:
         raise RuntimeError("API_FOOTBALL_KEY not configured")
+    await _sync_usage()
     n = _bump_usage()
     logger.info("[api-football] call #%d/%d GET %s%s %s", n, MAX_CALLS, base, path, params)
     async with httpx.AsyncClient(timeout=25, headers={"x-apisports-key": key}) as c:
         r = await c.get(f"{base}{path}", params=params)
+    await _flush_usage()
     r.raise_for_status()
-    return r.json()
+    data = r.json()
+    if "request" in str(((data or {}).get("errors") or {})):
+        # The provider says the day's quota is gone: stop the remaining ~140
+        # calls of a cold build from firing into the wall, and let the callers
+        # fall back to the last good snapshot.
+        _usage["count"] = max(_usage["count"], MAX_CALLS)
+        await _flush_usage(force=True)
+        logger.warning("api-football: provider reports daily limit reached — serving cached data")
+    return data
 
 
 def _form_list(form_str):
@@ -1026,7 +1080,9 @@ async def pick_odds_for_fixture(fixture_id: str) -> dict:
         logger.warning("apifootball.pick_odds_for_fixture(%s): %s", fid, e)
         _c_set(ck, {}, ttl=120)
         return {}
-    _c_set(ck, out, ttl=1800 if out else 300)
+    # 1h: a LION-ticket rebuild touches up to 40 fixtures, so a shorter window
+    # here is the single biggest consumer of the daily quota.
+    _c_set(ck, out, ttl=3600 if out else 300)
     return out
 
 

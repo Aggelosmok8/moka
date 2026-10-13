@@ -273,6 +273,35 @@ async def build_live_matches() -> list:
         return await _do_build_live_matches()
 
 
+async def _save_snapshot(matches: list):
+    """Keep the last good match list in the DB. In-memory stale copies die with
+    the pod, which is exactly why a fresh deploy (or an API-Football daily-quota
+    block) showed an empty Matches page."""
+    try:
+        from database import Database
+        import json as _json
+        await Database().odds_cache.update_one(
+            {"slug": "live_matches"},
+            {"$set": {"data": _json.dumps(matches), "fetched_at": str(time.time()),
+                      "month": "", "calls": 0}}, upsert=True)
+    except Exception as e:
+        logger.warning("live snapshot save: %s", type(e).__name__)
+
+
+async def _load_snapshot() -> list:
+    try:
+        from database import Database
+        import json as _json
+        row = await Database().odds_cache.find_one({"slug": "live_matches"})
+        data = (row or {}).get("data")
+        if isinstance(data, str):
+            data = _json.loads(data)
+        return data if isinstance(data, list) else []
+    except Exception as e:
+        logger.warning("live snapshot load: %s", type(e).__name__)
+        return []
+
+
 async def _do_build_live_matches() -> list:
     # Build all leagues concurrently so a cold cache loads in a few seconds
     # instead of ~1min (per-league calls are independent; each is still cached).
@@ -296,10 +325,13 @@ async def _do_build_live_matches() -> list:
     if matches:
         _cache_set("live_matches", matches, MATCHES_TTL)
         _cache_set("live_matches_last", matches, 12 * 3600)  # stale fallback
+        await _save_snapshot(matches)
         return matches
     # Build produced nothing (quota exhausted / API errors / cold-start race).
     # Serve the last known-good set instead of an empty page, and retry soon.
     stale = _cache_get("live_matches_last")
+    if stale is None:
+        stale = await _load_snapshot() or None   # survives restarts and redeploys
     if stale is not None:
         _cache_set("live_matches", stale, 60)
         return stale

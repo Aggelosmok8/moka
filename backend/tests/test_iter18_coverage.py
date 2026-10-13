@@ -245,7 +245,7 @@ def test_lion_tickets_cache_and_parlay(hdr):
 
 def test_odds_version_bucket():
     """rapid_books.odds_version() must be a non-empty string that embeds the
-    30-min time bucket so cache keys roll over automatically."""
+    1-hour time bucket so cache keys roll over automatically."""
     import asyncio, sys, importlib
     sys.path.insert(0, "/app/backend")
     rb = importlib.import_module("rapid_books")
@@ -255,5 +255,5 @@ def test_odds_version_bucket():
     # Must contain two parts separated by _ (snapshot_at _ bucket)
     parts = v.split("_")
     assert len(parts) == 2 and parts[1].isdigit(), f"unexpected odds_version shape: {v!r}"
-    expected_bucket = int(time.time() // 1800)
+    expected_bucket = int(time.time() // 3600)
     assert abs(int(parts[1]) - expected_bucket) <= 1
