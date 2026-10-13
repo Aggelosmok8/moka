@@ -870,14 +870,14 @@ async def fixtures_for_league(slug: str) -> dict:
 
 
 
-# Reputable bookmakers we are willing to surface + redirect to. Anything not
-# matching (grey-market / blocked-in-Greece operators) is dropped from odds.
+# Only operators that hold a Greek (ΕΕΕΠ/HGC) licence are surfaced: anything
+# else — Betano, Unibet, bet365.com, William Hill, BetVictor, Betway, Pinnacle,
+# 1xBet… — serves a Greek visitor a "not available in your country" page, so its
+# odds are useless to our users and are dropped from the feed entirely.
 APPROVED_BOOKMAKERS = (
-    "bet365", "betano", "bwin", "unibet", "betsson", "netbet", "888sport",
-    "888 sport", "betway", "betvictor", "bet victor", "interwetten",
-    "william hill", "coolbet", "nordicbet", "10bet", "leovegas",
-    # Greek-market operators (shown when the provider actually returns them).
-    "stoiximan", "novibet", "fonbet", "pamestoixima", "pame stoixima",
+    "stoiximan", "novibet", "bwin", "pamestoixima", "pame stoixima", "opap",
+    "elabet", "bet365", "betsson", "netbet", "interwetten", "winmasters",
+    "fonbet", "superbet", "vistabet", "sportingbet", "efbet",
 )
 
 
@@ -885,7 +885,10 @@ def _bookmaker_approved(name: str) -> bool:
     if not name:
         return False
     key = name.strip().lower()
-    return any(a in key or key in a for a in APPROVED_BOOKMAKERS)
+    # Exact-ish match only: a substring test would let "Betano" through on
+    # "bet365" and "Sportingbet"/"Betsafe" through on "sportingbet".
+    return any(key == a or key.replace(" ", "") == a.replace(" ", "")
+               or key.replace(".gr", "").strip() == a for a in APPROVED_BOOKMAKERS)
 
 
 _AF_OU = re.compile(r"^(over|under)\s+([\d.]+)$")

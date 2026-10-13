@@ -66,7 +66,9 @@ def _row(idx: dict, book: str, home: str, away: str, o: dict, updated):
         {"bookmaker": book, "odds": o, "source": "rapidapi", "updatedAt": updated})
 
 
-_OU = re.compile(r"^(over|under)\s*([\d.]+)?$", re.I)
+# bwin writes European decimals ("Over 1,5"), so the comma has to be accepted
+# here — dropping it silently cost us EVERY bwin goals line.
+_OU = re.compile(r"^(over|under)\s*([\d.,]+)?$", re.I)
 _LINE_IN_NAME = re.compile(r"(\d+(?:\.\d+)?)")
 
 
@@ -150,7 +152,7 @@ def _pick_id(mkt: str, sel: str, line=None, home: str = "", away: str = ""):
         if "goal" in m or "total" in m or "over" in m or "under" in m:
             return f"{side}_{ln}"
         return None
-    if "both teams" in m or "btts" in m or "goal/no goal" in m:
+    if "both teams" in m or "btts" in m or "goal/no goal" in m or "gg/ng" in m:
         if s in ("yes", "goal", "gg", "both teams to score"):
             return "btts_yes"
         if s in ("no", "no goal", "ng"):
@@ -177,33 +179,42 @@ def _extra(pidx: dict, key: str, book: str, mkt: str, sel: str, price, line=None
 # --- One parser per provider (their JSON shapes have nothing in common) -----
 
 def _p_stoiximan(payload, book, idx, pidx):
+    """The `_soccer` file carries every market (goals, 1st-half goals, double
+    chance, BTTS); the older `_soccer_leagues` file only ever had Match Result.
+    Both shapes are accepted. Team names come from `participants`, so a market
+    listed BEFORE the 1X2 one no longer loses its fixture key."""
     up = payload.get("updated_at")
-    for blk in payload.get("data") or []:
-        for b in ((blk or {}).get("data") or {}).get("blocks") or []:
-            for ev in b.get("events") or []:
-                key = ""
-                h = a = ""
-                for mkt in ev.get("markets") or []:
+    data = payload.get("data")
+    blocks = []
+    if isinstance(data, dict):
+        blocks = ((data.get("data") or {}).get("blocks")) or []
+    else:
+        for blk in data or []:
+            blocks.extend((((blk or {}).get("data")) or {}).get("blocks") or [])
+    for b in blocks:
+        for ev in b.get("events") or []:
+            ps = ev.get("participants") or []
+            h = (ps[0] or {}).get("name") if len(ps) > 1 else None
+            a = (ps[1] or {}).get("name") if len(ps) > 1 else None
+            if not (h and a) or _esports(h) or _esports(a):
+                continue
+            key = f"{_norm(h)}|{_norm(a)}"
+            for mkt in ev.get("markets") or []:
+                if mkt.get("type") in ("MRES", "MR12"):
                     sels = {x.get("name"): x for x in mkt.get("selections") or []}
-                    if mkt.get("type") == "MRES":
-                        h = (sels.get("1") or {}).get("fullName")
-                        a = (sels.get("2") or {}).get("fullName")
-                        if _esports(h) or _esports(a):
-                            continue
-                        key = f"{_norm(h)}|{_norm(a)}" if h and a else key
-                        _row(idx, book, h, a,
-                             {k: _price((sels.get(n) or {}).get("price"))
-                              for k, n in (("home", "1"), ("draw", "X"), ("away", "2"))}, up)
-                        continue
-                    for x in mkt.get("selections") or []:
-                        _extra(pidx, key, book, mkt.get("name") or "",
-                               x.get("name") or "", x.get("price"), mkt.get("handicap"),
-                               h or "", a or "")
+                    _row(idx, book, h, a,
+                         {k: _price((sels.get(n) or {}).get("price"))
+                          for k, n in (("home", "1"), ("draw", "X"), ("away", "2"))}, up)
+                    continue
+                for x in mkt.get("selections") or []:
+                    _extra(pidx, key, book, mkt.get("name") or "",
+                           x.get("name") or "", x.get("price"), mkt.get("handicap"), h, a)
 
 
 _NOVI_MKT = {"SOCCER_UNDER_OVER": "Goals Over/Under",
              "SOCCER_BOTH_TEAMS_TO_SCORE": "Both Teams To Score",
              "SOCCER_CORNERS_UNDER_OVER": "Corners Over/Under",
+             "SOCCER_POINT_CARDS_UNDER_OVER": "Cards Over/Under",
              "SOCCER_FIRST_HALF_UNDER_OVER": "1st Half Goals Over/Under",
              "SOCCER_DOUBLE_CHANCE": "Double Chance",
              "SOCCER_FIRST_HALF_RESULT": "Half Time Result"}
@@ -350,7 +361,7 @@ def _p_elabet(payload, book, idx, pidx):
 # Superbet is excluded on purpose: its snapshot is ~476 MB per fetch.
 # Fonbet is excluded: the feed is an opaque versioned packet, not an odds list.
 PROVIDERS = {
-    "stoiximan":    ("Stoiximan", "stoiximan-odds", "site_pregame_stoiximan_soccer_leagues.json", _p_stoiximan),
+    "stoiximan":    ("Stoiximan", "stoiximan-odds", "site_pregame_stoiximan_soccer.json", _p_stoiximan),
     "novibet":      ("Novibet", "novibet-odds", "site_pregame_novibet_soccer.json", _p_novibet),
     "bwin":         ("bwin", "bwin-odds1", "site_pregame_bwin_soccer.json", _p_bwin),
     "pamestoixima": ("Pame Stoixima", "allwyn-odds", "site_pregame_opapstore_soccer.json", _p_opap),
