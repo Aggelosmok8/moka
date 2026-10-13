@@ -874,3 +874,23 @@ All tested (curl + isolated + screenshots). No new deps, no DB migration, no UI 
 - The logs showed FOUR concurrent fetches of the same Elabet snapshot (each logged "call 1/150"), i.e. a thundering herd wasting quota. Added a per-provider `asyncio.Lock` (`_lock`/`_refresh_index`): the losers of the race re-check the cache instead of refetching.
 - Budget now: Greek feeds ~120 calls/month each (6h TTL, ceiling 150, limit 200). API-Football ~1 call per distinct fixture per 30 min; ~1,200 used of 5,000 today, Pro plan allows 7,500.
 - testing_agent iteration_16: backend 100%, frontend 100%, zero issues, all seven acceptance criteria pass, `retest_needed: false`.
+
+## 2026-10-13 Greek-licensed books ONLY + the Greek feeds' real market coverage
+User: "careful - we had deliberately removed some bookmakers, because in Greece they send you to a page saying you can't use them. The point is to bring ALL the odds from the Greek ones, and why do their sites have odds while we don't."
+### 1) Only EEEP/HGC-licensed operators are surfaced
+- Yesterday's merge widened `apifootball.APPROVED_BOOKMAKERS` to "reputable" books, which put Betano, Unibet, William Hill, BetVictor, Betway, 888sport, Coolbet, NordicBet, 10bet, LeoVegas back on screen - every one of those geo-blocks a Greek visitor, which is exactly why they had been removed before.
+- `APPROVED_BOOKMAKERS` is now the Greek licence list only (stoiximan, novibet, bwin, pame stoixima/opap, elabet, bet365, betsson, netbet, interwetten, winmasters, fonbet, superbet, vistabet, sportingbet, efbet) and `_bookmaker_approved()` matches exactly (the old substring test was what let near-misses through).
+- `frontend/src/lib/bookmakers.js` rewritten: 17 entries, all pointing at the operator's **.gr** site (bet365.gr, not bet365.com). `bookmakerUrl()` returns null for anything else, so an unlicensed name can never render a link; `isGreekBook()` is now simply "has a link".
+- Verified on a live fixture: 76 odds links on Specific Bets, 150+ across pages, ALL on .gr hosts, zero non-Greek links anywhere (value-matches, specific-bets, lion-tickets, Match Analysis).
+### 2) Why their sites had odds and we didn't - four real parser bugs
+Audited the 5 Greek feeds by saving one raw snapshot each (`backend/tools/raw_books_audit.py`, `tools/reparse_books.py` re-parse them with ZERO further calls):
+- **Stoiximan contributed nothing but 1X2** (0 extra picks!). We were reading `site_pregame_stoiximan_soccer_leagues.json`, which only carries Match Result. `GET /v1/files` showed `site_pregame_stoiximan_soccer.json` - same quota cost, with goals O/U, 1st-half goals, double chance, BTTS. Switched file and rewrote `_p_stoiximan` to take team names from `participants` (the old code only learned them inside the 1X2 market, so any market listed before it lost its fixture key). 0 -> 2,135 picks.
+- **Every bwin goals line was dropped**: bwin writes European decimals ("Over 1,5") and `_OU` only accepted a dot. One character in the regex. bwin goals 0 -> 5,187 picks.
+- **Elabet BTTS was almost absent**: the market is called "GG/NG" with selections GG/NG, which `_pick_id` didn't know. 58 -> 1,616 picks.
+- **Novibet cards market unwired**: added `SOCCER_POINT_CARDS_UNDER_OVER` -> Cards Over/Under (lines 3.5/4.5 = card count).
+- Picks parsed per snapshot: stoiximan 0->2,135, bwin 3,681->8,746, elabet 3,955->8,405, novibet 10,923->11,228, pamestoixima 8,498->8,764. Total ~27k -> ~39k.
+- Caches were re-seeded from the saved raw payloads, so the re-parse cost **0 extra provider calls** (month usage still 2-4 of 150 per provider).
+- Checked the other four hosts' `/v1/files`: they already use the only soccer pregame file, nothing better to switch to. Correct Score / Any-Time Score / Fouls / Offsides / GK Saves stay unpriced - no feed carries them.
+- Live result: Specific Bets 70/116 priced on Millwall-Swansea with Greek books supplying most rows (Pame Stoixima 21, bwin 11, Stoiximan 6, Novibet 5, Elabet 4; bet365 fills 23 markets the Greek snapshots don't price). LION Tickets 37-38, up to 6 legs, 32 with a one-bookmaker parlay.
+- New regression test `backend/tests/test_greek_books_coverage.py` (comma decimals, GG/NG, novibet cards, stoiximan market-order, licensed-only allowlist). Suite: **80 passed**.
+- testing_agent iteration_17: backend 100% (84/84), frontend 100%, zero issues, `retest_needed: false`.
