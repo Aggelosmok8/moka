@@ -505,9 +505,13 @@ async def specific_bets(match_id: str):
     import rapid_books as _rb
     _po = await _rb.pick_prices(((m or {}).get("home") or {}).get("name") or "",
                                 ((m or {}).get("away") or {}).get("name") or "")
+    # The /odds response API-Football already serves for this fixture carries
+    # every market, not just 1X2 — merge it in and keep the better price.
+    _af_po = await _af.pick_odds_for_fixture(digits[-1])
+    _rb.merge_prices(_po, _af_po)
     out = await sb.build(digits[-1], h2h, _val.get("pick"),
                          _val.get("prediction") or _val.get("probabilities"), _po)
-    out["pricesAt"] = await _rb.snapshot_at()
+    out["pricesAt"] = max(await _rb.snapshot_at(), _time.time() - 1800 if _af_po else 0)
     out["match"] = {
         "id": match_id,
         "home": (m or {}).get("home", {}).get("name") or out.get("home"),

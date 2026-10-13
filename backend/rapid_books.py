@@ -8,6 +8,7 @@ through the existing path.
 
 Inert unless RAPIDAPI_ODDS_KEY is set. Per-provider opt-out via RAPID_BOOKS.
 """
+import asyncio
 import json
 import logging
 import os
@@ -27,7 +28,16 @@ CACHE_TTL = int(os.environ.get("RAPID_BOOKS_TTL_HOURS", "6")) * 3600
 MAX_MONTHLY = int(os.environ.get("RAPID_BOOKS_MAX_MONTHLY", "150"))
 CACHE_DIR = Path("/tmp/rapid_books")
 
-_mem: dict = {}                              # slug -> {"idx":..., "at":...}
+_mem: dict = {}
+_locks: dict = {}
+
+
+def _lock(slug: str) -> asyncio.Lock:
+    """One fetch per provider at a time: four concurrent requests for the same
+    snapshot used to burn four calls of the monthly quota."""
+    if slug not in _locks:
+        _locks[slug] = asyncio.Lock()
+    return _locks[slug]                              # slug -> {"idx":..., "at":...}
 _usage: dict = {}                            # slug -> {"month":..., "count":...}
 
 
@@ -449,6 +459,20 @@ async def _quota_left(slug: str) -> int:
     return MAX_MONTHLY - u["count"]
 
 
+def merge_prices(base: dict, extra: dict) -> dict:
+    """Fold a second price source into `base`, keeping the better price per pick
+    and the union of per-bookmaker prices (the parlay check needs those)."""
+    for pick, slot in (extra or {}).items():
+        cur = base.get(pick)
+        if not cur:
+            base[pick] = slot
+            continue
+        cur.setdefault("books", {}).update(slot.get("books") or {})
+        if (slot.get("odds") or 0) > (cur.get("odds") or 0):
+            cur.update(odds=slot["odds"], bookmaker=slot["bookmaker"])
+    return base
+
+
 async def snapshot_at() -> float:
     """Unix time of the OLDEST snapshot in play — what the UI dates prices by."""
     ats = []
@@ -479,6 +503,14 @@ async def quota_status() -> list:
 
 
 async def _provider_index(slug: str) -> dict:
+    mem = _mem.get(slug)
+    if mem and time.time() - mem["at"] < CACHE_TTL:
+        return mem
+    async with _lock(slug):                 # the loser of the race re-checks
+        return await _refresh_index(slug)
+
+
+async def _refresh_index(slug: str) -> dict:
     book, host, file, parser = PROVIDERS[slug]
     now = time.time()
     mem = _mem.get(slug)

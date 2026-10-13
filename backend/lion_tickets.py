@@ -10,6 +10,7 @@ import logging
 import math
 from datetime import datetime, timezone
 
+import apifootball as af
 import live_values
 import rapid_books as rb
 
@@ -215,6 +216,10 @@ async def build_tickets() -> list:
             continue
         try:
             prices = await rb.pick_prices(m["home"]["name"], m["away"]["name"])
+            # API-Football already prices this fixture across every market and
+            # every approved book, on a 30-minute cache: richer AND fresher than
+            # the 6-hourly Greek snapshots.
+            prices = rb.merge_prices(prices, await af.pick_odds_for_fixture(m["id"]))
         except Exception:
             prices = {}
         if not prices:

@@ -10,6 +10,7 @@ import os
 import time as _time
 import datetime as _dt
 import logging
+import re
 import httpx
 import mockdata
 
@@ -885,6 +886,91 @@ def _bookmaker_approved(name: str) -> bool:
         return False
     key = name.strip().lower()
     return any(a in key or key in a for a in APPROVED_BOOKMAKERS)
+
+
+_AF_OU = re.compile(r"^(over|under)\s+([\d.]+)$")
+_AF_HCP = re.compile(r"^(home|away)\s*([+-][\d.]+)$")
+
+
+def _af_pick(bet, value):
+    """An API-Football bet name + selection -> one of our Specific Bets pick ids.
+
+    The /odds response we already pay for carries dozens of markets per
+    bookmaker; we used to keep only "Match Winner" and throw the rest away.
+    """
+    b, v = str(bet or "").strip().lower(), str(value or "").strip().lower()
+    if not b or not v:
+        return None
+    if b == "match winner":
+        return v if v in ("home", "draw", "away") else None
+    if b == "first half winner":
+        return {"home": "ht_home", "draw": "ht_draw", "away": "ht_away"}.get(v)
+    if b == "double chance":
+        return {"home/draw": "home_or_draw", "home/away": "home_or_away",
+                "draw/away": "away_or_draw"}.get(v)
+    if b == "both teams score":
+        return {"yes": "btts_yes", "no": "btts_no"}.get(v)
+    g = _AF_OU.match(v)
+    if g:
+        side, line = g.group(1), g.group(2)
+        if b == "goals over/under":
+            return f"{side}_{line}"
+        if b == "goals over/under first half":
+            return f"fh_{side}_{line}"
+        if b == "corners over under":
+            return f"corners_{side}_{line}"
+        if b in ("total - home", "home corners over/under"):
+            return f"home_{side}_{line}" if b == "total - home" else None
+        if b == "total - away":
+            return f"away_{side}_{line}"
+        if "card" in b:
+            return f"cards_{side}_{line}"
+    if b == "asian handicap":
+        g = _AF_HCP.match(v)
+        if g and abs(float(g.group(2))) * 2 % 2 == 1:   # half lines only
+            return f"{g.group(1)}_hcp_{float(g.group(2)):g}"
+    return None
+
+
+async def pick_odds_for_fixture(fixture_id: str) -> dict:
+    """pick id -> {odds, bookmaker, books} for ONE fixture, straight from the
+    bookmakers API-Football already gives us (1 call, cached 30 min)."""
+    fid = "".join(ch for ch in str(fixture_id) if ch.isdigit())
+    if not fid:
+        return {}
+    ck = f"afpicks_{fid}"
+    hit = _c_get(ck)
+    if hit is not None:
+        return hit
+    out = {}
+    try:
+        r = await _get(FOOTBALL_BASE, "/odds", {"fixture": fid})
+        for e in r.get("response") or []:
+            for bk in e.get("bookmakers") or []:
+                name = bk.get("name")
+                if not _bookmaker_approved(name):
+                    continue
+                for bet in bk.get("bets") or []:
+                    for val in bet.get("values") or []:
+                        pick = _af_pick(bet.get("name"), val.get("value"))
+                        if not pick:
+                            continue
+                        try:
+                            price = float(val.get("odd") or 0)
+                        except (TypeError, ValueError):
+                            continue
+                        if not 1.01 <= price <= 101.0:
+                            continue
+                        slot = out.setdefault(pick, {"odds": 0.0, "bookmaker": "", "books": {}})
+                        slot["books"][name] = price
+                        if price > slot["odds"]:
+                            slot.update(odds=price, bookmaker=name)
+    except Exception as e:
+        logger.warning("apifootball.pick_odds_for_fixture(%s): %s", fid, e)
+        _c_set(ck, {}, ttl=120)
+        return {}
+    _c_set(ck, out, ttl=1800 if out else 300)
+    return out
 
 
 def _mw_entries(bookmakers: list) -> list:
