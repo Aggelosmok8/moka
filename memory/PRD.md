@@ -921,3 +921,21 @@ User: "in no match do we get odds for correct score, goalkeeper saves, offsides,
 - `/api/value-matches` returns `source: "quota"` + a `notice`, and MatchesPage shows it instead of the generic "No matches in this category right now."
 - Burn reduction: per-fixture odds cache 30min -> **1h** and `odds_version()` bucket 30min -> **1h**. A LION-ticket rebuild touches up to 40 fixtures, so this halves the single biggest quota consumer (~1,900 -> ~960 calls/day) while still recalculating everything the moment new prices land.
 - Unit suite green (60 passed); the data-dependent tests (tickets/value-matches/specific-bets) can only pass once the provider quota resets.
+
+## 2026-10-14 Corners/cards now fully priced + the real reason nothing was priced + quota plan
+User (2nd report): "I still see no odds on fouls, corners, cards, score at any time, offsides, goalkeeper saves. Fix it and tell me if there is a plan so we don't exceed the odds calls — I also have pre-prod for testing."
+### Why NOTHING was priced yesterday evening
+- Our own circuit breaker, added that afternoon, matched the substring `"request"` in the error payload — which also matches the **per-minute** `rateLimit` message ("Too many requests per minute"). One transient minute-limit hit therefore marked the WHOLE day as exhausted (`count` forced to 5,000) and every panel/ticket went blank while the provider still had 5,500 calls left.
+- Fixed: the breaker only fires on the genuine daily error (`errors.requests` containing "limit for the day"/"daily").
+- The counter is no longer a guess at all: `_sync_usage()` now reads the provider's own **`/status`** (free, authoritative, already aggregates preview + pre-prod + prod on the shared key) at most every 10 minutes, caches it in `odds_cache.slug='af_usage'`, and `_budget()` = min(our cap, plan `limit_day`). Verified: plan Pro, 7,500/day.
+### Why corners/cards looked empty even when priced
+- A bookmaker posts exactly ONE corners line (e.g. 9.5) and ONE cards line (4.5) per fixture, while our panels listed 4 corner lines and 3 card lines -> 2 priced rows out of 8 and 2 out of 6, i.e. a column of dashes that reads as "no odds".
+- `_lines()` now returns **only the lines the books actually quote** (falling back to the model lines, with the note, when the market isn't quoted at all) and the Cards panel was routed through it. Result on Union Berlin-Dortmund: Corners **2/2**, Cards **2/2**, Handicap 8/8, Correct Score 8/8, Goals 17/18, Team Goals 11/11, players 57/105.
+- Fouls, offsides, goalkeeper saves and "score at any time" are quoted by NO bookmaker anywhere in the feed (164 market names x every book, plus all 5 Greek provider files). Those panels keep LION's own probability and now say so explicitly.
+### Quota plan (shared key: preview + pre-prod + prod, Pro = 7,500/day, our cap 5,000)
+- **A restart or redeploy now costs 0 calls** (was ~300-600): `build_live_matches()` serves the DB snapshot on a cold cache, and accepts a snapshot up to 6h old during the first 10 minutes of a process. This was the single biggest leak with two environments running.
+- `MATCHES_TTL` 2h -> **4h** (~6 -> 4 rebuilds/day).
+- Per-fixture odds cache 30min -> **1h**; `odds_version()` bucket 30min -> **1h** (recalculation still happens the moment new prices land).
+- LION Tickets fetch API-Football odds only for the **25 best-valued** matches instead of all 40 (-15 calls per rebuild, tickets stayed rich: 30 tickets, up to 6 legs, 25 with a parlay).
+- Expected steady state: ~600-900/day for the match list, <=600/day for tickets, ~5 calls per Specific Bets fixture (6h cache) -> roughly 1,500-2,500/day, leaving 5,000+ of the plan free for pre-prod testing.
+- Suite: **92 passed**. testing_agent iteration_19: backend 100% (33/33), frontend 100%, zero issues (75 .gr links on Specific Bets, 111 across 34 ticket cards, 4 explanatory notes, Matches page populated, restart confirmed to make no provider calls).
