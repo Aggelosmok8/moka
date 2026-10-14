@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft, Sparkles, ShieldAlert, ChevronDown, Users, Loader2, Flag, Target,
   Hand, AlertTriangle, SquareStack, Clock, Hash, Shuffle, Scale, Repeat, Goal, Move, ExternalLink,
+  Crosshair,
 } from "lucide-react";
 import Header from "../components/Header";
 import { PriceStamp } from "../components/PriceStamp";
@@ -14,7 +15,7 @@ import { toast } from "sonner";
 const ICONS = {
   goals: Goal, btts: Repeat, team_goals: Target, double_chance: Shuffle, handicap: Scale,
   corners: Flag, cards: SquareStack, fouls: AlertTriangle, offsides: Move, saves: Hand,
-  first_half: Clock, correct_score: Hash, score_anytime: Hash,
+  first_half: Clock, correct_score: Hash, score_anytime: Hash, shots: Crosshair,
 };
 
 const fmt = (iso) => (iso ? new Date(iso).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" }) : "");

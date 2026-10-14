@@ -512,6 +512,10 @@ async def specific_bets(match_id: str):
     _rb.merge_prices(_po, _af_po)
     # Sportmonks is the only feed quoting the extra lines (alternative corners,
     # card counts, player bookings/assists) — one call per fixture, cached 1h.
+    import superbet_odds as _sb
+    _rb.merge_prices(_po, await _sb.pick_prices(
+        ((m or {}).get("home") or {}).get("name") or "",
+        ((m or {}).get("away") or {}).get("name") or ""))
     import sportmonks_odds as _sm
     _rb.merge_prices(_po, await _sm.pick_odds(
         ((m or {}).get("home") or {}).get("name") or "",
@@ -555,9 +559,11 @@ async def odds_quota(admin=Depends(require_admin)):
                  "perDay": (r.get("requests") or {}).get("limit_day")}
     except Exception as e:
         logger.warning("odds_quota apifootball status: %s", e)
+    import superbet_odds
     return {"providers": await rapid_books.quota_status(),
             "refreshHours": rapid_books.CACHE_TTL / 3600,
-            "apiFootball": stats}
+            "apiFootball": stats,
+            "superbet": await superbet_odds.status()}
 
 
 @api_router.get("/fsl/status")
@@ -837,6 +843,10 @@ async def on_startup():
             import live_values
             await live_values.build_live_matches()
             logger.info("Live value cache pre-warmed")
+            # Superbet's 550 MB snapshot is streamed here, after the match list
+            # exists (it is filtered against it) and never inside a request.
+            import superbet_odds
+            await superbet_odds.refresh()
         except Exception as e:
             logger.warning("live prewarm failed: %s", e)
     asyncio.create_task(_prewarm())

@@ -60,7 +60,7 @@ export const matchKey = (home, away) =>
 // player markets) — those stay pending instead of being wrongly marked lost.
 // Picks that cannot be settled from the final score alone — they need the
 // match's stat totals / goal sequence / player numbers.
-export const needsDetail = (pick) => /^(cards|corners|fouls|offsides|fh|anyt|fts|p\d+|home_fouls|away_fouls|home_saves|away_saves)_/.test(NORM(pick));
+export const needsDetail = (pick) => /^(cards|corners|fouls|offsides|saves|fh|anyt|fts|p\d+|(home|away)_(fouls|saves|corners|shots|sot))_/.test(NORM(pick));
 
 // Over/Under settlement. Whole-number lines come from the bookmaker's 3-way
 // markets (Over / Under / Exactly), so landing exactly on the line loses both
@@ -90,8 +90,11 @@ export const settleStatus = (pick, r) => {
   if ((m = p.match(/^(cards|corners|fouls|offsides)_(over|under)_([\d.]+)$/))) {
     return t ? ou(m[2], parseFloat(m[3]), Number(t[m[1]])) : null;
   }
-  if ((m = p.match(/^(home|away)_(fouls|saves)_over_([\d.]+)$/))) {
-    return t ? ou("over", parseFloat(m[3]), Number(t[`${m[2]}_${m[1]}`])) : null;
+  if ((m = p.match(/^(home|away)_(fouls|saves|corners|shots|sot)_(over|under)_([\d.]+)$/))) {
+    return t ? ou(m[3], parseFloat(m[4]), Number(t[`${m[2]}_${m[1]}`])) : null;
+  }
+  if ((m = p.match(/^saves_(over|under)_([\d.]+)$/))) {
+    return t ? ou(m[1], parseFloat(m[2]), Number(t.saves)) : null;
   }
   if ((m = p.match(/^fh_(over|under)_([\d.]+)$/))) {
     const fh = Number(r?.ht_home) + Number(r?.ht_away);

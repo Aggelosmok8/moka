@@ -614,6 +614,9 @@ async def fixture_settlement_detail(fixture_id) -> dict:
                 "fouls_home": num(h, "Fouls"), "fouls_away": num(a, "Fouls"),
                 "offsides": num(h, "Offsides") + num(a, "Offsides"),
                 "saves_home": num(h, "Goalkeeper Saves"), "saves_away": num(a, "Goalkeeper Saves"),
+                "saves": num(h, "Goalkeeper Saves") + num(a, "Goalkeeper Saves"),
+                "shots_home": num(h, "Total Shots"), "shots_away": num(a, "Total Shots"),
+                "sot_home": num(h, "Shots on Goal"), "sot_away": num(a, "Shots on Goal"),
             }
     except Exception as e:
         logger.warning("settlement stats(%s): %s", fid, e)

@@ -114,14 +114,17 @@ def test_unpriced_panels_show_note(api, fid):
         p = next(v for k, v in panels.items() if name.lower() in k.lower())
         rows = p.get("rows", [])
         assert rows, f"{fid} {name}: no rows"
-        # No row should carry odds for these panels
+        # Superbet does quote fouls / offsides / saves close to kick-off, so a
+        # panel is only required to explain itself while it has NO price at all.
         with_odds = [r for r in rows if r.get("odds")]
-        assert not with_odds, f"{fid} {name}: unexpectedly priced {len(with_odds)}/{len(rows)}"
-        # Every row must have a probability (lion/market_pct)
         missing = [r for r in rows if r.get("lion") is None and r.get("market_pct") is None]
         assert not missing, f"{fid} {name}: {len(missing)} rows missing probability"
         note = p.get("note") or ""
-        assert NOTE_SUFFIX in note, f"{fid} {name}: expected explanatory note; got {note!r}"
+        if not with_odds:
+            assert NOTE_SUFFIX in note, f"{fid} {name}: expected explanatory note; got {note!r}"
+        else:
+            assert all(r.get("bookmaker") for r in with_odds), \
+                f"{fid} {name}: priced rows without a bookmaker"
 
 
 # ---------- Player panels still priced ----------

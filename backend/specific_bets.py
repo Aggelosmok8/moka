@@ -117,7 +117,8 @@ async def _fixture_stats(team_id, last: int = 3) -> Optional[dict]:
         return hit
     out = None
     want = {"corner kicks": "corners", "fouls": "fouls", "offsides": "offsides",
-            "goalkeeper saves": "saves"}
+            "goalkeeper saves": "saves", "total shots": "shots",
+            "shots on goal": "sot"}
     try:
         d = await af._get(af.FOOTBALL_BASE, "/fixtures",
                           {"team": team_id, "last": last, "status": "FT"})
@@ -490,27 +491,42 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
         lam_corn = (hc["corners"] + ac["corners_against"]) / 2 + (ac["corners"] + hc["corners_against"]) / 2
         corners = []
         for line in _lines((8.5, 9.5, 10.5, 11.5), priced, r"^corners_over_([\d.]+)$"):
-            if abs(line - lam_corn) > 5:      # ignore the no-value far ends
+            if abs(line - lam_corn) > 4:      # ignore the no-value far ends
                 continue
             corners.append(_row("Corners", f"Over {line:g} corners", _pct(_p_over(line, lam_corn)),
                                 line=line, pick=f"corners_over_{line:g}", quality=MEDIUM))
             corners.append(_row("Corners", f"Under {line:g} corners", _pct(1 - _p_over(line, lam_corn)),
                                 line=line, pick=f"corners_under_{line:g}", quality=MEDIUM))
+        for side, st, opp, name in (("home", hc, ac, fx["home"]), ("away", ac, hc, fx["away"])):
+            lam_tc = (st["corners"] + opp["corners_against"]) / 2
+            for line in _lines((), priced, rf"^{side}_corners_over_([\d.]+)$"):
+                if abs(line - lam_tc) > 3:
+                    continue
+                corners.append(_row("Team Corners", f"{name} over {line:g} corners",
+                                    _pct(_p_over(line, lam_tc)), line=line,
+                                    pick=f"{side}_corners_over_{line:g}", quality=MEDIUM, side=side))
+                corners.append(_row("Team Corners", f"{name} under {line:g} corners",
+                                    _pct(1 - _p_over(line, lam_tc)), line=line,
+                                    pick=f"{side}_corners_under_{line:g}", quality=MEDIUM, side=side))
         game += corners
         panel("corners", "Corners", "corners", corners,
               note=f"Expected {round(lam_corn, 1)} · {sample_note}")
 
         lam_f = hc["fouls"] + ac["fouls"]
         fouls = []
-        for line in (19.5, 21.5, 23.5):
-            fouls.append(_row("Fouls", f"Over {line} total fouls", _pct(_p_over(line, lam_f)),
-                              line=line, pick=f"fouls_over_{line}", quality=MEDIUM))
-            fouls.append(_row("Fouls", f"Under {line} total fouls", _pct(1 - _p_over(line, lam_f)),
-                              line=line, pick=f"fouls_under_{line}", quality=MEDIUM))
+        for line in _lines((19.5, 21.5, 23.5), priced, r"^fouls_over_([\d.]+)$"):
+            fouls.append(_row("Fouls", f"Over {line:g} total fouls", _pct(_p_over(line, lam_f)),
+                              line=line, pick=f"fouls_over_{line:g}", quality=MEDIUM))
+            fouls.append(_row("Fouls", f"Under {line:g} total fouls", _pct(1 - _p_over(line, lam_f)),
+                              line=line, pick=f"fouls_under_{line:g}", quality=MEDIUM))
         for side, st, name in (("home", hc, fx["home"]), ("away", ac, fx["away"])):
-            for line in (9.5, 11.5):
-                fouls.append(_row("Team Fouls", f"{name} over {line} fouls", _pct(_p_over(line, st["fouls"])),
-                                  line=line, pick=f"{side}_fouls_over_{line}", quality=MEDIUM, side=side))
+            for line in _lines((9.5, 11.5), priced, rf"^{side}_fouls_over_([\d.]+)$"):
+                fouls.append(_row("Team Fouls", f"{name} over {line:g} fouls",
+                                  _pct(_p_over(line, st["fouls"])), line=line,
+                                  pick=f"{side}_fouls_over_{line:g}", quality=MEDIUM, side=side))
+                fouls.append(_row("Team Fouls", f"{name} under {line:g} fouls",
+                                  _pct(1 - _p_over(line, st["fouls"])), line=line,
+                                  pick=f"{side}_fouls_under_{line:g}", quality=MEDIUM, side=side))
         game += fouls
         panel("fouls", "Fouls", "fouls", fouls,
               note=f"Expected {round(lam_f, 1)} total · {sample_note}")
@@ -518,24 +534,53 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
         lam_off = hc["offsides"] + ac["offsides"]
         if lam_off > 0:
             offs = []
-            for line in (1.5, 2.5, 3.5):
-                offs.append(_row("Offsides", f"Over {line} offsides", _pct(_p_over(line, lam_off)),
-                                 line=line, pick=f"offsides_over_{line}", quality=MEDIUM))
-                offs.append(_row("Offsides", f"Under {line} offsides", _pct(1 - _p_over(line, lam_off)),
-                                 line=line, pick=f"offsides_under_{line}", quality=MEDIUM))
+            for line in _lines((1.5, 2.5, 3.5), priced, r"^offsides_over_([\d.]+)$"):
+                offs.append(_row("Offsides", f"Over {line:g} offsides", _pct(_p_over(line, lam_off)),
+                                 line=line, pick=f"offsides_over_{line:g}", quality=MEDIUM))
+                offs.append(_row("Offsides", f"Under {line:g} offsides", _pct(1 - _p_over(line, lam_off)),
+                                 line=line, pick=f"offsides_under_{line:g}", quality=MEDIUM))
             game += offs
             panel("offsides", "Offsides", "offsides", offs,
                   note=f"Expected {round(lam_off, 1)} · {sample_note}")
 
         saves = []
+        lam_sv = (hc.get("saves") or 0) + (ac.get("saves") or 0)
+        for line in _lines((), priced, r"^saves_over_([\d.]+)$"):
+            saves.append(_row("Goalkeeper Saves", f"Over {line:g} saves (both keepers)",
+                              _pct(_p_over(line, lam_sv)), line=line,
+                              pick=f"saves_over_{line:g}", quality=MEDIUM))
+            saves.append(_row("Goalkeeper Saves", f"Under {line:g} saves (both keepers)",
+                              _pct(1 - _p_over(line, lam_sv)), line=line,
+                              pick=f"saves_under_{line:g}", quality=MEDIUM))
         for side, st, name in (("home", hc, fx["home"]), ("away", ac, fx["away"])):
             if (st.get("saves") or 0) <= 0:
                 continue
-            for line in (1.5, 2.5, 3.5, 4.5):
-                saves.append(_row("Goalkeeper Saves", f"Over {line} saves", _pct(_p_over(line, st["saves"])),
-                                  line=line, pick=f"{side}_saves_over_{line}", quality=MEDIUM, side=side))
+            for line in _lines((1.5, 2.5, 3.5, 4.5), priced, rf"^{side}_saves_over_([\d.]+)$"):
+                saves.append(_row("Goalkeeper Saves", f"Over {line:g} saves", _pct(_p_over(line, st["saves"])),
+                                  line=line, pick=f"{side}_saves_over_{line:g}", quality=MEDIUM, side=side))
+                saves.append(_row("Goalkeeper Saves", f"Under {line:g} saves",
+                                  _pct(1 - _p_over(line, st["saves"])), line=line,
+                                  pick=f"{side}_saves_under_{line:g}", quality=MEDIUM, side=side))
         game += saves
         panel("saves", "Goalkeeper Saves", "saves", saves, split=True, note=sample_note)
+
+        # Shots — only when a bookmaker prices them (Superbet does).
+        shots = []
+        for side, st, name in (("home", hc, fx["home"]), ("away", ac, fx["away"])):
+            for kind, label in (("shots", "shots"), ("sot", "shots on target")):
+                lam_sh = st.get(kind) or 0
+                if lam_sh <= 0:
+                    continue
+                for line in _lines((), priced, rf"^{side}_{kind}_over_([\d.]+)$"):
+                    shots.append(_row("Team Shots", f"{name} over {line:g} {label}",
+                                      _pct(_p_over(line, lam_sh)), line=line,
+                                      pick=f"{side}_{kind}_over_{line:g}", quality=MEDIUM, side=side))
+                    shots.append(_row("Team Shots", f"{name} under {line:g} {label}",
+                                      _pct(1 - _p_over(line, lam_sh)), line=line,
+                                      pick=f"{side}_{kind}_under_{line:g}", quality=MEDIUM, side=side))
+        if shots:
+            game += shots
+            panel("shots", "Shots", "shots", shots, split=True, note=sample_note)
 
     # --- First half -----------------------------------------------------------
     shares = [s for s in (hs.get("fh_share"), as_.get("fh_share")) if s]

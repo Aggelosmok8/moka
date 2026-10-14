@@ -14,6 +14,7 @@ import apifootball as af
 import live_values
 import rapid_books as rb
 import sportmonks_odds as sm
+import superbet_odds as sb
 
 logger = logging.getLogger(__name__)
 
@@ -224,6 +225,9 @@ async def build_tickets() -> list:
             continue
         try:
             prices = await rb.pick_prices(m["home"]["name"], m["away"]["name"])
+            # Superbet's snapshot is already in memory (streamed in the
+            # background), so this costs nothing per fixture.
+            rb.merge_prices(prices, await sb.pick_prices(m["home"]["name"], m["away"]["name"]))
             # API-Football prices this fixture across every market of every
             # licensed book, but it costs one call per fixture, so the budget
             # goes to the best-valued matches (entries are value-sorted).
