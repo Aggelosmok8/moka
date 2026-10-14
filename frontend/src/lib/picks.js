@@ -62,6 +62,9 @@ export const matchKey = (home, away) =>
 // match's stat totals / goal sequence / player numbers.
 export const needsDetail = (pick) => /^(cards|corners|fouls|offsides|fh|anyt|fts|p\d+|home_fouls|away_fouls|home_saves|away_saves)_/.test(NORM(pick));
 
+// Over/Under settlement. Whole-number lines come from the bookmaker's 3-way
+// markets (Over / Under / Exactly), so landing exactly on the line loses both
+// sides — which is also how we price them.
 const ou = (kind, line, value) => {
   if (!Number.isFinite(value)) return null;
   return (kind === "over" ? value > line : value < line) ? "won" : "lost";
@@ -135,14 +138,12 @@ export const settleStatus = (pick, r) => {
   }
   // --- Score-based markets --------------------------------------------------
   if ((m = p.match(/^(over|under)_([\d.]+)$/))) {
-    const isOver = total > parseFloat(m[2]);
-    return (m[1] === "over") === isOver ? "won" : "lost";
+    return ou(m[1], parseFloat(m[2]), total);
   }
   if (p === "btts_yes") return hs > 0 && as > 0 ? "won" : "lost";
   if (p === "btts_no") return hs > 0 && as > 0 ? "lost" : "won";
-  if ((m = p.match(/^(home|away)_over_([\d.]+)$/))) {
-    const g = m[1] === "home" ? hs : as;
-    return g > parseFloat(m[2]) ? "won" : "lost";
+  if ((m = p.match(/^(home|away)_(over|under)_([\d.]+)$/))) {
+    return ou(m[2], parseFloat(m[3]), m[1] === "home" ? hs : as);
   }
   if ((m = p.match(/^cs_(\d+)_(\d+)$/))) {
     return hs === Number(m[1]) && as === Number(m[2]) ? "won" : "lost";

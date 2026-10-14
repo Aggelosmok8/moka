@@ -510,6 +510,13 @@ async def specific_bets(match_id: str):
     # every market, not just 1X2 — merge it in and keep the better price.
     _af_po = await _af.pick_odds_for_fixture(digits[-1])
     _rb.merge_prices(_po, _af_po)
+    # Sportmonks is the only feed quoting the extra lines (alternative corners,
+    # card counts, player bookings/assists) — one call per fixture, cached 1h.
+    import sportmonks_odds as _sm
+    _rb.merge_prices(_po, await _sm.pick_odds(
+        ((m or {}).get("home") or {}).get("name") or "",
+        ((m or {}).get("away") or {}).get("name") or "",
+        (m or {}).get("commence_time") or ""))
     out = await sb.build(digits[-1], h2h, _val.get("pick"),
                          _val.get("prediction") or _val.get("probabilities"), _po)
     out["pricesAt"] = max(await _rb.snapshot_at(), _time.time() - 1800 if _af_po else 0)

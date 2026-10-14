@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 import apifootball as af
 import live_values
 import rapid_books as rb
+import sportmonks_odds as sm
 
 logger = logging.getLogger(__name__)
 
@@ -229,6 +230,8 @@ async def build_tickets() -> list:
             if af_budget > 0:
                 af_budget -= 1
                 prices = rb.merge_prices(prices, await af.pick_odds_for_fixture(m["id"]))
+                prices = rb.merge_prices(prices, await sm.pick_odds(
+                    m["home"]["name"], m["away"]["name"], m.get("commence_time") or ""))
         except Exception:
             prices = {}
         if not prices:

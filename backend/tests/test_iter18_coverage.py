@@ -129,8 +129,11 @@ def test_unpriced_panels_show_note(primary_sb):
 
 
 def test_no_integer_over_under_priced(primary_sb):
+    """Whole-number lines are allowed ONLY where the bookmaker runs a 3-way
+    market (Over / Under / Exactly) — corners and cards. Goals, first-half
+    goals, team goals and player props must stay on half lines, because there a
+    whole number is a push at the book and a win/loss for us."""
     body, mid = primary_sb
-    # Scan every priced row's pick id, ensure OU lines are half (.5).
     bad = []
     pat = re.compile(r"(over|under)_(\d+(?:\.\d+)?)$")
     for p in body.get("panels", []):
@@ -139,7 +142,8 @@ def test_no_integer_over_under_priced(primary_sb):
             m = pat.search(r.get("pick") or "")
             if m:
                 line = float(m.group(2))
-                if line * 2 % 2 != 1:
+                three_way = (r.get("pick") or "").startswith(("corners_", "cards_"))
+                if line * 2 % 2 != 1 and not three_way:
                     bad.append(f"{r['pick']}@{r['odds']} ({r.get('bookmaker')})")
     for blk in (body.get("players") or []):
         for r in blk.get("rows", []):

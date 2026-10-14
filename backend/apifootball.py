@@ -1040,10 +1040,11 @@ def _af_pick(bet, value):
     g = _AF_OU.match(v)
     if g:
         side, line = g.group(1), g.group(2)
-        # Half lines only: an integer line ("Over 10" corners) is a push/void at
-        # the bookmaker but a straight win/loss in our settlement, so pricing it
-        # would misstate the bet.
-        if float(line) * 2 % 2 != 1:
+        # Half lines only, except in the explicit 3-way markets (Over / Under /
+        # Exactly) where an exact hit loses both sides — which is how we settle
+        # whole numbers. Elsewhere a whole line is a push at the book but a
+        # win/loss for us, so pricing it would misstate the bet.
+        if float(line) * 2 % 2 != 1 and "(3 way)" not in b:
             return None
         if b == "goals over/under":
             return f"{side}_{line}"
