@@ -967,3 +967,10 @@ User approved full integration ("Ναι, βάλε Superbet τώρα").
 - `picks.js`: settles `(home|away)_(fouls|saves|corners|shots|sot)_(over|under)_X` and `saves_(over|under)_X`; `needsDetail` updated so they wait for stats instead of being settled off the score.
 - Live result on Frosinone-Sassuolo: **239/287 priced rows** — Fouls 6/6, Offsides 2/2, Goalkeeper Saves 22/22, Shots 4/4, Cards 10/10, Corners 72/72; 86 superbet.gr links on the page. LION Tickets: 33 tickets, Superbet supplying 53 legs.
 - Suite: **162 passed**. testing_agent iteration_21: backend 100% (12/12), frontend 100% (18/18 settlement unit + UI), zero issues, restart confirmed to make no Superbet call.
+
+## 2026-10-14 (d) Render backend build was crashing — requirements.txt
+- Cause: `backend/requirements.txt` had been replaced by a full `pip freeze` (134 pinned packages) which included **`emergentintegrations==0.2.0`** — that package only exists on Emergent's private index, so `pip install -r requirements.txt` fails on Render and the deploy dies. (A commit earlier in the project had explicitly cleaned this file for exactly this reason.)
+- Fix: restored the curated 25-line list (commit d127550) and appended the single genuinely new runtime dependency, **`ijson>=3.3.0`** (used by `superbet_odds.py`). Verified every third-party import in `backend/*.py` is covered and the backend boots (119 matches served).
+- Also confirmed the Superbet refresh cannot break a boot: it runs inside the non-blocking `_prewarm()` task with its own try/except, and can be switched off entirely with `SUPERBET=off` on small instances.
+- NOTE FOR FUTURE AGENTS: never run `pip freeze > backend/requirements.txt` in this repo — production builds on Render from the same file.
+- Production topology (discovered from the deployed bundle): frontend on Vercel -> backend **https://moka-k03f.onrender.com** (Render) -> shared Supabase. The Emergent deployer cannot inspect it; diagnose by calling the Render URL directly. `/api/specific-bets/{id}` now returns `priceSources` ({greekFeeds, apiFootball, superbet, sportmonks} counts) so an empty page is diagnosable from outside.
