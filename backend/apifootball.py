@@ -40,7 +40,8 @@ BASKETBALL_SEASON = "2023-2024"
 # catalogue (~170 fixtures) having its Specific Bets built in one day is roughly
 # 1,900 calls. 5,000 leaves headroom and is still well under the Pro 7,500/day.
 MAX_CALLS = int(os.environ.get("API_FOOTBALL_MAX_CALLS", "5000"))
-_usage = {"date": None, "count": 0, "synced": False, "flushed": 0}
+_usage = {"date": None, "count": 0, "synced": False, "flushed": 0,
+          "status_at": 0.0, "limit_day": None}
 
 
 def _usage_db():
@@ -49,26 +50,41 @@ def _usage_db():
 
 
 async def _sync_usage():
-    """Pull today's count from the DB once per process. The counter used to live
-    only in memory, so every restart and every environment (preview / preprod /
-    prod share one key) started from zero — which is how a whole day's quota got
-    spent without the ceiling ever noticing."""
+    """Keep the daily count honest across pods and restarts.
+
+    The authority is the provider's own `/status` (it reports usage for the key,
+    so it already includes preview + pre-prod + prod); the DB row is the
+    cross-pod cache so a fresh pod doesn't start from zero. `/status` is free of
+    charge and is refreshed at most every 10 minutes."""
     today = _dt.date.today().isoformat()
-    if _usage["synced"] and _usage["date"] == today:
+    if _usage["date"] != today:
+        _usage.update(date=today, count=0, synced=False, flushed=0, status_at=0.0)
+    if not _usage["synced"]:
+        _usage["synced"] = True
+        try:
+            row = await _usage_db().find_one({"slug": "af_usage"})
+            data = (row or {}).get("data")
+            if isinstance(data, str):
+                data = json.loads(data)
+            if (data or {}).get("date") == today:
+                _usage["count"] = max(_usage["count"], int(data.get("count") or 0))
+                _usage["flushed"] = _usage["count"]
+        except Exception as e:
+            logger.warning("api-football usage sync: %s", type(e).__name__)
+    if _time.time() - _usage["status_at"] < 600:
         return
-    _usage["date"], _usage["synced"], _usage["flushed"] = today, True, 0
+    _usage["status_at"] = _time.time()
     try:
-        row = await _usage_db().find_one({"slug": "af_usage"})
-        data = (row or {}).get("data")
-        if isinstance(data, str):
-            data = json.loads(data)
-        if (data or {}).get("date") == today:
-            _usage["count"] = max(_usage["count"], int(data.get("count") or 0))
-            _usage["flushed"] = _usage["count"]
-        else:
-            _usage["count"] = 0
+        key = _key()
+        async with httpx.AsyncClient(timeout=15, headers={"x-apisports-key": key}) as c:
+            r = await c.get(f"{FOOTBALL_BASE}/status")
+        req = ((r.json() or {}).get("response") or {}).get("requests") or {}
+        if req.get("current") is not None:
+            _usage["count"] = int(req["current"])
+            _usage["limit_day"] = int(req.get("limit_day") or 0) or None
+            await _flush_usage(force=True)
     except Exception as e:
-        logger.warning("api-football usage sync: %s", type(e).__name__)
+        logger.warning("api-football /status: %s", type(e).__name__)
 
 
 async def _flush_usage(force: bool = False):
@@ -85,22 +101,27 @@ async def _flush_usage(force: bool = False):
         logger.warning("api-football usage flush: %s", type(e).__name__)
 
 
+def _budget() -> int:
+    """Our own ceiling, never above what the plan actually allows."""
+    return min(MAX_CALLS, _usage["limit_day"] or MAX_CALLS)
+
+
 def _bump_usage() -> int:
     today = _dt.date.today().isoformat()
     if _usage["date"] != today:
         _usage["date"], _usage["count"] = today, 0
-    if _usage["count"] >= MAX_CALLS:
-        raise RuntimeError(f"API-Football daily call budget reached ({MAX_CALLS})")
+    if _usage["count"] >= _budget():
+        raise RuntimeError(f"API-Football daily call budget reached ({_budget()})")
     _usage["count"] += 1
-    if _usage["count"] == int(MAX_CALLS * 0.8):
+    if _usage["count"] == int(_budget() * 0.8):
         logger.warning("api-football: 80%% of the daily budget used (%s/%s)",
-                       _usage["count"], MAX_CALLS)
+                       _usage["count"], _budget())
     return _usage["count"]
 
 
 def usage() -> dict:
-    return {"date": _usage["date"], "count": _usage["count"], "max": MAX_CALLS,
-            "exhausted": _usage["count"] >= MAX_CALLS}
+    return {"date": _usage["date"], "count": _usage["count"], "max": _budget(),
+            "planLimit": _usage["limit_day"], "exhausted": _usage["count"] >= _budget()}
 
 # slug -> catalog entry. Verified league ids against api-sports.io.
 CATALOG = {
@@ -213,13 +234,16 @@ async def _get(base: str, path: str, params: dict) -> dict:
     await _flush_usage()
     r.raise_for_status()
     data = r.json()
-    if "request" in str(((data or {}).get("errors") or {})):
-        # The provider says the day's quota is gone: stop the remaining ~140
-        # calls of a cold build from firing into the wall, and let the callers
-        # fall back to the last good snapshot.
-        _usage["count"] = max(_usage["count"], MAX_CALLS)
+    errs = (data or {}).get("errors") or {}
+    msg = str(errs.get("requests") or "") if isinstance(errs, dict) else ""
+    if "limit for the day" in msg.lower() or "daily" in msg.lower():
+        # Real daily exhaustion: stop the remaining ~140 calls of a cold build
+        # from firing into the wall. A per-minute "rateLimit" error does NOT
+        # come through here — killing the whole day over it is what wrongly
+        # blanked the Matches page.
+        _usage["count"] = max(_usage["count"], _budget())
         await _flush_usage(force=True)
-        logger.warning("api-football: provider reports daily limit reached — serving cached data")
+        logger.warning("api-football: provider reports DAILY limit reached — serving cached data")
     return data
 
 

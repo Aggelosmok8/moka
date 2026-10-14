@@ -110,8 +110,11 @@ def test_correct_score_cards_corners_priced(primary_sb):
         f"Correct Score priced rows too low: {rpt}"
     assert cards and len([r for r in cards["rows"] if r.get("odds")]) >= 2, \
         f"Cards priced rows too low: {rpt}"
-    assert corners and len([r for r in corners["rows"] if r.get("odds")]) >= 10, \
-        f"Corners priced rows too low: {rpt}"
+    # A book posts ONE corners line, so the panel now shows only quoted lines:
+    # every row must carry a price (no column of dashes).
+    assert corners and corners["rows"] and \
+        all(r.get("odds") for r in corners["rows"]), \
+        f"Corners panel must only contain priced lines: {rpt}"
 
 
 def test_unpriced_panels_show_note(primary_sb):

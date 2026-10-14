@@ -195,16 +195,21 @@ async def _squad(team_id, season) -> list:
 
 
 def _lines(default, priced: set, pattern: str) -> list:
-    """Our model lines plus every line the bookmakers price for this fixture."""
-    out = set(default)
+    """Only the lines the bookmakers actually quote for this fixture.
+
+    A bookmaker typically posts ONE corners line (9.5) and ONE cards line (4.5),
+    so padding the panel with our own extra lines produced a column of dashes
+    that reads like a broken feed. When nothing is quoted at all we fall back to
+    the model lines, and the panel says so."""
+    book = set()
     for p in priced:
         m = re.match(pattern, p)
         if m:
             try:
-                out.add(float(m.group(1)))
+                book.add(float(m.group(1)))
             except ValueError:
                 pass
-    return sorted(out)
+    return sorted(book or set(default))
 
 
 def _row(market, selection, lion, market_pct=None, odds=None, book=None,
@@ -468,7 +473,7 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
     if hs.get("cards_per_game") and as_.get("cards_per_game"):
         lam_c = hs["cards_per_game"] + as_["cards_per_game"]
         cards = []
-        for line in (3.5, 4.5, 5.5):
+        for line in _lines((3.5, 4.5, 5.5), priced, r"^cards_over_([\d.]+)$"):
             cards.append(_row("Cards", f"Over {line} cards", _pct(_p_over(line, lam_c)),
                               line=line, pick=f"cards_over_{line}", quality=q_goals))
             cards.append(_row("Cards", f"Under {line} cards", _pct(1 - _p_over(line, lam_c)),

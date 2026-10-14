@@ -213,6 +213,7 @@ async def build_tickets() -> list:
         return []
     out = []
     now = datetime.now(timezone.utc).isoformat()
+    af_budget = 25          # one call per fixture: spend it on the best-valued ones
     for e in entries[:MAX_MATCHES]:
         m, v = e.get("match") or {}, e.get("value") or {}
         if not m.get("id") or (m.get("status") or "") != "upcoming":
@@ -222,10 +223,12 @@ async def build_tickets() -> list:
             continue
         try:
             prices = await rb.pick_prices(m["home"]["name"], m["away"]["name"])
-            # API-Football already prices this fixture across every market and
-            # every approved book, on a 30-minute cache: richer AND fresher than
-            # the 6-hourly Greek snapshots.
-            prices = rb.merge_prices(prices, await af.pick_odds_for_fixture(m["id"]))
+            # API-Football prices this fixture across every market of every
+            # licensed book, but it costs one call per fixture, so the budget
+            # goes to the best-valued matches (entries are value-sorted).
+            if af_budget > 0:
+                af_budget -= 1
+                prices = rb.merge_prices(prices, await af.pick_odds_for_fixture(m["id"]))
         except Exception:
             prices = {}
         if not prices:
