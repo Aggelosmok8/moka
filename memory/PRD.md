@@ -953,3 +953,17 @@ User: "you said they were included but we had wrong mapping and couldn't match t
 ### Fouls / offsides / goalkeeper saves / score-at-any-time
 - Audited every market name available to us: API-Football returns **121 market names across 14 bookmakers** for a single fixture, Sportmonks lists **75 market types** on this plan. Neither quotes fouls, offsides or keeper saves pre-match, and "score at any time" is not a bookmaker market at all. Those panels keep LION's own probability plus the explanatory note; there is no mapping left to fix.
 - Suite: **125 passed**. testing_agent iteration_20: backend 100% (37/37), frontend 100% (13/13 settleStatus unit + UI), zero issues.
+
+## 2026-10-14 (c) Superbet integrated — fouls, offsides, keeper saves, per-team corners/shots
+User approved full integration ("Ναι, βάλε Superbet τώρα").
+### `backend/superbet_odds.py` (new provider)
+- Feed is **550 MB** of JSON (238 markets for every soccer event worldwide), so it is never loaded into memory: **ijson** (C backend) streams it inside `asyncio.to_thread`, keeping only the fixtures of our own match list (exact + tolerant name match, 12-day horizon) and the ~20 markets we price. Measured: **11 s download, ~20 s total, flat memory**, 76 fixtures / 8,862 prices per snapshot.
+- 1 call per refresh, TTL 6h (4/day = ~120 of the 200 free monthly calls), snapshot persisted in `odds_cache.slug='superbet'` so a restart or redeploy costs NOTHING; refresh is kicked off from the startup prewarm, never from a request.
+- Markets mapped: Total Goals, 1st-Half Total Goals, **Total Corners + per team**, **Total Cards**, **Total Fouls + per team**, **Total Offsides**, **Total Goalkeeper Saves + per team**, **Total Shots / Shots on Target per team**, Correct Score, Double Chance, BTTS. Superbet is Greek-licensed, so rows link to superbet.gr.
+- Reality check: the stat markets (fouls/offsides/saves/shots) are only posted by the book **close to kick-off** — currently 3-5 of 76 fixtures have them, cards ~12, corners ~42, correct score all 76. Panels still explain themselves when a market isn't quoted yet.
+### Supporting changes
+- `specific_bets.py`: new **Team Corners**, **Team Fouls (under too)**, match-total **Goalkeeper Saves**, new **Shots** panel (team shots + shots on target), all priced-only rows; the stats fetch now also collects shots/shots-on-goal at **zero extra API cost**; corner lines windowed +/-4 (match) and +/-3 (team) so the panel stays readable.
+- `apifootball.py`: settlement totals gained `saves`, `shots_home/away`, `sot_home/away`.
+- `picks.js`: settles `(home|away)_(fouls|saves|corners|shots|sot)_(over|under)_X` and `saves_(over|under)_X`; `needsDetail` updated so they wait for stats instead of being settled off the score.
+- Live result on Frosinone-Sassuolo: **239/287 priced rows** — Fouls 6/6, Offsides 2/2, Goalkeeper Saves 22/22, Shots 4/4, Cards 10/10, Corners 72/72; 86 superbet.gr links on the page. LION Tickets: 33 tickets, Superbet supplying 53 legs.
+- Suite: **162 passed**. testing_agent iteration_21: backend 100% (12/12), frontend 100% (18/18 settlement unit + UI), zero issues, restart confirmed to make no Superbet call.
