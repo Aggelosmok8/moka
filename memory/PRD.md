@@ -939,3 +939,17 @@ User (2nd report): "I still see no odds on fouls, corners, cards, score at any t
 - LION Tickets fetch API-Football odds only for the **25 best-valued** matches instead of all 40 (-15 calls per rebuild, tickets stayed rich: 30 tickets, up to 6 legs, 25 with a parlay).
 - Expected steady state: ~600-900/day for the match list, <=600/day for tickets, ~5 calls per Specific Bets fixture (6h cache) -> roughly 1,500-2,500/day, leaving 5,000+ of the plan free for pre-prod testing.
 - Suite: **92 passed**. testing_agent iteration_19: backend 100% (33/33), frontend 100%, zero issues (75 .gr links on Specific Bets, 111 across 34 ticket cards, 4 explanatory notes, Matches page populated, restart confirmed to make no provider calls).
+
+## 2026-10-14 (b) "Plenty of lines back" + a second provider for the extra markets
+User: "you said they were included but we had wrong mapping and couldn't match them because they were named differently… we want plenty of options like we had, and to bring a provider for all of them."
+### The actual bug behind the thin panels
+- `_lines()` fed FLOATS into the pick id, so a whole-number line produced `corners_over_5.0` while the price was stored as `corners_over_5` — **every integer-line row was therefore unpriced** (corners read 2/22). All dynamic pick ids now format with `{line:g}`.
+- Whole-number lines were also being rejected outright. They are legitimate where the book runs the market **3-way** (Over / Under / Exactly) — which is exactly how bet365's "Total Corners (3 way)" works and exactly how our settlement treats a whole line (exact hit loses both sides). So they are now accepted for corners/cards from 3-way markets, and still rejected for goals / first-half / team goals / player props (there a whole number is a push at the book).
+- Corners went **2/8 -> 22-24 rows, all priced**; cards fully priced; lines are capped to +/-5 (corners) and +/-3 (cards) around the model expectation so the 1.00-odds far ends don't pad the panel.
+### New provider: Sportmonks pre-match odds (`backend/sportmonks_odds.py`)
+- Markets it quotes that API-Football does not: **Alternative Corners** (up to 37 lines), **Number of Cards / Asian Total Cards**, **Player to be booked**, **Player to Assist**, Player Shots / Shots on Target, Goalscorers, full Correct Score, Team Total Goals.
+- Greek-licensed books only, book names canonicalised ("bet365" -> "Bet365"), 150 odds calls/hour cap (plan allows 180), fixture odds cached 1h, one date-index call per kickoff day cached 6h, fuzzy fixture matching (FC København vs FC Copenhagen, AGF vs Aarhus).
+- **Plan limitation: the Sportmonks subscription only covers the Scottish Premiership and the Danish Superliga.** For those leagues player rows jumped to 73/88 priced including "To assist" and "To be carded". A paid upgrade would extend it to the rest; nothing else is needed code-side.
+### Fouls / offsides / goalkeeper saves / score-at-any-time
+- Audited every market name available to us: API-Football returns **121 market names across 14 bookmakers** for a single fixture, Sportmonks lists **75 market types** on this plan. Neither quotes fouls, offsides or keeper saves pre-match, and "score at any time" is not a bookmaker market at all. Those panels keep LION's own probability plus the explanatory note; there is no mapping left to fix.
+- Suite: **125 passed**. testing_agent iteration_20: backend 100% (37/37), frontend 100% (13/13 settleStatus unit + UI), zero issues.

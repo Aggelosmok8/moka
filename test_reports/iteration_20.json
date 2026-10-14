@@ -1,0 +1,64 @@
+{
+  "summary": "Iteration 20 verifies the richer Corners/Cards coverage + player 'To assist' and 'To be carded' rows (Sportmonks for Scottish Premiership + Danish Superliga, plus API-Football 3-way Corner markets for other leagues) are correctly priced, that whole-number corner/card lines are allowed only where a bookmaker quotes them, and that no whole-number priced line leaks into Goals / First-Half / Team Goals / player props. All regression invariants (4 unpriced-market panels still show the explanatory note, LION tickets Greek-only and parlay-math-correct, /api/value-matches populated, picks.js settleStatus) also hold. Backend: 37/37 pytest. Frontend unit test for settleStatus: 13/13. Frontend UI (Specific Bets for Odense vs Brondby): 98 .gr links across bet365.gr + novibet.gr, 4 'No bookmaker prices this market for this fixture' notes, snapshot banner visible, Corners panel renders ~25 rows and Cards panel renders fully.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "evidence": {
+    "pytest_iter20": "37 passed in 38.40s (/app/test_reports/pytest/iter20.xml)",
+    "picks_js_unit_tests": "13/13 passed (whole-number corners/cards settle won/lost, home_under_1.5 settles)",
+    "fixtures_tested": [
+      "live_af_1549037 (Odense vs Brondby, Superliga Denmark - Sportmonks coverage)",
+      "live_af_1575188 (Union Berlin vs Dortmund, Bundesliga - API-Football 3-way corners)",
+      "live_af_1557428 (Brentford vs Liverpool, Premier League)"
+    ],
+    "specific_bets_live_af_1549037_odense_brondby": {
+      "panels": {
+        "Goals Over / Under": "15/16 (0 priced whole-number)",
+        "Both Teams To Score": "2/2",
+        "Team Goals": "11/11 (0 priced whole-number)",
+        "Double Chance": "3/3",
+        "Handicap": "8/8",
+        "Correct Score (final)": "8/8",
+        "Score At Any Time": "0/8 (note shown)",
+        "Cards": "2/2",
+        "Corners": "24/24 (22 whole-number + 2 .5 lines, all priced)",
+        "Fouls": "0/10 (note shown)",
+        "Offsides": "0/6 (note shown)",
+        "Goalkeeper Saves": "0/8 (note shown)",
+        "First Half": "8/9 (0 priced whole-number)"
+      },
+      "players": {"priced_rows": "73/88", "to_assist_priced": "7/8", "to_be_carded_priced": "13/15", "bookmaker": "Bet365 (canonical capital B)"}
+    },
+    "specific_bets_live_af_1575188_bundesliga": {"corners_priced": "22/22 (20 whole-number lines via API-Football 3-way market)", "cards_priced": "2/2", "forbidden_whole_number_priced": 0},
+    "specific_bets_live_af_1557428_premier_league": {"corners_priced": "2/2", "cards_priced": "2/2", "forbidden_whole_number_priced": 0},
+    "greek_only_books_on_priced_rows": true,
+    "unpriced_note_phrase_present_in_all_4_panels_on_all_3_fixtures": true,
+    "value_matches": "GET /api/value-matches -> HTTP 200, source=live, count=119",
+    "lion_tickets": {"count": 30, "parlays": 25, "max_legs": 6, "non_greek_books": 0, "bad_parlay_math": 0},
+    "specific_bets_ui_odense": {"gr_links": 98, "hosts": {"www.bet365.gr": 88, "www.novibet.gr": 10}, "unpriced_notes": 4, "snapshot_banner": true, "corners_row_text_matches": 25, "cards_row_text_matches": 3}
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter20_coverage.py",
+    "/app/test_reports/pytest/iter20.xml",
+    "/app/frontend/src/lib/__tests__/picks.iter20.test.mjs"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "specific_bets._lines() now returns ONLY bookmaker-quoted rows AND _af_pick accepts whole-number lines when the market is explicitly 3-way (fixes the earlier 'single quoted line' limitation). For Bundesliga/Championship fixtures this immediately exposed ~20 whole-number corner lines; for Scottish/Danish fixtures the richer Sportmonks catalogue drives even more rows.",
+    "pick id formatting switched to {line:g}, so 'corners_over_5' (not 'corners_over_5.0') correctly resolves against the model row id — this was the root cause of integer-line rows appearing unpriced in iteration 19.",
+    "sportmonks_odds._sm_pick correctly handles the alternative corner/card markets, correct score, team totals, BTTS and player markets (Goalscorer, Player to Assist, Player to be booked, Shots/SOT); it also canonicalises 'bet365' -> 'Bet365' with capital B as the UI expects. Date index with 6h cache + 150 calls/hour cap looks safe.",
+    "picks.js ou() now treats whole-number lines as 3-way (hit-line loses both sides) so corners_over_8 / cards_over_4 settle won/lost rather than void — verified by 13 unit tests. Team-total regex generalised to over|under so under lines (home_under_1.5) now settle correctly.",
+    "4 markets no .gr book quotes (Score At Any Time, Fouls, Offsides, Goalkeeper Saves) stay unpriced BY DESIGN and still display 'No bookmaker prices this market for this fixture — LION's own probability only.' — confirmed on all 3 fixtures.",
+    "LION tickets: parlay odds <= product(leg odds)+0.01 holds for all 25 parlays; max legs=6 as specified; every leg bookmaker is in the Greek-licensed allowlist."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter20_coverage.py (new, 37 cases)",
+    "/app/frontend/src/lib/__tests__/picks.iter20.test.mjs (new, 13 cases)"
+  ],
+  "success_rate": {"backend": "100% (37/37)", "frontend": "100% (13/13 unit + Specific Bets UI verified)"},
+  "test_credentials": "qa.owner@lionstats.app / Qa-593ca402f165abc1!",
+  "seed_data_creation": "None.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Canonical fixtures for Sportmonks coverage: live_af_1549037 (Odense vs Brondby, Danish Superliga - gives ~73/88 priced player rows including To Assist and To Be Carded, Corners 24/24 priced, bookmakers Bet365 + Novibet). For API-Football 3-way whole-number corners regression use live_af_1575188 (Union Berlin vs Dortmund, Bundesliga - Corners 22/22 of which 20 are whole-number). The 4 unpriced panels (Score At Any Time, Fouls, Offsides, Goalkeeper Saves) are design-correct and still carry the explanatory note. VITE_BACKEND_URL is set in /app/frontend/.env (not REACT_APP_BACKEND_URL — the project is on Vite). Credit budget: /api/specific-bets took ~10s cold then <2s cached; /api/lion-tickets responded <1s from snapshot. One pytest run of this file costs ~0 fresh provider calls thanks to 30-min odds cache + DB snapshot.",
+  "rca of the issue": "User's 'wrong mapping, couldn't match them because named differently' was resolved by sportmonks_odds.py which (a) adds a 1-call/day date index with fuzzy fixture matching (FC Kobenhavn <-> FC Copenhagen, AGF <-> Aarhus) so the Sportmonks catalogue actually matches our fixtures for Scottish Premiership and Danish Superliga, (b) maps Sportmonks alternative Corners/Cards/Correct Score/Team Totals/BTTS/Goalscorer/Assist/Shots/SOT/Booked markets into our pick ids and (c) merges after API-Football while keeping the Greek-licensed-book whitelist. The earlier Corners/Cards integer-line pricing bug (iter19) is now fixed by {line:g} formatting + apifootball._af_pick accepting whole-number lines when the market is explicitly 3-way."
+}
