@@ -504,26 +504,28 @@ async def specific_bets(match_id: str):
     h2h["book"] = best_book
 
     _val = (m or {}).get("value") or {}
-    _po = await _rb.pick_prices(((m or {}).get("home") or {}).get("name") or "",
-                                ((m or {}).get("away") or {}).get("name") or "")
+    _home = ((m or {}).get("home") or {}).get("name") or ""
+    _away = ((m or {}).get("away") or {}).get("name") or ""
+    import superbet_odds as _sb
+    import sportmonks_odds as _sm
+    _po = await _rb.pick_prices(_home, _away)
     # The /odds response API-Football already serves for this fixture carries
     # every market, not just 1X2 — merge it in and keep the better price.
     _af_po = await _af.pick_odds_for_fixture(digits[-1])
-    _rb.merge_prices(_po, _af_po)
-    # Sportmonks is the only feed quoting the extra lines (alternative corners,
-    # card counts, player bookings/assists) — one call per fixture, cached 1h.
-    import superbet_odds as _sb
-    _rb.merge_prices(_po, await _sb.pick_prices(
-        ((m or {}).get("home") or {}).get("name") or "",
-        ((m or {}).get("away") or {}).get("name") or ""))
-    import sportmonks_odds as _sm
-    _rb.merge_prices(_po, await _sm.pick_odds(
-        ((m or {}).get("home") or {}).get("name") or "",
-        ((m or {}).get("away") or {}).get("name") or "",
-        (m or {}).get("commence_time") or ""))
+    # Superbet (streamed snapshot) is the only feed quoting fouls, offsides,
+    # keeper saves and per-team corners/shots; Sportmonks adds player bookings.
+    _sb_po = await _sb.pick_prices(_home, _away)
+    _sm_po = await _sm.pick_odds(_home, _away, (m or {}).get("commence_time") or "")
+    # Per-source counts make an empty page diagnosable from outside the pod:
+    # if every source reads 0 the problem is a key/feed, not the mapping.
+    _sources = {"greekFeeds": len(_po), "apiFootball": len(_af_po),
+                "superbet": len(_sb_po), "sportmonks": len(_sm_po)}
+    for _extra_po in (_af_po, _sb_po, _sm_po):
+        _rb.merge_prices(_po, _extra_po)
     out = await sb.build(digits[-1], h2h, _val.get("pick"),
                          _val.get("prediction") or _val.get("probabilities"), _po)
     out["pricesAt"] = max(await _rb.snapshot_at(), _time.time() - 1800 if _af_po else 0)
+    out["priceSources"] = _sources
     out["match"] = {
         "id": match_id,
         "home": (m or {}).get("home", {}).get("name") or out.get("home"),
