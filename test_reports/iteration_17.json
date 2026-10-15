@@ -1,0 +1,63 @@
+{
+  "summary": "Verified Greek-licensed-only odds policy across backend endpoints (specific-bets, lion-tickets, value-matches) and across frontend pages (Specific Bets, LION Tickets, Match Analysis). Full pytest suite 80/80 passed, 5 new greek-only coverage unit tests passed, 4 new live-endpoint tests passed. UI scraped zero non-Greek bookmaker links and 150+ links to .gr domains. All seven acceptance criteria in the review request PASS.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "evidence": {
+    "pytest_full_suite": "80 passed in 15.93s (incl. test_greek_books_coverage.py 5/5)",
+    "live_endpoint_tests": "4 passed in test_greek_only_endpoints.py (value-matches, lion-tickets x2, specific-bets)",
+    "specific_bets_live_af_1563191": {
+      "panels_count": 13,
+      "total_rows": 116,
+      "priced_rows": 69,
+      "bookmaker_distribution": {"bet365": 31, "pame stoixima": 23, "bwin": 7, "novibet": 3, "elabet": 3, "stoiximan": 2},
+      "non_greek_or_unknown_bookmakers": 0,
+      "pricesAt_delta_min": 18.8,
+      "price_stamp_present": true,
+      "price_stamp_text_sample": "Prices move — these are a snapshot, taken 07:13 AM (22 min ago) when we calculated the value..."
+    },
+    "specific_bets_additional_fixtures": {
+      "live_af_1575188": {"priced": 51, "books": {"bwin": 13, "bet365": 33, "novibet": 2, "elabet": 3}},
+      "live_af_1593333": {"priced": 48, "books": {"bet365": 39, "novibet": 5, "elabet": 4}}
+    },
+    "lion_tickets": {
+      "ticket_count": 38,
+      "ticket_cards_rendered": 39,
+      "all_leg_bookmakers_greek": true,
+      "parlay_bookmakers_greek": true,
+      "singles_math_sum_and_avg": "PASS (<=0.05 tolerance)",
+      "price_stamp_present": true,
+      "leg_link_hosts_scraped": {"bet365.gr": 110, "bwin.gr": 16, "novibet.gr": 25, "elabet.gr": 7, "pamestoixima.gr": 3},
+      "non_greek_link_count": 0
+    },
+    "match_analysis_live_af_1563191": {
+      "best_odds_bookmakers": ["Stoiximan", "bet365", "Novibet", "Elabet", "Pame Stoixima"],
+      "greek_link_count": 15,
+      "non_greek_link_count": 0
+    },
+    "value_matches": "140 matches, 0 blocked bookmakers in any match.odds[] bookmaker field",
+    "bookmakers_js": "MAP contains exactly 17 Greek-licensed operators; bookmakerUrl() returns null for everything else; verified via unit test test_only_greek_licensed_bookmakers_are_surfaced"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_greek_books_coverage.py",
+    "/app/backend/tests/test_greek_only_endpoints.py",
+    "/app/test_reports/pytest/iter17.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "apifootball._bookmaker_approved uses exact-ish matching with 3 variants (name, name.replace(' ',''), name.replace('.gr','')) — correctly avoids substring false-positives like Betano matching bet365.",
+    "APPROVED_BOOKMAKERS set in backend (17 entries) matches frontend bookmakers.js MAP (17 entries) — kept in lockstep.",
+    "rapid_books._pick_id handles European comma decimals and Elabet GG/NG — unit tested, prevents dropping entire bwin/Elabet markets.",
+    "pick_odds_for_fixture 30-min cache + per-slug lock protects RapidAPI quota — reconfirmed via spot checks.",
+    "Minor: /api/lion-tickets returned a single 502 during one of the subsequent test calls (timed-out ingress on cold cache miss). Added retry (3x) in test harness; endpoint itself works fine on retry. Not a code bug but worth noting under service capacity."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_greek_only_endpoints.py (new)"
+  ],
+  "success_rate": {"backend": "100% (84/84 tests)", "frontend": "100% (3/3 pages verified)"},
+  "test_credentials": "qa.owner@lionstats.app / Qa-593ca402f165abc1!",
+  "seed_data_creation": "None.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Fixture live_af_1563191 (Birmingham vs Preston, Championship) remains the canonical rich-coverage test target (69/116 priced rows across 13 panels). Match-analysis route is /match/:id (singular, no 's'). LION tickets endpoint can take 60-120s on cold cache; use >=180s timeout or 3x retry. Greek-licensed bookmaker set is now 17 ops; keep backend APPROVED_BOOKMAKERS and frontend bookmakers.js MAP in sync. Expected unpriced panels per spec: Correct Score (final), Score At Any Time, Fouls, Offsides, Goalkeeper Saves.",
+  "rca of the issue": "N/A — previous policy already fixed. This iteration verifies the Greek-licensed-only tightening: Betano/William Hill/BetVictor/etc. that appeared in iteration_16 LION Tickets are now absent across all surfaces. Policy enforcement happens at (a) apifootball._bookmaker_approved on ingest, (b) rapid_books greek-feed parsers (only 5 Greek feeds parsed), (c) frontend bookmakers.js bookmakerUrl() returning null for non-Greek names."
+}

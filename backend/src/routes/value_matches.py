@@ -29,4 +29,12 @@ async def value_matches(level: Optional[str] = None, limit: Optional[int] = None
         ranked = [e for e in ranked if e["value"]["value_level"] == level.upper()]
     if limit:
         ranked = ranked[: max(0, limit)]
-    return {"count": len(ranked), "matches": ranked, "source": "live"}
+    out = {"count": len(ranked), "matches": ranked, "source": "live"}
+    if not ranked:
+        # Say WHY the page is empty instead of looking broken.
+        import apifootball as af
+        if af.usage().get("exhausted"):
+            out["notice"] = ("The odds provider's daily request limit has been reached. "
+                             "Matches will be back as soon as it resets.")
+            out["source"] = "quota"
+    return out

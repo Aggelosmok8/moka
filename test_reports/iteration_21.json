@@ -1,0 +1,68 @@
+{
+  "summary": "Iteration 21 verifies the full Superbet (superbet.gr) pre-match integration. Backend pytest iter21: 12/12 passed in 96s. Frontend unit tests (picks.js settlement for home_corners_over_4.5 / away_fouls_under_11.5 / home_shots_over_12.5 / away_sot_under_4.5 / saves_over_6.5 and needsDetail): 18/18 passed. Frontend UI (Specific Bets): 86 superbet.gr hrefs on live_af_1550151, 0 forbidden-book hrefs; link hosts are strictly superbet.gr + bet365.gr + bwin.gr + novibet.gr + elabet.gr; 4 unpriced-market notes still rendered on live_af_1575188 (Union Berlin vs Dortmund); snapshot warning banner present. Quota safety: a one-off `supervisorctl restart backend` left Superbet at callsThisMonth=2 (unchanged), fixtures=76 and GET /api/value-matches populated (count=119, source=live) — snapshot was loaded from odds_cache slug='superbet' and respected the 6h TTL (no new 'superbet: N fixtures' log line emitted).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "evidence": {
+    "pytest_iter21": "12 passed in 96.16s (/app/test_reports/pytest/iter21.xml)",
+    "picks_js_unit_tests": "18/18 passed (per-team fouls/saves/corners/shots/sot and saves_over_X plus needsDetail=true for all six)",
+    "specific_bets_live_af_1550151_frosinone_sassuolo": {
+      "Fouls": "6/6 priced (Superbet)",
+      "Offsides": "2/2 priced (Superbet)",
+      "Goalkeeper Saves": "22/22 priced (Superbet, split home/away)",
+      "Shots": "4/4 priced (Superbet)",
+      "Cards": "10/10 priced (Novibet + Superbet)",
+      "Corners": "56/56 priced (Bet365 + Novibet + Superbet)"
+    },
+    "specific_bets_live_af_1563200_norwich_southampton": {
+      "Fouls": "6/6 priced (Superbet)",
+      "Offsides": "2/2 priced (Superbet)",
+      "Goalkeeper Saves": "18/18 priced (Superbet)",
+      "Shots": "28/28 priced (Superbet)",
+      "Corners": "40/40 priced (Bet365 + Novibet + Pame Stoixima + Superbet)"
+    },
+    "specific_bets_live_af_1552785_le_mans_toulouse": {
+      "Fouls": "6/6 priced (Superbet)",
+      "Offsides": "2/2 priced (Superbet)",
+      "Goalkeeper Saves": "22/22 priced (Superbet)",
+      "Shots": "4/4 priced (Superbet)",
+      "Corners": "40/40 priced (Novibet + Superbet)"
+    },
+    "specific_bets_live_af_1575188_union_dortmund_far_out": {
+      "Fouls": "0/14 priced — note 'No bookmaker prices this market for this fixture'",
+      "Offsides": "0/6 priced — note present",
+      "Goalkeeper Saves": "0/16 priced — note present",
+      "Score At Any Time": "note present (design)"
+    },
+    "greek_only_bookmakers_on_priced_rows": true,
+    "forbidden_books_found": 0,
+    "superbet_quota": {"callsThisMonth": 2, "ceiling": 120, "fixtures": 76, "cachedAt": "2026-10-14T17:34:17.042663+00:00"},
+    "value_matches": "GET /api/value-matches -> 200, source=live, count=119",
+    "lion_tickets": {"count": 33, "parlays": 33, "singles": 0, "max_legs": 6, "superbet_legs": 53, "tickets_with_superbet": 22, "bad_parlay_math": 0, "books": ["bet365","bwin","elabet","novibet","pame stoixima","superbet"]},
+    "ui_specific_bets_live_af_1550151": {"superbet_gr_hrefs": 86, "hosts": ["sports.bwin.gr","www.bet365.gr","www.elabet.gr","www.novibet.gr","www.superbet.gr"], "forbidden_hrefs": 0, "snapshot_banner_visible": true},
+    "ui_specific_bets_live_af_1575188": {"unpriced_note_occurrences": 4}
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter21_superbet.py",
+    "/app/test_reports/pytest/iter21.xml",
+    "/app/frontend/src/lib/__tests__/picks.iter21.test.mjs"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "superbet_odds.py streams the 550MB JSON with ijson in a worker thread (asyncio.to_thread) so the event loop never blocks; refresh is guarded by a 6h TTL, a 120/month ceiling and an asyncio.Lock — a backend restart correctly reuses the DB snapshot (slug='superbet') and did NOT trigger a download in this test (callsThisMonth stayed at 2).",
+    "The {line:g} formatting of pick ids plus explicit 3-way acceptance of whole-number lines (iter20 fix) continues to hold: team-corner lines render cleanly on all 4 fixtures tested; no 'corners_over_5.0' leaks.",
+    "_pick_id drops whole-number lines on 'goals'/'fh_goals' (2-way markets at Superbet are push on the line) but keeps them on the 3-way stat markets — this is correct and prevents fake push rows from leaking into Goals/First-Half panels.",
+    "bookmakers.js maps Superbet -> https://www.superbet.gr/stoixima/podosfairo and no non-.gr operator has a link; the UI verification found zero links to Betano/Unibet/William Hill/BetVictor/Pinnacle/Marathonbet/1xBet/Betfair.",
+    "picks.js settleStatus correctly handles the five new patterns via two regex rows (`^(cards|corners|fouls|offsides)_(over|under)_X$` + `^(home|away)_(fouls|saves|corners|shots|sot)_(over|under)_X$` + `^saves_(over|under)_X$`); needsDetail excludes these picks from score-only settlement; 18/18 unit tests pass.",
+    "LION tickets regenerated to include Superbet legs (53 across 22 tickets); parlay odds always <= product(legs)+0.01; max legs=6; every leg bookmaker is Greek-licensed."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter21_superbet.py (new, 12 cases)",
+    "/app/frontend/src/lib/__tests__/picks.iter21.test.mjs (new, 18 cases)"
+  ],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "100% (18/18 unit + UI verified on live_af_1550151 and live_af_1575188)"},
+  "test_credentials": "qa.owner@lionstats.app / Qa-593ca402f165abc1!",
+  "seed_data_creation": "None.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Superbet snapshot slug='superbet' in odds_cache; refresh is credit-expensive (one of only 120/month calls + 20s download + 1-3 min parse). NEVER call superbet_odds.refresh(force=True). A plain supervisorctl restart is safe — the module loads from Mongo and the 6h TTL keeps it stable. Canonical fixtures for Fouls/Offsides/Saves/Shots coverage: live_af_1550151 (Frosinone-Sassuolo), live_af_1563200 (Norwich-Southampton), live_af_1552785 (Le Mans-Toulouse). For the 'far-out, still unpriced' regression use live_af_1575188. Note that per-team SoT ('home_sot_*') exists in the backend path but only renders when Superbet actually quotes it, which it does not for these three fixtures. VITE_BACKEND_URL (not REACT_APP_BACKEND_URL) is the Vite env var; the tests read REACT_APP_BACKEND_URL from the shell with a fallback to the preview URL."
+}

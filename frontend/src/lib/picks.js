@@ -60,12 +60,21 @@ export const matchKey = (home, away) =>
 // player markets) — those stay pending instead of being wrongly marked lost.
 // Picks that cannot be settled from the final score alone — they need the
 // match's stat totals / goal sequence / player numbers.
-export const needsDetail = (pick) => /^(cards|corners|fouls|offsides|fh|anyt|fts|p\d+|home_fouls|away_fouls|home_saves|away_saves)_/.test(NORM(pick));
+export const needsDetail = (pick) => /^(cards|corners|fouls|offsides|saves|fh|anyt|fts|p\d+|(home|away)_(fouls|saves|corners|shots|sot))_/.test(NORM(pick));
 
+// Over/Under settlement. Whole-number lines come from the bookmaker's 3-way
+// markets (Over / Under / Exactly), so landing exactly on the line loses both
+// sides — which is also how we price them.
 const ou = (kind, line, value) => {
   if (!Number.isFinite(value)) return null;
   return (kind === "over" ? value > line : value < line) ? "won" : "lost";
 };
+
+// A player prop where the player never took the field: once the fixture's
+// player stats are in, his absence means he did not feature, which every book
+// settles as void (stake returned) rather than a loss.
+const playerMissing = (d) =>
+  d?.players && Object.keys(d.players).length ? "void" : null;
 
 export const settleStatus = (pick, r) => {
   const p = NORM(pick);
@@ -81,8 +90,11 @@ export const settleStatus = (pick, r) => {
   if ((m = p.match(/^(cards|corners|fouls|offsides)_(over|under)_([\d.]+)$/))) {
     return t ? ou(m[2], parseFloat(m[3]), Number(t[m[1]])) : null;
   }
-  if ((m = p.match(/^(home|away)_(fouls|saves)_over_([\d.]+)$/))) {
-    return t ? ou("over", parseFloat(m[3]), Number(t[`${m[2]}_${m[1]}`])) : null;
+  if ((m = p.match(/^(home|away)_(fouls|saves|corners|shots|sot)_(over|under)_([\d.]+)$/))) {
+    return t ? ou(m[3], parseFloat(m[4]), Number(t[`${m[2]}_${m[1]}`])) : null;
+  }
+  if ((m = p.match(/^saves_(over|under)_([\d.]+)$/))) {
+    return t ? ou(m[1], parseFloat(m[2]), Number(t.saves)) : null;
   }
   if ((m = p.match(/^fh_(over|under)_([\d.]+)$/))) {
     const fh = Number(r?.ht_home) + Number(r?.ht_away);
@@ -118,25 +130,23 @@ export const settleStatus = (pick, r) => {
   }
   if ((m = p.match(/^p(\d+)_(score|assist|card)$/))) {
     const ps = d?.players?.[m[1]];
-    if (!ps) return null;
+    if (!ps) return playerMissing(d);
     const v = m[2] === "score" ? ps.goals : m[2] === "assist" ? ps.assists : ps.cards;
     return Number(v) > 0 ? "won" : "lost";
   }
   if ((m = p.match(/^p(\d+)_(shots|sot)_over_([\d.]+)$/))) {
     const ps = d?.players?.[m[1]];
-    if (!ps) return null;
+    if (!ps) return playerMissing(d);
     return ou("over", parseFloat(m[3]), Number(m[2] === "shots" ? ps.shots : ps.sot));
   }
   // --- Score-based markets --------------------------------------------------
   if ((m = p.match(/^(over|under)_([\d.]+)$/))) {
-    const isOver = total > parseFloat(m[2]);
-    return (m[1] === "over") === isOver ? "won" : "lost";
+    return ou(m[1], parseFloat(m[2]), total);
   }
   if (p === "btts_yes") return hs > 0 && as > 0 ? "won" : "lost";
   if (p === "btts_no") return hs > 0 && as > 0 ? "lost" : "won";
-  if ((m = p.match(/^(home|away)_over_([\d.]+)$/))) {
-    const g = m[1] === "home" ? hs : as;
-    return g > parseFloat(m[2]) ? "won" : "lost";
+  if ((m = p.match(/^(home|away)_(over|under)_([\d.]+)$/))) {
+    return ou(m[2], parseFloat(m[3]), m[1] === "home" ? hs : as);
   }
   if ((m = p.match(/^cs_(\d+)_(\d+)$/))) {
     return hs === Number(m[1]) && as === Number(m[2]) ? "won" : "lost";

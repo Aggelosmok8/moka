@@ -1,0 +1,47 @@
+{
+  "summary": "Verified Specific Bets odds coverage, bookmaker redirect links, LION Tickets expansion, and prominent price-stamp warning. All seven acceptance criteria from the review request pass. No regressions observed on highlight logic or engine invariants (one leg per market family, singles arithmetic).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "evidence": {
+    "specific_bets_live_af_1563191": {
+      "total_rows": 144,
+      "priced_rows": 99,
+      "priced_rows_with_bookmaker_link": 99,
+      "priced_rows_without_link": 0,
+      "panels_filled_that_were_empty_before": ["Team Goals (10/10)", "Cards (4/6)", "Corners (24/24)", "Handicap (9/10)", "First Half (16/17)"],
+      "expected_unpriced_panels_as_per_spec": ["Correct Score (final)", "Score At Any Time", "Fouls", "Offsides", "Goalkeeper Saves"],
+      "pricesAt_epoch": 1791873256.83,
+      "pricesAt_delta": "~32 min ago (recent, not nonsense)"
+    },
+    "lion_tickets": {
+      "ticket_count": 38,
+      "leg_length_distribution": {"2": 5, "3": 5, "4": 4, "5": 19, "6": 5},
+      "bookmakers_seen": ["Betano (92)", "Bet365 (43)", "Novibet (12)", "William Hill (11)", "bwin (3)", "BetVictor (3)", "Pame Stoixima (2)"],
+      "international_books_present": true,
+      "legs_rendered_with_anchor": "166/166"
+    },
+    "price_stamp": {
+      "present_on_specific_bets": true,
+      "present_on_lion_tickets": true,
+      "data_testid": "price-stamp",
+      "style": "amber border (rgba(255,214,10,0.4)) + amber-tinted background, border 1px — prominent, not grey microcopy",
+      "sample_text": "Prices move — these are a snapshot, taken 06:34 AM (32 min ago) when we calculated the value. The bookmaker may show a different number by now — always check the live price on their page before you place the bet."
+    },
+    "odds_consistency": "Match analysis /api/matches/live_af_1563191 returns odds array {William Hill 1.55/4.0/5.0, bet365 1.55/3.9/6.0, BetVictor 1.53/4.2/6.0, Betano 1.62/4.4/5.4, ...} sourced from apifootball — same merge source feeding Specific Bets/LION Tickets per backend code (pick_odds_for_fixture + rapid_books.merge_prices). Consistency guaranteed by shared source."
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "pick_odds_for_fixture() cache (30 min) and _lock(slug) correctly prevent quota burn; verified only one /odds call per fixture during this test run.",
+    "merge_prices keeps better price per pick and union of books — good for frontend bookmakerUrl() resolution.",
+    "Specific Bets emdash fallback renders cleanly for unpriced rows (121 em-dashes counted in DOM, matching 144-99=45 rows plus other non-row dashes). No price-without-link leaks detected."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (spot-checked endpoints, no failures)", "frontend": "100%"},
+  "test_credentials": "qa.owner@lionstats.app / Qa-593ca402f165abc1!",
+  "seed_data_creation": "None.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Fixture live_af_1563191 (Birmingham vs Preston) is the canonical test target for odds-coverage checks: 99/144 priced, 0 priced-without-link, all 5 previously-empty panels now populated. Lion-tickets count=38 (up from 19). price-stamp data-testid is amber-bordered and reads a recent HH:MM + 'N min ago'. Shared merged source means 1X2 prices on /match/:id odds card align with LION Tickets / Specific Bets by construction. Do not hammer new fixtures (quota).",
+  "rca of the issue": "N/A — fix verified. Previous root cause (apifootball._mw_entries discarding all non-Match-Winner markets from a paid /odds response) is fully resolved by new _af_pick + pick_odds_for_fixture mapping all approved markets, merged with Greek pick_prices via rapid_books.merge_prices."
+}

@@ -1,0 +1,68 @@
+{
+  "summary": "Iteration 18 verifies the Correct-Score/Cards/Corners mapping fix, name-keyed player odds matching, unpriced-panel note, no-integer-OU rule, odds-version cache + recalculation, and LION-ticket parlay sanity. 8/8 new backend tests pass. Full prior suite still green. Frontend confirms snapshot banner + 4 unpriced notes + 95 .gr links on Specific Bets and 158 .gr links on LION Tickets, with ZERO non-Greek bookmaker links on either page.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "evidence": {
+    "pytest_iter18": "8 passed in 71.78s (/app/test_reports/pytest/iter18.xml)",
+    "specific_bets_live_af_1563195 (Millwall vs Swansea)": {
+      "panels": {
+        "Goals Over / Under": "15/16",
+        "Both Teams To Score": "2/2",
+        "Team Goals": "10/10",
+        "Double Chance": "3/3",
+        "Handicap": "8/8",
+        "Correct Score (final)": "8/8",
+        "Score At Any Time": "0/8 (note shown)",
+        "Cards": "4/6",
+        "Corners": "20/20",
+        "Fouls": "0/10 (note shown)",
+        "Offsides": "0/6 (note shown)",
+        "Goalkeeper Saves": "0/8 (note shown)",
+        "First Half": "8/9"
+      },
+      "player_priced_rows": "48/88",
+      "player_sample_spot_checks": [
+        "L. Dykes -> l|dykes | shots_over_0.5 @ 1.06 (Bet365)",
+        "E. Baggott -> e|baggott | shots_over_0.5 @ 1.83 (Bet365)",
+        "T. Arconte -> t|arconte | score @ 3.4 (Bet365)",
+        "J. Opoku -> j|opoku | shots_over_0.5 @ 1.12 and score @ 3.6 (Bet365)"
+      ],
+      "integer_OU_lines_priced": 0,
+      "non_greek_or_blocked_bookmakers": 0
+    },
+    "frontend_specific_bets_scrape": "95 .gr links, 0 banned links, 4 'No bookmaker prices this market' notes visible, orange PRICES-MOVE banner present (confirmed in screenshot)",
+    "frontend_lion_tickets_scrape": "158 .gr links, 0 banned links, snapshot banner present",
+    "caching": {
+      "specific_bets_second_call_identical": true,
+      "specific_bets_second_call_faster": true,
+      "lion_tickets_second_call_identical": true,
+      "lion_tickets_cache_hit_time_s": "<10",
+      "odds_version_shape": "{snapshot_at}_{30min_bucket}, matches time.time()//1800"
+    },
+    "lion_tickets_parlay": "Every parlay.odds <= product(leg_odds)+0.01; singlesReturn==sum, singlesMultiple==avg (<=0.05 tol); edge consistent with lion - 100/odds (<=0.6pt)."
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter18_coverage.py",
+    "/app/test_reports/pytest/iter18.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "apifootball._af_pick now strictly maps 'Cards Over/Under' / 'Total Cards' (NOT 'Home Team Total Cards') — fixes the old 'card in b' loose test that attached team-cards lines to the match-cards market.",
+    "apifootball._af_pick rejects integer OU lines (line*2%2 != 1) across goals/corners/cards/handicap — prevents the exact-number push risk.",
+    "apifootball.player_key collapses 'Z. Vipotnik' / 'Zan Vipotnik' / 'Vipotnik, Zan' to the same `initial|surname` key; verified against live priced rows.",
+    "specific_bets._apply resolves pn:<key>:<market> for player rows using the player field; after pricing, any panel with 0 priced rows is annotated with the explanatory note.",
+    "rapid_books.odds_version() returns `{max_snapshot_at}_{int(time/1800)}` so cache keys roll both on provider refresh AND every 30-min window; /api/specific-bets cache key `sb_out_{match_id}_{odds_version}` and /api/lion-tickets key `lion_tickets_{odds_version}` both honour it — repeat calls return byte-identical payloads.",
+    "lion_tickets parlay now multiplies ROUNDED (displayed) leg odds so parlay.odds cannot exceed the product shown to the user — verified across all tickets.",
+    "APPROVED_BOOKMAKERS (backend) and bookmakers.js MAP (frontend) still mirror the same 17 Greek-licensed ops."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter18_coverage.py (new)"
+  ],
+  "success_rate": {"backend": "100% (8/8 new + prior suite)", "frontend": "100% (Specific Bets + LION Tickets verified)"},
+  "test_credentials": "qa.owner@lionstats.app / Qa-593ca402f165abc1!",
+  "seed_data_creation": "None.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "live_af_1563195 (Millwall vs Swansea) is the canonical rich-coverage fixture: expect panels Correct Score 8/8, Cards 4/6, Corners 20/20 and players ~48/88 priced; Fouls/Offsides/Goalkeeper Saves/Score-At-Any-Time stay unpriced BY DESIGN and must show 'No bookmaker prices this market for this fixture — LION's own probability only.'. odds_version() shape is '{at}_{bucket30m}'. Specific-bets endpoint can take ~90s on cold cache; use 180s timeout + retry. Keep ingest focused: do not fan-out to many fixtures (RapidAPI monthly quota).",
+  "rca of the issue": "N/A — iteration 18 verifies E1's mapping/caching fix. The old `'card' in b` test matched 'Home Team Total Cards' alongside 'Cards Over/Under', scrambling the Cards panel; integer OU lines also leaked. Fix: strict bet-name equality for Cards/Corners + half-line-only guard. Player markets had no ids, so a name_key (initial|surname) is emitted on both sides and matched inside _apply(). Recalculation on new odds is driven by odds_version() entering the cache key for both /api/specific-bets and /api/lion-tickets."
+}

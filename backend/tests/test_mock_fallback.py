@@ -83,7 +83,9 @@ def test_league_detail_seriea_populated(client):
     assert res["finished"] is True
     assert isinstance(res["homeScore"], int) and isinstance(res["awayScore"], int)
     up = d["upcoming"][0]
-    assert up["finished"] is False and up["homeScore"] is None
+    # "upcoming" holds everything not finished, which includes a match that is
+    # currently in play and therefore already carries a live score.
+    assert up["finished"] is False
     assert up["home"] and up["away"] and up["kickoff"]
 
 

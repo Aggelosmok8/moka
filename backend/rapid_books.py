@@ -8,6 +8,7 @@ through the existing path.
 
 Inert unless RAPIDAPI_ODDS_KEY is set. Per-provider opt-out via RAPID_BOOKS.
 """
+import asyncio
 import json
 import logging
 import os
@@ -20,11 +21,23 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-CACHE_TTL = 12 * 3600                        # ~62 requests/month per provider
+# Prices move: a measured 18-minute gap already shifted 3.4% of Elabet's lines.
+# 4 refreshes a day (~124/month per provider) is the most the 200/month free plan
+# takes while leaving room under RAPID_BOOKS_MAX_MONTHLY.
+CACHE_TTL = int(os.environ.get("RAPID_BOOKS_TTL_HOURS", "6")) * 3600
 MAX_MONTHLY = int(os.environ.get("RAPID_BOOKS_MAX_MONTHLY", "150"))
 CACHE_DIR = Path("/tmp/rapid_books")
 
-_mem: dict = {}                              # slug -> {"idx":..., "at":...}
+_mem: dict = {}
+_locks: dict = {}
+
+
+def _lock(slug: str) -> asyncio.Lock:
+    """One fetch per provider at a time: four concurrent requests for the same
+    snapshot used to burn four calls of the monthly quota."""
+    if slug not in _locks:
+        _locks[slug] = asyncio.Lock()
+    return _locks[slug]                              # slug -> {"idx":..., "at":...}
 _usage: dict = {}                            # slug -> {"month":..., "count":...}
 
 
@@ -53,7 +66,9 @@ def _row(idx: dict, book: str, home: str, away: str, o: dict, updated):
         {"bookmaker": book, "odds": o, "source": "rapidapi", "updatedAt": updated})
 
 
-_OU = re.compile(r"^(over|under)\s*([\d.]+)?$", re.I)
+# bwin writes European decimals ("Over 1,5"), so the comma has to be accepted
+# here — dropping it silently cost us EVERY bwin goals line.
+_OU = re.compile(r"^(over|under)\s*([\d.,]+)?$", re.I)
 _LINE_IN_NAME = re.compile(r"(\d+(?:\.\d+)?)")
 
 
@@ -137,7 +152,7 @@ def _pick_id(mkt: str, sel: str, line=None, home: str = "", away: str = ""):
         if "goal" in m or "total" in m or "over" in m or "under" in m:
             return f"{side}_{ln}"
         return None
-    if "both teams" in m or "btts" in m or "goal/no goal" in m:
+    if "both teams" in m or "btts" in m or "goal/no goal" in m or "gg/ng" in m:
         if s in ("yes", "goal", "gg", "both teams to score"):
             return "btts_yes"
         if s in ("no", "no goal", "ng"):
@@ -164,31 +179,42 @@ def _extra(pidx: dict, key: str, book: str, mkt: str, sel: str, price, line=None
 # --- One parser per provider (their JSON shapes have nothing in common) -----
 
 def _p_stoiximan(payload, book, idx, pidx):
+    """The `_soccer` file carries every market (goals, 1st-half goals, double
+    chance, BTTS); the older `_soccer_leagues` file only ever had Match Result.
+    Both shapes are accepted. Team names come from `participants`, so a market
+    listed BEFORE the 1X2 one no longer loses its fixture key."""
     up = payload.get("updated_at")
-    for blk in payload.get("data") or []:
-        for b in ((blk or {}).get("data") or {}).get("blocks") or []:
-            for ev in b.get("events") or []:
-                key = ""
-                h = a = ""
-                for mkt in ev.get("markets") or []:
+    data = payload.get("data")
+    blocks = []
+    if isinstance(data, dict):
+        blocks = ((data.get("data") or {}).get("blocks")) or []
+    else:
+        for blk in data or []:
+            blocks.extend((((blk or {}).get("data")) or {}).get("blocks") or [])
+    for b in blocks:
+        for ev in b.get("events") or []:
+            ps = ev.get("participants") or []
+            h = (ps[0] or {}).get("name") if len(ps) > 1 else None
+            a = (ps[1] or {}).get("name") if len(ps) > 1 else None
+            if not (h and a) or _esports(h) or _esports(a):
+                continue
+            key = f"{_norm(h)}|{_norm(a)}"
+            for mkt in ev.get("markets") or []:
+                if mkt.get("type") in ("MRES", "MR12"):
                     sels = {x.get("name"): x for x in mkt.get("selections") or []}
-                    if mkt.get("type") == "MRES":
-                        h = (sels.get("1") or {}).get("fullName")
-                        a = (sels.get("2") or {}).get("fullName")
-                        key = f"{_norm(h)}|{_norm(a)}" if h and a else key
-                        _row(idx, book, h, a,
-                             {k: _price((sels.get(n) or {}).get("price"))
-                              for k, n in (("home", "1"), ("draw", "X"), ("away", "2"))}, up)
-                        continue
-                    for x in mkt.get("selections") or []:
-                        _extra(pidx, key, book, mkt.get("name") or "",
-                               x.get("name") or "", x.get("price"), mkt.get("handicap"),
-                               h or "", a or "")
+                    _row(idx, book, h, a,
+                         {k: _price((sels.get(n) or {}).get("price"))
+                          for k, n in (("home", "1"), ("draw", "X"), ("away", "2"))}, up)
+                    continue
+                for x in mkt.get("selections") or []:
+                    _extra(pidx, key, book, mkt.get("name") or "",
+                           x.get("name") or "", x.get("price"), mkt.get("handicap"), h, a)
 
 
 _NOVI_MKT = {"SOCCER_UNDER_OVER": "Goals Over/Under",
              "SOCCER_BOTH_TEAMS_TO_SCORE": "Both Teams To Score",
              "SOCCER_CORNERS_UNDER_OVER": "Corners Over/Under",
+             "SOCCER_POINT_CARDS_UNDER_OVER": "Cards Over/Under",
              "SOCCER_FIRST_HALF_UNDER_OVER": "1st Half Goals Over/Under",
              "SOCCER_DOUBLE_CHANCE": "Double Chance",
              "SOCCER_FIRST_HALF_RESULT": "Half Time Result"}
@@ -201,6 +227,8 @@ def _p_novibet(payload, book, idx, pidx):
             for it in bv.get("items") or []:
                 cap = it.get("additionalCaptions") or {}
                 h, a = cap.get("competitor1"), cap.get("competitor2")
+                if _esports(h) or _esports(a):
+                    continue
                 key = f"{_norm(h)}|{_norm(a)}" if h and a else ""
                 for mkt in it.get("markets") or []:
                     sys_name = mkt.get("betTypeSysname")
@@ -229,6 +257,8 @@ def _p_bwin(payload, book, idx, pidx):
     for fx in ((payload.get("data") or {}).get("fixtures")) or []:
         parts = {((p.get("properties") or {}).get("type")): ((p.get("name") or {}).get("value"))
                  for p in fx.get("participants") or []}
+        if _esports(parts.get("HomeTeam")) or _esports(parts.get("AwayTeam")):
+            continue
         key = f"{_norm(parts.get('HomeTeam'))}|{_norm(parts.get('AwayTeam'))}"
         for mkt in fx.get("optionMarkets") or []:
             mname = ((mkt.get("name") or {}).get("value")) or ""
@@ -264,6 +294,8 @@ def _p_opap(payload, book, idx, pidx):
         if len(parts) != 2:
             continue
         home, away = parts[0].strip(), parts[1].strip()
+        if _esports(home) or _esports(away):
+            continue
         key = f"{_norm(home)}|{_norm(away)}"
         for mkt in ev.get("markets") or []:
             if mkt.get("groupCode") != "MATCH_RESULT":
@@ -300,6 +332,8 @@ def _p_elabet(payload, book, idx, pidx):
         if len(cids) != 2:
             continue
         home, away = comp.get(cids[0]), comp.get(cids[1])
+        if _esports(home) or _esports(away):
+            continue
         key = f"{_norm(home)}|{_norm(away)}"
         for mid in ev.get("marketIds") or []:
             m = mks.get(mid) or {}
@@ -327,7 +361,7 @@ def _p_elabet(payload, book, idx, pidx):
 # Superbet is excluded on purpose: its snapshot is ~476 MB per fetch.
 # Fonbet is excluded: the feed is an opaque versioned packet, not an odds list.
 PROVIDERS = {
-    "stoiximan":    ("Stoiximan", "stoiximan-odds", "site_pregame_stoiximan_soccer_leagues.json", _p_stoiximan),
+    "stoiximan":    ("Stoiximan", "stoiximan-odds", "site_pregame_stoiximan_soccer.json", _p_stoiximan),
     "novibet":      ("Novibet", "novibet-odds", "site_pregame_novibet_soccer.json", _p_novibet),
     "bwin":         ("bwin", "bwin-odds1", "site_pregame_bwin_soccer.json", _p_bwin),
     "pamestoixima": ("Pame Stoixima", "allwyn-odds", "site_pregame_opapstore_soccer.json", _p_opap),
@@ -436,6 +470,51 @@ async def _quota_left(slug: str) -> int:
     return MAX_MONTHLY - u["count"]
 
 
+def merge_prices(base: dict, extra: dict) -> dict:
+    """Fold a second price source into `base`, keeping the better price per pick
+    and the union of per-bookmaker prices (the parlay check needs those)."""
+    for pick, slot in (extra or {}).items():
+        cur = base.get(pick)
+        if not cur:
+            base[pick] = slot
+            continue
+        cur.setdefault("books", {}).update(slot.get("books") or {})
+        if (slot.get("odds") or 0) > (cur.get("odds") or 0):
+            cur.update(odds=slot["odds"], bookmaker=slot["bookmaker"])
+    return base
+
+
+async def snapshot_at() -> float:
+    """Unix time of the OLDEST snapshot in play — what the UI dates prices by."""
+    ats = []
+    for slug in active_slugs():
+        try:
+            at = (await _provider_index(slug) or {}).get("at")
+        except Exception:
+            at = None
+        if at:
+            ats.append(float(at))
+    return min(ats) if ats else 0.0
+
+
+async def odds_version() -> str:
+    """Changes the moment ANY provider snapshot is refreshed, so everything we
+    derive from prices (value, edge, LION Tickets) is recomputed instead of
+    being served from a cache built on older odds."""
+    ats = []
+    for slug in active_slugs():
+        try:
+            at = (await _provider_index(slug) or {}).get("at")
+        except Exception:
+            at = None
+        if at:
+            ats.append(int(float(at)))
+    # The API-Football per-fixture odds sit on a 1-hour cache, so bucket time at
+    # the same resolution — a newer price set always gets a new key, without
+    # rebuilding (and re-fetching 40 fixtures) more often than prices change.
+    return f"{max(ats) if ats else 0}_{int(time.time() // 3600)}"
+
+
 async def quota_status() -> list:
     """Per-provider call budget — what /api/admin/odds-quota reports."""
     out = []
@@ -453,6 +532,14 @@ async def quota_status() -> list:
 
 
 async def _provider_index(slug: str) -> dict:
+    mem = _mem.get(slug)
+    if mem and time.time() - mem["at"] < CACHE_TTL:
+        return mem
+    async with _lock(slug):                 # the loser of the race re-checks
+        return await _refresh_index(slug)
+
+
+async def _refresh_index(slug: str) -> dict:
     book, host, file, parser = PROVIDERS[slug]
     now = time.time()
     mem = _mem.get(slug)
@@ -551,9 +638,37 @@ async def pick_prices(home: str, away: str) -> dict:
     return out
 
 
+# A provider may add or drop club words around a team name ("Gent" / "KAA Gent",
+# "Lyon" / "Olympique Lyonnais"), but an age, reserve or women's marker makes it
+# a DIFFERENT team and must never fuzzy-match the senior fixture.
+_VARIANT_TOKEN = re.compile(r"u\d{1,2}|^w$|women|ladies|^fem|^i{2,3}$|reserve|^res$|youth|academy|^b$")
+
+# "Aston Villa (Haiko)" is an esports FIFA fixture: the parenthesis holds a
+# player handle, not a qualifier we recognise. Those fixtures are dropped.
+_PARENS = re.compile(r"\(([^)]*)\)")
+_KEEP_IN_PARENS = {"w", "women", "ladies", "u17", "u18", "u19", "u20", "u21", "u23",
+                   "res", "b", "ii", "youth"}
+
+
+def _esports(name: str) -> bool:
+    return any(m.group(1).strip().lower() not in _KEEP_IN_PARENS
+               for m in _PARENS.finditer(name or ""))
+
+
+def _same_team(q: str, cand: str) -> bool:
+    if q == cand:
+        return True
+    if not q or not cand:
+        return False
+    long, short = (cand, q) if len(cand) > len(q) else (q, cand)
+    if short not in long:
+        return False
+    return not _VARIANT_TOKEN.search(long.replace(short, "", 1))
+
+
 def _lookup_picks(picks: dict, home: str, away: str) -> dict:
-    """Exact key first, then a contains-match on either side (team naming
-    differs between providers and API-Football)."""
+    """Exact key first, then a tolerant match (providers and API-Football spell
+    team names differently) that still refuses youth/reserve/women fixtures."""
     hk, ak = _norm(home), _norm(away)
     if not hk or not ak:
         return {}
@@ -562,9 +677,7 @@ def _lookup_picks(picks: dict, home: str, away: str) -> dict:
         return hit
     for key, v in picks.items():
         a, b = key.split("|", 1) if "|" in key else ("", "")
-        if not a or not b:
-            continue
-        if (hk in a or a in hk) and (ak in b or b in ak):
+        if a and b and _same_team(hk, a) and _same_team(ak, b):
             return v
     return {}
 

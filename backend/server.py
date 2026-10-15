@@ -462,13 +462,15 @@ async def match_odds(match_id: str, user=Depends(current_user_optional)):
 async def specific_bets(match_id: str):
     """Specific Bets payload — separate deterministic engine, cached 30 min."""
     import apifootball as _af
+    import rapid_books as _rb
     import specific_bets as sb
 
-    ck = f"sb_out_{match_id}"
+    # Keyed by the odds snapshot in play: when prices are refreshed, the whole
+    # payload (model %, market %, edge, value) is recalculated, never reused.
+    ck = f"sb_out_{match_id}_{await _rb.odds_version()}"
     hit = _af._c_get(ck)
     if hit is not None:
         return hit
-
     m = None
     try:
         m = await fsl_get_match_detail(match_id)
@@ -502,11 +504,28 @@ async def specific_bets(match_id: str):
     h2h["book"] = best_book
 
     _val = (m or {}).get("value") or {}
-    import rapid_books as _rb
-    _po = await _rb.pick_prices(((m or {}).get("home") or {}).get("name") or "",
-                                ((m or {}).get("away") or {}).get("name") or "")
+    _home = ((m or {}).get("home") or {}).get("name") or ""
+    _away = ((m or {}).get("away") or {}).get("name") or ""
+    import superbet_odds as _sb
+    import sportmonks_odds as _sm
+    _po = await _rb.pick_prices(_home, _away)
+    # The /odds response API-Football already serves for this fixture carries
+    # every market, not just 1X2 — merge it in and keep the better price.
+    _af_po = await _af.pick_odds_for_fixture(digits[-1])
+    # Superbet (streamed snapshot) is the only feed quoting fouls, offsides,
+    # keeper saves and per-team corners/shots; Sportmonks adds player bookings.
+    _sb_po = await _sb.pick_prices(_home, _away)
+    _sm_po = await _sm.pick_odds(_home, _away, (m or {}).get("commence_time") or "")
+    # Per-source counts make an empty page diagnosable from outside the pod:
+    # if every source reads 0 the problem is a key/feed, not the mapping.
+    _sources = {"greekFeeds": len(_po), "apiFootball": len(_af_po),
+                "superbet": len(_sb_po), "sportmonks": len(_sm_po)}
+    for _extra_po in (_af_po, _sb_po, _sm_po):
+        _rb.merge_prices(_po, _extra_po)
     out = await sb.build(digits[-1], h2h, _val.get("pick"),
                          _val.get("prediction") or _val.get("probabilities"), _po)
+    out["pricesAt"] = max(await _rb.snapshot_at(), _time.time() - 1800 if _af_po else 0)
+    out["priceSources"] = _sources
     out["match"] = {
         "id": match_id,
         "home": (m or {}).get("home", {}).get("name") or out.get("home"),
@@ -542,9 +561,11 @@ async def odds_quota(admin=Depends(require_admin)):
                  "perDay": (r.get("requests") or {}).get("limit_day")}
     except Exception as e:
         logger.warning("odds_quota apifootball status: %s", e)
+    import superbet_odds
     return {"providers": await rapid_books.quota_status(),
             "refreshHours": rapid_books.CACHE_TTL / 3600,
-            "apiFootball": stats}
+            "apiFootball": stats,
+            "superbet": await superbet_odds.status()}
 
 
 @api_router.get("/fsl/status")
@@ -824,6 +845,10 @@ async def on_startup():
             import live_values
             await live_values.build_live_matches()
             logger.info("Live value cache pre-warmed")
+            # Superbet's 550 MB snapshot is streamed here, after the match list
+            # exists (it is filtered against it) and never inside a request.
+            import superbet_odds
+            await superbet_odds.refresh()
         except Exception as e:
             logger.warning("live prewarm failed: %s", e)
     asyncio.create_task(_prewarm())

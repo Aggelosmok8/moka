@@ -3,6 +3,7 @@ import { Ticket, ExternalLink, Layers, Loader2, Clock, TrendingUp } from "lucide
 import Header from "../components/Header";
 import { api } from "../lib/api";
 import { bookmakerUrl } from "../lib/bookmakers";
+import { PriceStamp } from "../components/PriceStamp";
 import { usePortfolio } from "../contexts/PortfolioContext";
 import { toast } from "sonner";
 
@@ -40,7 +41,7 @@ const Leg = ({ leg, anchor }) => {
   );
 };
 
-const TicketCard = ({ t, onAdd, inSlip }) => (
+const TicketCard = ({ t, onAdd, inSlip, played }) => (
   <div className="bg-[#11161d] border border-white/10 rounded-2xl overflow-hidden hover:border-[#39FF14]/30 transition-colors"
     data-testid={`lion-ticket-${t.match.id}`}>
     <div className="flex items-center justify-between gap-2 px-4 py-2 bg-[#0d1117] border-b border-white/5">
@@ -86,11 +87,12 @@ const TicketCard = ({ t, onAdd, inSlip }) => (
           </div>
         )}
       </div>
-      <button onClick={() => onAdd(t)} disabled={inSlip} data-testid={`lt-add-${t.match.id}`}
-        className={`rounded-full px-4 py-2 text-[11px] font-black uppercase tracking-wider transition ${inSlip
-          ? "bg-white/10 text-zinc-500 cursor-default"
-          : "bg-[#39FF14] text-black hover:brightness-110"}`}>
-        {inSlip ? "In slip" : "Add to slip"}
+      <button onClick={() => onAdd(t)} disabled={inSlip || !!played} data-testid={`lt-add-${t.match.id}`}
+        className={`rounded-full px-4 py-2 text-[11px] font-black uppercase tracking-wider transition ${
+          played ? "bg-[#39FF14]/15 text-[#39FF14] border border-[#39FF14]/40 cursor-default"
+            : inSlip ? "bg-white/10 text-zinc-500 cursor-default"
+            : "bg-[#39FF14] text-black hover:brightness-110"}`}>
+        {played ? "Played" : inSlip ? "In slip" : "Add to slip"}
       </button>
     </div>
   </div>
@@ -98,13 +100,18 @@ const TicketCard = ({ t, onAdd, inSlip }) => (
 
 export default function LionTicketsPage() {
   const [tickets, setTickets] = useState([]);
+  const [pricesAt, setPricesAt] = useState(0);
   const [loading, setLoading] = useState(true);
-  const { addToSlip, slipHasPick } = usePortfolio();
+  const { addToSlip, slipHasPick, playedPick } = usePortfolio();
 
   useEffect(() => {
     let active = true;
     api.get("/lion-tickets", { timeout: 120000 })
-      .then((r) => active && setTickets(r.data?.tickets || []))
+      .then((r) => {
+        if (!active) return;
+        setTickets(r.data?.tickets || []);
+        setPricesAt(r.data?.pricesAt || 0);
+      })
       .catch(() => active && setTickets([]))
       .finally(() => active && setLoading(false));
     return () => { active = false; };
@@ -135,6 +142,7 @@ export default function LionTicketsPage() {
               likely AND better priced than the bookmaker. Each pick is taken at its own best
               bookmaker, so a ticket is staked as singles — the figure shown is what comes back.
             </p>
+            <PriceStamp at={pricesAt} className="mt-2" />
           </div>
           <div className="flex items-center gap-2 text-[11px] text-[#FFD60A] bg-[#FFD60A]/10 border border-[#FFD60A]/25 rounded-lg px-3 py-2 max-w-sm">
             <TrendingUp className="w-4 h-4 shrink-0" />
@@ -156,7 +164,8 @@ export default function LionTicketsPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5 items-start" data-testid="lion-tickets-grid">
             {tickets.map((t) => (
               <TicketCard key={t.id} t={t} onAdd={add}
-                inSlip={t.legs.every((l) => slipHasPick(t.match.id, l.pick))} />
+                inSlip={t.legs.every((l) => slipHasPick(t.match.id, l.pick))}
+                played={t.legs.some((l) => playedPick(t.match.id, l.pick, t.match.home, t.match.away))} />
             ))}
           </div>
         )}

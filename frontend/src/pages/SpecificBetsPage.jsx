@@ -3,8 +3,10 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft, Sparkles, ShieldAlert, ChevronDown, Users, Loader2, Flag, Target,
   Hand, AlertTriangle, SquareStack, Clock, Hash, Shuffle, Scale, Repeat, Goal, Move, ExternalLink,
+  Crosshair,
 } from "lucide-react";
 import Header from "../components/Header";
+import { PriceStamp } from "../components/PriceStamp";
 import { bookmakerUrl } from "../lib/bookmakers";
 import { usePortfolio } from "../contexts/PortfolioContext";
 import { api } from "../lib/api";
@@ -13,7 +15,7 @@ import { toast } from "sonner";
 const ICONS = {
   goals: Goal, btts: Repeat, team_goals: Target, double_chance: Shuffle, handicap: Scale,
   corners: Flag, cards: SquareStack, fouls: AlertTriangle, offsides: Move, saves: Hand,
-  first_half: Clock, correct_score: Hash, score_anytime: Hash,
+  first_half: Clock, correct_score: Hash, score_anytime: Hash, shots: Crosshair,
 };
 
 const fmt = (iso) => (iso ? new Date(iso).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" }) : "");
@@ -45,8 +47,15 @@ const OddsCell = ({ row }) => {
 };
 
 // One selection — checkbox-style toggle straight into the existing slip.
-const BetRow = ({ row, picked, onToggle, lion, compact }) => (
-  <div className={`px-2 py-2 rounded-lg transition-colors ${picked ? "bg-[#FFD60A]/[0.07]" : "hover:bg-white/[0.03]"}`}
+const PLAYED_TONE = {
+  pending: ["#FFD60A", "PLAYED"], won: ["#39FF14", "WON"],
+  lost: ["#FF3B30", "LOST"], void: ["#8b949e", "VOID"],
+};
+
+const BetRow = ({ row, picked, played, onToggle, lion, compact }) => (
+  <div className={`px-2 py-2 rounded-lg transition-colors ${
+    played ? "bg-[#39FF14]/[0.06] ring-1 ring-inset ring-[#39FF14]/20"
+      : picked ? "bg-[#FFD60A]/[0.07]" : "hover:bg-white/[0.03]"}`}
     data-testid={`sb-row-${row.pick}`}>
     <div className="flex items-center justify-between gap-2">
       <button onClick={() => onToggle(row)} data-testid={`sb-toggle-${row.pick}`}
@@ -60,6 +69,13 @@ const BetRow = ({ row, picked, onToggle, lion, compact }) => (
           <QualityDot q={row.quality} />
           {row.player ? <span className="text-zinc-400">{row.player} · </span> : null}
           {(compact && row.short) || row.selection}
+          {played && (
+            <span className="shrink-0 text-[9px] font-black px-1.5 py-px rounded"
+              style={{ color: PLAYED_TONE[played]?.[0], background: `${PLAYED_TONE[played]?.[0]}1f` }}
+              data-testid={`sb-played-${row.pick}`}>
+              {PLAYED_TONE[played]?.[1]}
+            </span>
+          )}
         </span>
       </button>
       <div className="flex items-center gap-2.5 shrink-0 text-right">
@@ -108,7 +124,7 @@ const TopStrip = ({ row }) => (
   </div>
 );
 
-const Panel = ({ panel, teams, onToggle, isPicked }) => {
+const Panel = ({ panel, teams, onToggle, isPicked, playedOf }) => {
   const Icon = ICONS[panel.icon] || Target;
   const top = panel.top;
   // Grow with the content; only long lists get capped and scroll.
@@ -119,7 +135,7 @@ const Panel = ({ panel, teams, onToggle, isPicked }) => {
   // Inside a split panel the team is already the column header, so the row
   // label drops it instead of truncating ("Sunde…").
   const body = (rows, compact) => rows.map((r) => (
-    <BetRow key={r.pick} row={r} picked={isPicked(r)} onToggle={onToggle}
+    <BetRow key={r.pick} row={r} picked={isPicked(r)} played={playedOf(r)} onToggle={onToggle}
       lion={top && r.pick === top.pick} compact={compact} />
   ));
   return (
@@ -154,7 +170,7 @@ export default function SpecificBetsPage() {
   const { id } = useParams();
   const [params] = useSearchParams();
   const demo = params.get("demo") === "1";
-  const { addToSlip, removeFromSlip, slipHasPick } = usePortfolio();
+  const { addToSlip, removeFromSlip, slipHasPick, playedPick } = usePortfolio();
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
   const [openAll, setOpenAll] = useState({});
@@ -182,6 +198,8 @@ export default function SpecificBetsPage() {
   const match = data?.match || {};
   const teams = { home: match.home || data?.home, away: match.away || data?.away };
   const isPicked = (row) => slipHasPick(match.id, row.pick, teams.home, teams.away);
+  // Survives navigation and a fresh login: this reads the placed bets, not the slip.
+  const playedOf = (row) => playedPick(match.id, row.pick, teams.home, teams.away);
 
   const toggle = (row) => {
     if (isPicked(row)) {
@@ -255,6 +273,21 @@ export default function SpecificBetsPage() {
           </div>
         )}
 
+        {data && data.available && data.market_odds_available && (
+          <PriceStamp at={data.pricesAt} className="mb-4" />
+        )}
+
+        {data && data.available && !data.market_odds_available && (
+          <div className="rounded-xl border border-[#FFD60A]/30 bg-[#FFD60A]/5 p-3 mb-4 text-xs text-[#FFD60A] flex items-start gap-2"
+            data-testid="sb-no-prices">
+            <ShieldAlert className="w-4 h-4 shrink-0 mt-px" />
+            <span>
+              No bookmaker has opened these markets for this fixture yet — they usually go live 5-7 days before
+              kick-off. LION's probabilities are below; prices will fill in automatically.
+            </span>
+          </div>
+        )}
+
         {data && !data.available && (
           <div className="rounded-2xl border border-white/10 bg-[#11161d] p-8 text-center" data-testid="sb-insufficient">
             <ShieldAlert className="w-7 h-7 text-[#FFD60A] mx-auto mb-3" />
@@ -267,7 +300,7 @@ export default function SpecificBetsPage() {
           <>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
               {panels.map((p) => (
-                <Panel key={p.key} panel={p} teams={teams} onToggle={toggle} isPicked={isPicked} />
+                <Panel key={p.key} panel={p} teams={teams} onToggle={toggle} isPicked={isPicked} playedOf={playedOf} />
               ))}
             </div>
 
@@ -289,7 +322,7 @@ export default function SpecificBetsPage() {
                       {top && <TopStrip row={top} />}
                       <div className={rows.length > 7 ? "max-h-72 overflow-y-auto pr-1 sb-scroll" : ""}>
                         {rows.map((r) => (
-                          <BetRow key={r.pick} row={r} picked={isPicked(r)} onToggle={toggle} lion={top && r.pick === top.pick} />
+                          <BetRow key={r.pick} row={r} picked={isPicked(r)} played={playedOf(r)} onToggle={toggle} lion={top && r.pick === top.pick} />
                         ))}
                       </div>
                       <button onClick={() => setOpenAll((s) => ({ ...s, [team.side]: !open }))}

@@ -10,8 +10,11 @@ import logging
 import math
 from datetime import datetime, timezone
 
+import apifootball as af
 import live_values
 import rapid_books as rb
+import sportmonks_odds as sm
+import superbet_odds as sb
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +176,9 @@ def _build_ticket(m: dict, value: dict, prices: dict) -> dict:
     for book in books:
         p = 1.0
         for l in legs:
-            p *= l["books"][book]
+            # Round exactly like the prices we publish, so the parlay can never
+            # read higher than the legs on screen multiplied out.
+            p *= round(float(l["books"][book]), 2)
         if parlay is None or p > parlay["odds"]:
             parlay = {"bookmaker": book, "odds": round(p, 2)}
     for l in legs:
@@ -195,7 +200,11 @@ def _build_ticket(m: dict, value: dict, prices: dict) -> dict:
 
 
 async def build_tickets() -> list:
-    cached = live_values._cache_get("lion_tickets")
+    # Cache keyed on the odds snapshot: the instant new prices land, every
+    # ticket is rebuilt and re-valued (a leg whose price dropped loses its edge
+    # and falls out) instead of being served off stale odds.
+    ck = f"lion_tickets_{await rb.odds_version()}"
+    cached = live_values._cache_get(ck)
     if cached is not None:
         return cached
     try:
@@ -206,6 +215,7 @@ async def build_tickets() -> list:
         return []
     out = []
     now = datetime.now(timezone.utc).isoformat()
+    af_budget = 25          # one call per fixture: spend it on the best-valued ones
     for e in entries[:MAX_MATCHES]:
         m, v = e.get("match") or {}, e.get("value") or {}
         if not m.get("id") or (m.get("status") or "") != "upcoming":
@@ -215,6 +225,17 @@ async def build_tickets() -> list:
             continue
         try:
             prices = await rb.pick_prices(m["home"]["name"], m["away"]["name"])
+            # Superbet's snapshot is already in memory (streamed in the
+            # background), so this costs nothing per fixture.
+            rb.merge_prices(prices, await sb.pick_prices(m["home"]["name"], m["away"]["name"]))
+            # API-Football prices this fixture across every market of every
+            # licensed book, but it costs one call per fixture, so the budget
+            # goes to the best-valued matches (entries are value-sorted).
+            if af_budget > 0:
+                af_budget -= 1
+                prices = rb.merge_prices(prices, await af.pick_odds_for_fixture(m["id"]))
+                prices = rb.merge_prices(prices, await sm.pick_odds(
+                    m["home"]["name"], m["away"]["name"], m.get("commence_time") or ""))
         except Exception:
             prices = {}
         if not prices:
@@ -224,5 +245,5 @@ async def build_tickets() -> list:
             out.append(t)
     # Nearest kick-off first; between two the same day, the richer ticket wins.
     out.sort(key=lambda t: ((t["match"]["kickoff"] or "")[:10], -t["legCount"], -t["singlesReturn"]))
-    live_values._cache_set("lion_tickets", out, CACHE_TTL)
+    live_values._cache_set(ck, out, CACHE_TTL)
     return out

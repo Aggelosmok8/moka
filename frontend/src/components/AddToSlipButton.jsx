@@ -6,13 +6,17 @@ import { usePortfolio } from "../contexts/PortfolioContext";
 import { isDoubleChance, pickChoices, bestOddsByOutcome } from "../lib/picks";
 
 export default function AddToSlipButton({ entry, className = "", size = "sm" }) {
-  const { addToSlip, removeFromSlip, slipHas } = usePortfolio();
+  const { addToSlip, removeFromSlip, slipHas, playedMatch } = usePortfolio();
   const navigate = useNavigate();
   const [choosing, setChoosing] = useState(false);
   const match = entry?.match || {};
   const value = entry?.value || {};
   const id = match.id;
   const inSlip = slipHas(id, match.home?.name, match.away?.name);
+  // Already placed: read from the bets, so it stays marked after navigating
+  // away, switching pages or signing in again.
+  const played = playedMatch(id, match.home?.name, match.away?.name);
+  const PLAYED_LABEL = { pending: "Played", won: "Won", lost: "Lost", void: "Void" };
 
   const add = (choice) => {
     // Price the scenario the user actually picked, not the model's pick.
@@ -35,6 +39,12 @@ export default function AddToSlipButton({ entry, className = "", size = "sm" }) 
   const onClick = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    if (played) {
+      toast(`You already played this match — ${PLAYED_LABEL[played]}`, {
+        action: { label: "Open portfolio", onClick: () => navigate("/portfolio") },
+      });
+      return;
+    }
     if (inSlip) {
       removeFromSlip(id, match.home?.name, match.away?.name);
       toast("Removed from bet slip");
@@ -54,13 +64,15 @@ export default function AddToSlipButton({ entry, className = "", size = "sm" }) 
         type="button"
         onClick={onClick}
         data-testid={`add-to-slip-${id}`}
-        title={inSlip ? "Remove from bet slip" : "Add to accumulator slip"}
+        title={played ? "Already in your portfolio" : inSlip ? "Remove from bet slip" : "Add to accumulator slip"}
         className={`inline-flex items-center justify-center gap-1.5 rounded-md font-bold transition-colors ${
-          inSlip ? "bg-[#FFD60A]/15 text-[#FFD60A] border border-[#FFD60A]/40" : "bg-white/5 text-zinc-300 border border-white/10 hover:bg-white/10 hover:text-white"
+          played ? "bg-[#39FF14]/15 text-[#39FF14] border border-[#39FF14]/40"
+            : inSlip ? "bg-[#FFD60A]/15 text-[#FFD60A] border border-[#FFD60A]/40"
+            : "bg-white/5 text-zinc-300 border border-white/10 hover:bg-white/10 hover:text-white"
         } ${size === "sm" ? "px-2.5 py-1.5 text-xs" : "px-4 py-2 text-sm"} ${className}`}
       >
-        {inSlip ? <Check className="w-3.5 h-3.5" /> : <Layers className="w-3.5 h-3.5" />}
-        {inSlip ? "In slip" : "Add to slip"}
+        {played || inSlip ? <Check className="w-3.5 h-3.5" /> : <Layers className="w-3.5 h-3.5" />}
+        {played ? PLAYED_LABEL[played] : inSlip ? "In slip" : "Add to slip"}
       </button>
 
       {choosing && (

@@ -10,6 +10,9 @@ import os
 import time as _time
 import datetime as _dt
 import logging
+import re
+import json
+import unicodedata
 import httpx
 import mockdata
 
@@ -37,24 +40,88 @@ BASKETBALL_SEASON = "2023-2024"
 # catalogue (~170 fixtures) having its Specific Bets built in one day is roughly
 # 1,900 calls. 5,000 leaves headroom and is still well under the Pro 7,500/day.
 MAX_CALLS = int(os.environ.get("API_FOOTBALL_MAX_CALLS", "5000"))
-_usage = {"date": None, "count": 0}
+_usage = {"date": None, "count": 0, "synced": False, "flushed": 0,
+          "status_at": 0.0, "limit_day": None}
+
+
+def _usage_db():
+    from database import Database
+    return Database().odds_cache
+
+
+async def _sync_usage():
+    """Keep the daily count honest across pods and restarts.
+
+    The authority is the provider's own `/status` (it reports usage for the key,
+    so it already includes preview + pre-prod + prod); the DB row is the
+    cross-pod cache so a fresh pod doesn't start from zero. `/status` is free of
+    charge and is refreshed at most every 10 minutes."""
+    today = _dt.date.today().isoformat()
+    if _usage["date"] != today:
+        _usage.update(date=today, count=0, synced=False, flushed=0, status_at=0.0)
+    if not _usage["synced"]:
+        _usage["synced"] = True
+        try:
+            row = await _usage_db().find_one({"slug": "af_usage"})
+            data = (row or {}).get("data")
+            if isinstance(data, str):
+                data = json.loads(data)
+            if (data or {}).get("date") == today:
+                _usage["count"] = max(_usage["count"], int(data.get("count") or 0))
+                _usage["flushed"] = _usage["count"]
+        except Exception as e:
+            logger.warning("api-football usage sync: %s", type(e).__name__)
+    if _time.time() - _usage["status_at"] < 600:
+        return
+    _usage["status_at"] = _time.time()
+    try:
+        key = _key()
+        async with httpx.AsyncClient(timeout=15, headers={"x-apisports-key": key}) as c:
+            r = await c.get(f"{FOOTBALL_BASE}/status")
+        req = ((r.json() or {}).get("response") or {}).get("requests") or {}
+        if req.get("current") is not None:
+            _usage["count"] = int(req["current"])
+            _usage["limit_day"] = int(req.get("limit_day") or 0) or None
+            await _flush_usage(force=True)
+    except Exception as e:
+        logger.warning("api-football /status: %s", type(e).__name__)
+
+
+async def _flush_usage(force: bool = False):
+    if not force and _usage["count"] - _usage["flushed"] < 10:
+        return
+    _usage["flushed"] = _usage["count"]
+    try:
+        await _usage_db().update_one(
+            {"slug": "af_usage"},
+            {"$set": {"data": json.dumps({"date": _usage["date"], "count": _usage["count"]}),
+                      "fetched_at": str(_dt.datetime.now(_dt.timezone.utc).timestamp()),
+                      "month": "", "calls": _usage["count"]}}, upsert=True)
+    except Exception as e:
+        logger.warning("api-football usage flush: %s", type(e).__name__)
+
+
+def _budget() -> int:
+    """Our own ceiling, never above what the plan actually allows."""
+    return min(MAX_CALLS, _usage["limit_day"] or MAX_CALLS)
 
 
 def _bump_usage() -> int:
     today = _dt.date.today().isoformat()
     if _usage["date"] != today:
         _usage["date"], _usage["count"] = today, 0
-    if _usage["count"] >= MAX_CALLS:
-        raise RuntimeError(f"API-Football daily call budget reached ({MAX_CALLS})")
+    if _usage["count"] >= _budget():
+        raise RuntimeError(f"API-Football daily call budget reached ({_budget()})")
     _usage["count"] += 1
-    if _usage["count"] == int(MAX_CALLS * 0.8):
+    if _usage["count"] == int(_budget() * 0.8):
         logger.warning("api-football: 80%% of the daily budget used (%s/%s)",
-                       _usage["count"], MAX_CALLS)
+                       _usage["count"], _budget())
     return _usage["count"]
 
 
 def usage() -> dict:
-    return {"date": _usage["date"], "count": _usage["count"], "max": MAX_CALLS}
+    return {"date": _usage["date"], "count": _usage["count"], "max": _budget(),
+            "planLimit": _usage["limit_day"], "exhausted": _usage["count"] >= _budget()}
 
 # slug -> catalog entry. Verified league ids against api-sports.io.
 CATALOG = {
@@ -159,12 +226,25 @@ async def _get(base: str, path: str, params: dict) -> dict:
     key = _key()
     if not key:
         raise RuntimeError("API_FOOTBALL_KEY not configured")
+    await _sync_usage()
     n = _bump_usage()
     logger.info("[api-football] call #%d/%d GET %s%s %s", n, MAX_CALLS, base, path, params)
     async with httpx.AsyncClient(timeout=25, headers={"x-apisports-key": key}) as c:
         r = await c.get(f"{base}{path}", params=params)
+    await _flush_usage()
     r.raise_for_status()
-    return r.json()
+    data = r.json()
+    errs = (data or {}).get("errors") or {}
+    msg = str(errs.get("requests") or "") if isinstance(errs, dict) else ""
+    if "limit for the day" in msg.lower() or "daily" in msg.lower():
+        # Real daily exhaustion: stop the remaining ~140 calls of a cold build
+        # from firing into the wall. A per-minute "rateLimit" error does NOT
+        # come through here — killing the whole day over it is what wrongly
+        # blanked the Matches page.
+        _usage["count"] = max(_usage["count"], _budget())
+        await _flush_usage(force=True)
+        logger.warning("api-football: provider reports DAILY limit reached — serving cached data")
+    return data
 
 
 def _form_list(form_str):
@@ -534,6 +614,9 @@ async def fixture_settlement_detail(fixture_id) -> dict:
                 "fouls_home": num(h, "Fouls"), "fouls_away": num(a, "Fouls"),
                 "offsides": num(h, "Offsides") + num(a, "Offsides"),
                 "saves_home": num(h, "Goalkeeper Saves"), "saves_away": num(a, "Goalkeeper Saves"),
+                "saves": num(h, "Goalkeeper Saves") + num(a, "Goalkeeper Saves"),
+                "shots_home": num(h, "Total Shots"), "shots_away": num(a, "Total Shots"),
+                "sot_home": num(h, "Shots on Goal"), "sot_away": num(a, "Shots on Goal"),
             }
     except Exception as e:
         logger.warning("settlement stats(%s): %s", fid, e)
@@ -869,14 +952,14 @@ async def fixtures_for_league(slug: str) -> dict:
 
 
 
-# Reputable bookmakers we are willing to surface + redirect to. Anything not
-# matching (grey-market / blocked-in-Greece operators) is dropped from odds.
+# Only operators that hold a Greek (ΕΕΕΠ/HGC) licence are surfaced: anything
+# else — Betano, Unibet, bet365.com, William Hill, BetVictor, Betway, Pinnacle,
+# 1xBet… — serves a Greek visitor a "not available in your country" page, so its
+# odds are useless to our users and are dropped from the feed entirely.
 APPROVED_BOOKMAKERS = (
-    "bet365", "betano", "bwin", "unibet", "betsson", "netbet", "888sport",
-    "888 sport", "betway", "betvictor", "bet victor", "interwetten",
-    "william hill", "coolbet", "nordicbet", "10bet", "leovegas",
-    # Greek-market operators (shown when the provider actually returns them).
-    "stoiximan", "novibet", "fonbet", "pamestoixima", "pame stoixima",
+    "stoiximan", "novibet", "bwin", "pamestoixima", "pame stoixima", "opap",
+    "elabet", "bet365", "betsson", "netbet", "interwetten", "winmasters",
+    "fonbet", "superbet", "vistabet", "sportingbet", "efbet",
 )
 
 
@@ -884,7 +967,151 @@ def _bookmaker_approved(name: str) -> bool:
     if not name:
         return False
     key = name.strip().lower()
-    return any(a in key or key in a for a in APPROVED_BOOKMAKERS)
+    # Exact-ish match only: a substring test would let "Betano" through on
+    # "bet365" and "Sportingbet"/"Betsafe" through on "sportingbet".
+    return any(key == a or key.replace(" ", "") == a.replace(" ", "")
+               or key.replace(".gr", "").strip() == a for a in APPROVED_BOOKMAKERS)
+
+
+_AF_OU = re.compile(r"^(over|under)\s+([\d.]+)$")
+_AF_CS = re.compile(r"^(\d{1,2})\s*[:\-]\s*(\d{1,2})$")
+_AF_PLAYER_N = re.compile(r"^(.+?)\s*-\s*(\d+)\s*$")
+_AF_CORNERS = ("corners over under", "corners over/under", "total corners",
+               "total corners (3 way)", "corners. total")
+_AF_SCORER = ("anytime goal scorer", "home anytime goal scorer",
+              "away anytime goal scorer")
+_AF_SHOTS = ("home player shots", "away player shots", "player shots")
+_AF_SOT = ("home player shots on target total", "away player shots on target total",
+           "player shots on target total")
+
+
+def player_key(name: str) -> str:
+    """'Zan Vipotnik', 'Ž. Vipotnik' and 'Vipotnik, Zan' all collapse to the same
+    key, because squads give us initials while bookmakers give full names."""
+    s = unicodedata.normalize("NFKD", str(name or "")).encode("ascii", "ignore").decode()
+    parts = [p for p in re.split(r"[\s,]+", s) if p]
+    if len(parts) < 2:
+        return ""
+    first = re.sub(r"[^a-z]", "", parts[0].lower())
+    last = re.sub(r"[^a-z]", "", parts[-1].lower())
+    return f"{first[:1]}|{last}" if first and last else ""
+
+
+def _af_player_pick(bet, value):
+    """Player markets are keyed by NAME (`pn:<key>:<market>`) because the odds
+    feed has no player ids; Specific Bets resolves them against its squad rows."""
+    b, v = str(bet or "").strip().lower(), str(value or "").strip()
+    if not b or not v:
+        return None
+    if b in _AF_SCORER:
+        k = player_key(v)
+        return f"pn:{k}:score" if k else None
+    kind = "shots" if b in _AF_SHOTS else "sot" if b in _AF_SOT else None
+    if not kind:
+        return None
+    g = _AF_PLAYER_N.match(v)          # "Ryan Leonard - 2" == 2 or more
+    if not g:
+        return None
+    k, n = player_key(g.group(1)), int(g.group(2))
+    return f"pn:{k}:{kind}_over_{n - 0.5:g}" if k and n >= 1 else None
+_AF_HCP = re.compile(r"^(home|away)\s*([+-][\d.]+)$")
+
+
+def _af_pick(bet, value):
+    """An API-Football bet name + selection -> one of our Specific Bets pick ids.
+
+    The /odds response we already pay for carries dozens of markets per
+    bookmaker; we used to keep only "Match Winner" and throw the rest away.
+    """
+    b, v = str(bet or "").strip().lower(), str(value or "").strip().lower()
+    if not b or not v:
+        return None
+    if b == "match winner":
+        return v if v in ("home", "draw", "away") else None
+    if b == "first half winner":
+        return {"home": "ht_home", "draw": "ht_draw", "away": "ht_away"}.get(v)
+    if b == "double chance":
+        return {"home/draw": "home_or_draw", "home/away": "home_or_away",
+                "draw/away": "away_or_draw"}.get(v)
+    if b == "both teams score":
+        return {"yes": "btts_yes", "no": "btts_no"}.get(v)
+    if b in ("exact score", "correct score"):
+        g = _AF_CS.match(v)
+        if g:
+            return f"cs_{int(g.group(1))}_{int(g.group(2))}"
+        return None
+    g = _AF_OU.match(v)
+    if g:
+        side, line = g.group(1), g.group(2)
+        # Half lines only, except in the explicit 3-way markets (Over / Under /
+        # Exactly) where an exact hit loses both sides — which is how we settle
+        # whole numbers. Elsewhere a whole line is a push at the book but a
+        # win/loss for us, so pricing it would misstate the bet.
+        if float(line) * 2 % 2 != 1 and "(3 way)" not in b:
+            return None
+        if b == "goals over/under":
+            return f"{side}_{line}"
+        if b == "goals over/under first half":
+            return f"fh_{side}_{line}"
+        if b in _AF_CORNERS:
+            return f"corners_{side}_{line}"
+        if b == "total - home":
+            return f"home_{side}_{line}"
+        if b == "total - away":
+            return f"away_{side}_{line}"
+        # Only the MATCH total — "Home Team Total Cards" is a different bet and
+        # used to be mislabelled as the match line by a loose "card in b" test.
+        if b in ("cards over/under", "cards over under", "total cards"):
+            return f"cards_{side}_{line}"
+    if b == "asian handicap":
+        g = _AF_HCP.match(v)
+        if g and abs(float(g.group(2))) * 2 % 2 == 1:   # half lines only
+            return f"{g.group(1)}_hcp_{float(g.group(2)):g}"
+    return None
+
+
+async def pick_odds_for_fixture(fixture_id: str) -> dict:
+    """pick id -> {odds, bookmaker, books} for ONE fixture, straight from the
+    bookmakers API-Football already gives us (1 call, cached 30 min)."""
+    fid = "".join(ch for ch in str(fixture_id) if ch.isdigit())
+    if not fid:
+        return {}
+    ck = f"afpicks_{fid}"
+    hit = _c_get(ck)
+    if hit is not None:
+        return hit
+    out = {}
+    try:
+        r = await _get(FOOTBALL_BASE, "/odds", {"fixture": fid})
+        for e in r.get("response") or []:
+            for bk in e.get("bookmakers") or []:
+                name = bk.get("name")
+                if not _bookmaker_approved(name):
+                    continue
+                for bet in bk.get("bets") or []:
+                    for val in bet.get("values") or []:
+                        pick = _af_pick(bet.get("name"), val.get("value")) \
+                            or _af_player_pick(bet.get("name"), val.get("value"))
+                        if not pick:
+                            continue
+                        try:
+                            price = float(val.get("odd") or 0)
+                        except (TypeError, ValueError):
+                            continue
+                        if not 1.01 <= price <= 101.0:
+                            continue
+                        slot = out.setdefault(pick, {"odds": 0.0, "bookmaker": "", "books": {}})
+                        slot["books"][name] = price
+                        if price > slot["odds"]:
+                            slot.update(odds=price, bookmaker=name)
+    except Exception as e:
+        logger.warning("apifootball.pick_odds_for_fixture(%s): %s", fid, e)
+        _c_set(ck, {}, ttl=120)
+        return {}
+    # 1h: a LION-ticket rebuild touches up to 40 fixtures, so a shorter window
+    # here is the single biggest consumer of the daily quota.
+    _c_set(ck, out, ttl=3600 if out else 300)
+    return out
 
 
 def _mw_entries(bookmakers: list) -> list:

@@ -43,7 +43,8 @@ LIVE_LEAGUES = [
 ]
 
 STATS_TTL = 24 * 3600
-MATCHES_TTL = 2 * 3600  # pre-match value list changes slowly; long cache saves quota
+MATCHES_TTL = 4 * 3600  # pre-match value list changes slowly; long cache saves quota
+_STARTED = time.time()
 MAX_PER_LEAGUE = 14      # full matchday per competition (was 6 -> matches were lost)
 _BUILD_CONCURRENCY = 6    # cap simultaneous league builds (API rate-limit safety)
 
@@ -270,7 +271,64 @@ async def build_live_matches() -> list:
         cached = _cache_get("live_matches")
         if cached is not None:
             return cached
+        # A restart or a redeploy used to mean a ~600-call cold rebuild. Reuse
+        # the DB snapshot while it is inside its TTL — and for the first minutes
+        # after a restart accept an older one too, so deploys cost nothing.
+        snap, age = await _load_snapshot_aged()
+        window = MATCHES_TTL if time.time() - _STARTED > 600 else max(MATCHES_TTL, 6 * 3600)
+        if snap and age < window:
+            _cache_set("live_matches", snap, max(60, int(MATCHES_TTL - min(age, MATCHES_TTL - 60))))
+            _cache_set("live_matches_last", snap, 12 * 3600)
+            logger.info("live matches served from DB snapshot (%.0f min old) — no provider calls",
+                        age / 60)
+            return snap
         return await _do_build_live_matches()
+
+
+async def _save_snapshot(matches: list):
+    """Keep the last good match list in the DB. In-memory stale copies die with
+    the pod, which is exactly why a fresh deploy (or an API-Football daily-quota
+    block) showed an empty Matches page."""
+    try:
+        from database import Database
+        import json as _json
+        await Database().odds_cache.update_one(
+            {"slug": "live_matches"},
+            {"$set": {"data": _json.dumps(matches), "fetched_at": str(time.time()),
+                      "month": "", "calls": 0}}, upsert=True)
+    except Exception as e:
+        logger.warning("live snapshot save: %s", type(e).__name__)
+
+
+async def _load_snapshot_aged() -> tuple:
+    """(matches, age_seconds) of the DB snapshot."""
+    try:
+        from database import Database
+        import json as _json
+        row = await Database().odds_cache.find_one({"slug": "live_matches"})
+        data = (row or {}).get("data")
+        if isinstance(data, str):
+            data = _json.loads(data)
+        if not isinstance(data, list):
+            return [], 1e9
+        return data, max(0.0, time.time() - float((row or {}).get("fetched_at") or 0))
+    except Exception as e:
+        logger.warning("live snapshot load: %s", type(e).__name__)
+        return [], 1e9
+
+
+async def _load_snapshot() -> list:
+    try:
+        from database import Database
+        import json as _json
+        row = await Database().odds_cache.find_one({"slug": "live_matches"})
+        data = (row or {}).get("data")
+        if isinstance(data, str):
+            data = _json.loads(data)
+        return data if isinstance(data, list) else []
+    except Exception as e:
+        logger.warning("live snapshot load: %s", type(e).__name__)
+        return []
 
 
 async def _do_build_live_matches() -> list:
@@ -296,10 +354,13 @@ async def _do_build_live_matches() -> list:
     if matches:
         _cache_set("live_matches", matches, MATCHES_TTL)
         _cache_set("live_matches_last", matches, 12 * 3600)  # stale fallback
+        await _save_snapshot(matches)
         return matches
     # Build produced nothing (quota exhausted / API errors / cold-start race).
     # Serve the last known-good set instead of an empty page, and retry soon.
     stale = _cache_get("live_matches_last")
+    if stale is None:
+        stale = await _load_snapshot() or None   # survives restarts and redeploys
     if stale is not None:
         _cache_set("live_matches", stale, 60)
         return stale
