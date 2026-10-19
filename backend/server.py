@@ -519,6 +519,18 @@ async def specific_bets(match_id: str):
     h2h["book"] = best_book
 
     _val = (m or {}).get("value") or {}
+    if not _val.get("prediction") and not _val.get("probabilities"):
+        # CRITICAL for consistency: without the match model's own probabilities the
+        # Specific Bets engine falls back to raw team averages and can contradict
+        # the Analysis page (e.g. "Away or Draw" under a Home pick). Running the
+        # same value engine on the match we already have is pure arithmetic.
+        try:
+            from src.services.value_engine import rank_value_matches
+            ranked = rank_value_matches([m]) if m else []
+            if ranked:
+                _val = ranked[0].get("value") or _val
+        except Exception as e:
+            logger.warning("specific_bets value(%s): %s", match_id, e)
     _home = ((m or {}).get("home") or {}).get("name") or ""
     _away = ((m or {}).get("away") or {}).get("name") or ""
     import superbet_odds as _sb

@@ -117,14 +117,14 @@ function OddsBoxes({ match, value }) {
                 isBest ? "bg-[#39FF14]/10 border-[#39FF14]/60"
                   : isSecond ? "bg-[#FFD60A]/[0.07] border-[#FFD60A]/50"
                   : "bg-[#0d1117] border-[#30363d]"}`}>
-              {/* corner markers */}
-              {isBest && (
-                <span className="absolute -top-1.5 -left-1.5 text-[8px] font-black uppercase tracking-wide text-black bg-[#39FF14] rounded px-1 leading-[13px] shadow">Best</span>
-              )}
+              {/* corner markers — lion top-left, BEST bottom-right, never overlapping */}
               {(isBest || isSecond) && (
-                <LionMark className={`absolute -top-2 -right-2 w-4 h-4 rounded-full ${isBest ? "bg-[#39FF14]/20" : "bg-[#FFD60A]/20"} p-[1px]`} />
+                <LionMark className={`absolute -top-2 -left-2 w-4 h-4 rounded-full ${isBest ? "bg-[#39FF14]/20" : "bg-[#FFD60A]/20"} p-[1px]`} />
               )}
-              <div className="text-[9px] text-zinc-400 truncate" title={b.label}>{b.label}</div>
+              {isBest && (
+                <span className="absolute -bottom-1.5 -right-1.5 text-[8px] font-black uppercase tracking-wide text-black bg-[#39FF14] rounded px-1 leading-[13px] shadow">Best</span>
+              )}
+              <div className="text-[9px] text-white truncate" title={b.label}>{b.label}</div>
               <div className={`font-display font-black text-sm font-mono-num leading-tight ${isBest ? "text-[#39FF14]" : "text-white"}`}>
                 {o?.odds ? o.odds.toFixed(2) : "—"}
               </div>
@@ -196,7 +196,7 @@ export default function ValueCard({ entry }) {
       }`}
     >
       <div className="flex items-center justify-between mb-2 gap-2">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 truncate flex items-center gap-1.5">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-white truncate flex items-center gap-1.5">
           {inSlip && (
             <span data-testid={`in-slip-badge-${match.id}`} className="inline-flex items-center gap-1 text-[9px] font-black text-[#FFD60A] bg-[#FFD60A]/15 border border-[#FFD60A]/40 rounded-full px-1.5 py-0.5 whitespace-nowrap">
               <Check className="w-2.5 h-2.5" /> IN SLIP

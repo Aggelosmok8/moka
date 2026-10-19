@@ -423,7 +423,12 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
              _pct(imp[0] + imp[2]) if imp else None, pick="home_or_away", quality=q_goals),
     ]
     core += dc
-    panel("double_chance", "Double Chance", "double_chance", dc)
+    # The highlighted double chance must CONTAIN the match model's pick — one
+    # match, one view: an "Away or Draw" can never sit under a Home prediction.
+    _side = (model_pick or "").lower()
+    _dc_allowed = [r for r in dc if r["pick"] == f"{_side}_or_draw"] if _side in ("home", "away") else []
+    panel("double_chance", "Double Chance", "double_chance", dc,
+          top_from=_dc_allowed or None)
 
     # --- Handicap -------------------------------------------------------------
     # Half lines only (a side covers when diff + line > 0), which is exactly how
@@ -440,7 +445,9 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
                         pick=f"away_hcp_{line:g}", quality=q_goals, side="away",
                         short=f"{line:+g}"))
     core += hcp
-    panel("handicap", "Handicap", "handicap", hcp, split=True)
+    _hcp_allowed = [r for r in hcp if _side and r.get("side") == _side]
+    panel("handicap", "Handicap", "handicap", hcp, split=True,
+          top_from=_hcp_allowed or None)
 
     # --- Correct score (final) ------------------------------------------------
     # The highlighted scoreline must agree with the result the SAME model rates

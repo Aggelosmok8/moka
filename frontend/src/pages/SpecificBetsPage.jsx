@@ -139,7 +139,8 @@ const Panel = ({ panel, teams, onToggle, isPicked, playedOf }) => {
       lion={top && r.pick === top.pick} compact={compact} />
   ));
   return (
-    <div className={`rounded-2xl border border-white/10 bg-[#11161d] p-4 ${panel.split ? "lg:col-span-2" : ""}`} data-testid={`sb-panel-${panel.key}`}>
+    <div className={`rounded-2xl border border-white/10 bg-[#11161d] p-4 break-inside-avoid ${
+      panel.split ? "lg:[column-span:all]" : ""}`} data-testid={`sb-panel-${panel.key}`}>
       <div className="flex items-center gap-2 mb-1">
         <span className="w-7 h-7 rounded-lg bg-[#39FF14]/12 border border-[#39FF14]/30 flex items-center justify-center shrink-0">
           <Icon className="w-4 h-4 text-[#39FF14]" />
@@ -298,20 +299,20 @@ export default function SpecificBetsPage() {
 
         {data?.available && (
           <>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+            <div className="columns-1 lg:columns-2 gap-4 [&>*]:mb-4" data-testid="sb-panels">
               {panels.map((p) => (
                 <Panel key={p.key} panel={p} teams={teams} onToggle={toggle} isPicked={isPicked} playedOf={playedOf} />
               ))}
             </div>
 
             {!!(data.players || []).length && (
-              <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+              <div className="mt-4 columns-1 lg:columns-2 gap-4 [&>*]:mb-4">
                 {data.players.map((team) => {
                   const open = !!openAll[team.side];
                   const rows = (open ? team.rows : team.top).map(withDemo);
                   const top = team.top.length ? withDemo(team.top[0]) : null;
                   return (
-                    <div key={team.side} className="rounded-2xl border border-white/10 bg-[#11161d] p-4" data-testid={`sb-players-${team.side}`}>
+                    <div key={team.side} className="rounded-2xl border border-white/10 bg-[#11161d] p-4 break-inside-avoid" data-testid={`sb-players-${team.side}`}>
                       <div className="flex items-center gap-2 mb-2">
                         <span className="w-7 h-7 rounded-lg bg-[#39FF14]/12 border border-[#39FF14]/30 flex items-center justify-center">
                           <Users className="w-4 h-4 text-[#39FF14]" />

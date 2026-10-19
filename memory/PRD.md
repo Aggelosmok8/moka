@@ -1037,3 +1037,20 @@ disappearing, pending above History, bookmaker-style match panel.
   Score At Any Time is the one market no Greek book quotes at all.
 - Suite: **169 passed, 3 skipped** (the pinned-fixture iteration tests were re-pointed at current
   fixtures and now skip instead of failing when a market is simply not posted yet).
+
+## 2026-10-19 (c) Specific Bets aligned with the match prediction + panel/badge polish
+- **ROOT CAUSE of the contradictions**: `/api/specific-bets` passed `m["value"]` to the engine, but the
+  match object it resolves (fsl detail OR the live list) carries NO `value` — so `_calibrate()` got
+  nothing and the whole Specific Bets model ran on raw team averages (`basis: "team averages"`). That is
+  why Analysis could say Home while Double Chance highlighted "Away or Draw". The route now runs the SAME
+  value engine on the match it already has (`rank_value_matches([m])`, pure arithmetic, no API call) when
+  the value is missing. Every fixture now reports `basis: "calibrated to LION's match model"`.
+- **Highlight alignment**: the Double Chance panel's LION's pick is forced to `{pick}_or_draw`, and the
+  Handicap panel's to a line on the predicted side (`top_from=`). Verified: Tottenham pick -> "Tottenham
+  or Draw" + "Tottenham +0.5"; Brighton pick -> "Brighton or Draw" + "Brighton +1.5".
+- **Match panel badges**: lion mark moved to the TOP-LEFT corner and the BEST badge to the BOTTOM-RIGHT
+  corner of the highlighted box, so they never sit on top of each other. League name and the team names
+  inside the four boxes are now white.
+- **Specific Bets layout**: panels moved from a grid to CSS multi-columns — narrow panels pair up two per
+  row with no holes, while wide (split) panels take the full width via `lg:[column-span:all]`.
+- Suite: 169 passed, 3 skipped.
