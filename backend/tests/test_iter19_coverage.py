@@ -16,7 +16,7 @@ GREEK_HOSTS = ("bet365.gr", "bwin.gr", "novibet.gr", "elabet.gr",
                "n1bet.gr", "winbet.gr", "betarades.gr")
 
 UNPRICED_PANELS = {"Score At Any Time", "Fouls", "Offsides", "Goalkeeper Saves"}
-NOTE_SUFFIX = "No bookmaker prices this market for this fixture"
+NOTE_SUFFIX = "Not quoted by any Greek-licensed bookmaker yet"
 
 
 @pytest.fixture(scope="session")

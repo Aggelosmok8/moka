@@ -36,8 +36,9 @@ export const pickChoices = (match, value) => {
   ];
 };
 
-// Best published price per outcome, plus the implied double-chance prices, so a
-// chosen scenario arrives in the slip already priced instead of empty.
+// Best published price per outcome. Double chance uses the REAL bookmaker price
+// when a feed quotes it (`match.dcOdds`), and only falls back to the implied
+// 1/(1/a+1/b) figure when nobody prices it.
 export const bestOddsByOutcome = (match) => {
   const best = {};
   for (const e of match?.odds || []) {
@@ -49,7 +50,16 @@ export const bestOddsByOutcome = (match) => {
   const dc = (a, b) => (best[a] && best[b]
     ? { odds: Math.round((1 / (1 / best[a].odds + 1 / best[b].odds)) * 100) / 100, bookmaker: "" }
     : null);
-  return { ...best, home_or_draw: dc("home", "draw"), away_or_draw: dc("away", "draw") };
+  const real = match?.dcOdds || {};
+  const pick = (k, a, b) => (Number(real[k]?.odds) > 1
+    ? { odds: Number(real[k].odds), bookmaker: real[k].bookmaker || "" }
+    : dc(a, b));
+  return {
+    ...best,
+    home_or_draw: pick("home_or_draw", "home", "draw"),
+    away_or_draw: pick("away_or_draw", "away", "draw"),
+    home_or_away: pick("home_or_away", "home", "away"),
+  };
 };
 
 export const matchKey = (home, away) =>

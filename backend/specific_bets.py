@@ -29,7 +29,8 @@ def _p_over(line: float, lam: float) -> float:
 
 
 def _pct(p: float) -> int:
-    return int(round(max(0.0, min(1.0, p)) * 100))
+    # Never publish 100% (or 0%): no statistical model can promise a certainty.
+    return int(round(max(0.01, min(0.99, p)) * 100))
 
 
 def _implied(price: float) -> Optional[int]:
@@ -401,8 +402,9 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
     tg = []
     for side, lam, name in (("home", lam_h, fx["home"]), ("away", lam_a, fx["away"])):
         for line in _lines((0.5, 1.5, 2.5), priced, rf"^{side}_over_([\d.]+)$"):
-            tg.append(_row("Team Goals", f"Over {line} goals", _pct(_p_over(line, lam)),
-                           line=line, pick=f"{side}_over_{line:g}", quality=q_goals, side=side))
+            tg.append(_row("Team Goals", f"{name} over {line:g} goals", _pct(_p_over(line, lam)),
+                           line=line, pick=f"{side}_over_{line:g}", quality=q_goals, side=side,
+                           short=f"Over {line:g} goals"))
     core += tg
     panel("team_goals", "Team Goals", "team_goals", tg, split=True)
 
@@ -556,11 +558,14 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
             if (st.get("saves") or 0) <= 0:
                 continue
             for line in _lines((1.5, 2.5, 3.5, 4.5), priced, rf"^{side}_saves_over_([\d.]+)$"):
-                saves.append(_row("Goalkeeper Saves", f"Over {line:g} saves", _pct(_p_over(line, st["saves"])),
-                                  line=line, pick=f"{side}_saves_over_{line:g}", quality=MEDIUM, side=side))
-                saves.append(_row("Goalkeeper Saves", f"Under {line:g} saves",
+                saves.append(_row("Goalkeeper Saves", f"{name} keeper over {line:g} saves",
+                                  _pct(_p_over(line, st["saves"])),
+                                  line=line, pick=f"{side}_saves_over_{line:g}", quality=MEDIUM, side=side,
+                                  short=f"Over {line:g} saves"))
+                saves.append(_row("Goalkeeper Saves", f"{name} keeper under {line:g} saves",
                                   _pct(1 - _p_over(line, st["saves"])), line=line,
-                                  pick=f"{side}_saves_under_{line:g}", quality=MEDIUM, side=side))
+                                  pick=f"{side}_saves_under_{line:g}", quality=MEDIUM, side=side,
+                                  short=f"Under {line:g} saves"))
         game += saves
         panel("saves", "Goalkeeper Saves", "saves", saves, split=True, note=sample_note)
 
@@ -698,11 +703,41 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
         for blk in players:
             _apply(blk["rows"])
 
+    # --- Drop selections nobody would actually play --------------------------
+    # A near-certainty priced at 1.0x returns nothing, and the same selection
+    # with no price at all is pure noise in the panel. Runs AFTER pricing so the
+    # decision is made on the real number.
+    def _pointless(r) -> bool:
+        o = r.get("odds")
+        if o is not None:
+            return float(o) < 1.10
+        return (r.get("lion") or 0) >= 96
+
+    for _p in list(panels):
+        kept = [r for r in _p["rows"] if not _pointless(r)]
+        if not kept:
+            panels.remove(_p)
+            continue
+        if len(kept) != len(_p["rows"]):
+            _p["rows"] = kept
+            if _p.get("top") not in kept:
+                _p["top"] = _best(kept)
+    core = [r for r in core if not _pointless(r)]
+    game = [r for r in game if not _pointless(r)]
+    for blk in list(players):
+        blk["rows"] = [r for r in blk["rows"] if not _pointless(r)]
+        blk["top"] = [r for r in blk.get("top") or [] if not _pointless(r)]
+        if not blk["rows"]:
+            players.remove(blk)
+        elif not blk["top"]:
+            blk["top"] = blk["rows"][:4]
+
     # Tell the user WHY a panel is blank instead of leaving a column of dashes:
     # no licensed Greek bookmaker quotes fouls, offsides or keeper saves.
     for _p in panels:
         if not any(r.get("odds") for r in _p["rows"]):
-            msg = "No bookmaker prices this market for this fixture — LION's own probability only."
+            msg = ("Not quoted by any Greek-licensed bookmaker yet — these markets usually open "
+                   "1-2 days before kick-off. LION's own probability only; prices fill in automatically.")
             _p["note"] = f"{_p['note']} · {msg}" if _p.get("note") else msg
 
     return {

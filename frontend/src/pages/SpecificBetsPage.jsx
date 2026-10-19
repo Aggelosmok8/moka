@@ -96,7 +96,7 @@ const BetRow = ({ row, picked, played, onToggle, lion, compact }) => (
   </div>
 );
 
-const TopStrip = ({ row }) => (
+const TopStrip = ({ row, teamName }) => (
   <div className="rounded-lg border border-[#39FF14]/30 bg-[#39FF14]/[0.07] px-3 py-2 mb-2 flex items-center justify-between gap-3"
     data-testid="sb-panel-top">
     <div className="flex items-center gap-2 min-w-0">
@@ -104,7 +104,7 @@ const TopStrip = ({ row }) => (
       <div className="min-w-0">
         <div className="text-[9px] font-black uppercase tracking-widest text-[#39FF14]">LION's pick</div>
         <div className="text-[13px] font-bold text-white truncate">
-          {row.player ? `${row.player} — ` : ""}{row.selection}
+          {teamName ? `${teamName} — ` : ""}{row.player ? `${row.player} — ` : ""}{row.selection}
         </div>
       </div>
     </div>
@@ -139,7 +139,7 @@ const Panel = ({ panel, teams, onToggle, isPicked, playedOf }) => {
       lion={top && r.pick === top.pick} compact={compact} />
   ));
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#11161d] p-4" data-testid={`sb-panel-${panel.key}`}>
+    <div className={`rounded-2xl border border-white/10 bg-[#11161d] p-4 ${panel.split ? "lg:col-span-2" : ""}`} data-testid={`sb-panel-${panel.key}`}>
       <div className="flex items-center gap-2 mb-1">
         <span className="w-7 h-7 rounded-lg bg-[#39FF14]/12 border border-[#39FF14]/30 flex items-center justify-center shrink-0">
           <Icon className="w-4 h-4 text-[#39FF14]" />

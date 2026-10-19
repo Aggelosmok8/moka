@@ -1012,3 +1012,28 @@ disappearing, pending above History, bookmaker-style match panel.
 - **Add to slip always asks now**: dialog shows which scenario(s) could have been played and an editable
   "odds you played" field, so the slip records the user's real price.
 - Verified in preview with screenshots on /matches, /lion-tickets and /portfolio; `yarn build` clean.
+
+## 2026-10-19 (b) Real double-chance prices, panel clean-up, no more 100%
+- **1X/X2 box had no bookmaker**: it was always the mathematically implied price. `/api/value-matches`
+  now attaches `match.dcOdds` (home_or_draw / away_or_draw / home_or_away) read from the Greek-feed and
+  Superbet snapshots that are ALREADY cached — zero extra provider requests — and `bestOddsByOutcome()`
+  prefers the real quote, falling back to "implied" only when nobody prices it. Live result: Superbet /
+  bwin / Pame Stoixima / Elabet now appear under the 4th box with a working outbound link.
+- **`_pct()` clamps to 1-99%**: the app never publishes a 100% (or 0%) probability again.
+- **Pointless selections dropped** (`_pointless` pass in `specific_bets.build`, after pricing):
+  anything priced under 1.10, and any unpriced row LION rates >= 96%. Panels/player blocks that empty
+  out are removed and the LION's pick is recomputed from what is left.
+- **Which team is being backed** is now explicit: Team Goals and per-keeper Saves rows carry the team
+  name in `selection` (with a `short` label for the split columns), like Handicap already did — so the
+  slip and the LION's-pick strip read "Tottenham over 0.5 goals", not "Over 0.5 goals".
+- **Width**: every split panel (Team Goals, Handicap, Saves, Shots) spans both columns (`lg:col-span-2`),
+  which removed the "Un…" truncation.
+- **Empty panels explained**: note now reads "Not quoted by any Greek-licensed bookmaker yet — these
+  markets usually open 1-2 days before kick-off".
+- Reality check on the "Superbet sends everything" assumption: the snapshot has 120 fixtures, 79 of them
+  WITH the stat markets (corners ~500 per side, cards, fouls, offsides, saves, shots) — but a book only
+  posts them 1-2 days out. Tottenham-Coventry and Monza-Cagliari: every panel 100% priced
+  (corners 56/56, saves 22/22, shots 28/28). Liverpool-Brighton (6 days out): goals markets only.
+  Score At Any Time is the one market no Greek book quotes at all.
+- Suite: **169 passed, 3 skipped** (the pinned-fixture iteration tests were re-pointed at current
+  fixtures and now skip instead of failing when a market is simply not posted yet).

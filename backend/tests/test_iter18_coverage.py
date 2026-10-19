@@ -119,7 +119,7 @@ def test_correct_score_cards_corners_priced(primary_sb):
 
 def test_unpriced_panels_show_note(primary_sb):
     body, mid = primary_sb
-    expected_note = "No bookmaker prices this market for this fixture"
+    expected_note = "Not quoted by any Greek-licensed bookmaker yet"
     missing = []
     for p in body.get("panels", []):
         if not any(r.get("odds") for r in p.get("rows", [])):
