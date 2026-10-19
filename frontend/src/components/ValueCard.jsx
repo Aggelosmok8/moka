@@ -1,7 +1,9 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Lock, ChevronDown, ChevronUp, ArrowRight, Clock, Check } from "lucide-react";
+import { Lock, ChevronDown, ChevronUp, ArrowRight, Clock, Check, ExternalLink } from "lucide-react";
 import { aiExplanation, shortExplanation } from "../lib/valueEngine";
+import { bestOddsByOutcome, isDoubleChance } from "../lib/picks";
+import { bookmakerUrl } from "../lib/bookmakers";
 import { UpgradeButton } from "./Gating";
 import AddToChartButton from "./AddToChartButton";
 import AddToSlipButton from "./AddToSlipButton";
@@ -68,6 +70,69 @@ function ProbBar({ label, pct, color }) {
         <div className="h-full rounded-full" style={{ width: `${Math.max(0, Math.min(100, pct))}%`, background: color }} />
       </div>
       <span className="w-8 text-right text-[11px] font-bold text-zinc-300">{Math.round(pct)}%</span>
+    </div>
+  );
+}
+
+const LionMark = ({ className = "w-3 h-3" }) => (
+  <img src="/lion-logo.png" alt="LION" className={`${className} object-contain`} data-no-translate />
+);
+
+// The four things a user can actually back on a match: 1 / X / 2 and the
+// double chance. Each box carries the best published price AND the bookmaker
+// (tappable, Greek-licensed sites only). Green + BEST = LION's call, yellow
+// lion = the runner-up scenario.
+function OddsBoxes({ match, value }) {
+  const best = bestOddsByOutcome(match);
+  const dc = isDoubleChance(value);
+  const side = String(value.pick || "").startsWith("away") ? "away" : "home";
+  const dcKey = side === "away" ? "away_or_draw" : "home_or_draw";
+  const teamSide = side === "away" ? match.away?.name : match.home?.name;
+  const primary = dc ? dcKey : String(value.pick || "").toLowerCase();
+  const secondary = dc ? side : null;
+
+  const boxes = [
+    { key: "home", label: match.home?.name || "Home", code: "1" },
+    { key: "draw", label: "Draw", code: "X" },
+    { key: "away", label: match.away?.name || "Away", code: "2" },
+    { key: dcKey, label: `${teamSide || (side === "away" ? "Away" : "Home")} or Draw`, code: side === "away" ? "X2" : "1X" },
+  ];
+
+  return (
+    <div className="grid grid-cols-4 gap-1.5 border-t border-white/5 pt-2.5" data-testid={`odds-boxes-${match.id}`}>
+      {boxes.map((b) => {
+        const o = best[b.key];
+        const isBest = b.key === primary;
+        const isSecond = b.key === secondary;
+        const url = o?.bookmaker ? bookmakerUrl(o.bookmaker) : null;
+        return (
+          <div key={b.key} data-testid={`odds-box-${match.id}-${b.key}`}
+            className={`rounded-lg px-1.5 py-1.5 border text-center ${
+              isBest ? "bg-[#39FF14]/10 border-[#39FF14]/60"
+                : isSecond ? "bg-[#FFD60A]/[0.07] border-[#FFD60A]/50"
+                : "bg-[#0d1117] border-[#30363d]"}`}>
+            <div className="flex items-center justify-center gap-1 h-3.5">
+              <span className={`text-[9px] font-black uppercase ${isBest ? "text-[#39FF14]" : isSecond ? "text-[#FFD60A]" : "text-zinc-500"}`}>{b.code}</span>
+              {isBest && <span className="text-[8px] font-black uppercase tracking-wide text-black bg-[#39FF14] rounded px-1 leading-[12px]">Best</span>}
+              {(isBest || isSecond) && <LionMark className="w-3 h-3" />}
+            </div>
+            <div className="text-[9px] text-zinc-400 truncate mt-0.5" title={b.label}>{b.label}</div>
+            <div className={`font-display font-black text-sm font-mono-num leading-tight ${isBest ? "text-[#39FF14]" : "text-white"}`}>
+              {o?.odds ? o.odds.toFixed(2) : "—"}
+            </div>
+            {url ? (
+              <a href={url} target="_blank" rel="noopener noreferrer" title={`Bet with ${o.bookmaker}`}
+                data-testid={`odds-book-${match.id}-${b.key}`}
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center justify-center gap-0.5 text-[9px] font-bold text-zinc-300 hover:text-[#39FF14] truncate max-w-full transition-colors">
+                <span className="truncate">{o.bookmaker}</span><ExternalLink className="w-2 h-2 shrink-0 opacity-70" />
+              </a>
+            ) : (
+              <span className="block text-[9px] text-zinc-600 truncate">{o?.bookmaker || (o?.odds ? "implied" : "no price")}</span>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -164,28 +229,19 @@ export default function ValueCard({ entry }) {
         </div>
       ) : (
         <>
-          {/* Simple info — always visible (backend pick = model's prediction) */}
-          <div className="flex items-center justify-between text-xs border-t border-white/5 pt-2">
-            <span className="text-zinc-500">Best odds</span>
-            <span className="text-white font-bold font-mono-num">
-              {value.bestOdds} <span className="text-zinc-500 font-normal">@ {value.bookmaker}</span>
-            </span>
-          </div>
-          <div className="flex items-center justify-between text-xs mt-1.5">
-            <span className="text-zinc-500">LION pick</span>
-            <span className="text-white font-bold truncate ml-2">{value.pickName}</span>
-          </div>
+          <OddsBoxes match={match} value={value} />
           <p className="text-xs text-zinc-400 mt-2 leading-snug">{shortExplanation(match, value)}</p>
         </>
       )}
-      <div className="mt-2 flex flex-col items-start gap-1">
-        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#39FF14]" data-testid={`see-analysis-${match.id}`}>
-          See Analysis <ArrowRight className="w-3.5 h-3.5" />
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <span data-testid={`see-analysis-${match.id}`}
+          className="inline-flex items-center justify-center gap-1 text-[11px] font-black uppercase tracking-wider text-[#39FF14] bg-[#39FF14]/10 border border-[#39FF14]/30 rounded-md py-1.5 hover:bg-[#39FF14]/20 transition-colors">
+          See Match Analysis <ArrowRight className="w-3.5 h-3.5" />
         </span>
         <span role="link" tabIndex={0} data-testid={`see-specific-bets-${match.id}`}
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/specific-bets/${match.id}`); }}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); navigate(`/specific-bets/${match.id}`); } }}
-          className="inline-flex items-center gap-1 text-[11px] font-bold text-[#FFD60A] hover:underline cursor-pointer">
+          className="inline-flex items-center justify-center gap-1 text-[11px] font-black uppercase tracking-wider text-[#39FF14] bg-[#39FF14]/10 border border-[#39FF14]/30 rounded-md py-1.5 hover:bg-[#39FF14]/20 cursor-pointer transition-colors">
           See Specific Bets <ArrowRight className="w-3.5 h-3.5" />
         </span>
       </div>

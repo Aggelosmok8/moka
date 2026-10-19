@@ -1,9 +1,10 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
-import { Wallet, TrendingUp, Target, Percent, Trash2, Check, X, Clock, Flame, CircleSlash, Lock, Layers, Receipt, Plus, RefreshCw, Loader2, Calendar, ArrowUpRight, ArrowDownRight, History } from "lucide-react";
+import { Wallet, TrendingUp, Target, Percent, Trash2, Check, X, Clock, Flame, CircleSlash, Lock, Layers, Receipt, Plus, RefreshCw, Loader2, Calendar, ArrowUpRight, ArrowDownRight, History, PenLine } from "lucide-react";
 import { toast } from "sonner";
 import Header from "../components/Header";
+import CreateTicketModal from "../components/CreateTicketModal";
 import { usePortfolio, computeStats, computeTicket } from "../contexts/PortfolioContext";
 import { useEntitlements } from "../hooks/useEntitlements";
 import { UpgradeButton } from "../components/Gating";
@@ -278,7 +279,10 @@ function TicketCard({ t, settleLeg, removeTicket }) {
     <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-4 h-fit" data-testid={`ticket-${t.id}`}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-zinc-400">
-          <Receipt className="w-4 h-4" /> Ticket · {info.total} {info.total === 1 ? "selection" : "selections"}
+          <Receipt className="w-4 h-4" />
+          {t.manual ? <span className="text-[#58a6ff]">My Ticket</span>
+            : (t.legs || []).some((l) => l.kind === "ticket") ? <span className="text-[#39FF14]">LION Ticket</span>
+            : "Ticket"} · {info.total} {info.total === 1 ? "selection" : "selections"}
         </div>
         <span className={`inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${badgeCls}`} data-testid={`ticket-progress-${t.id}`}>
           <Check className="w-3 h-3" /> {info.progress}
@@ -293,8 +297,11 @@ function TicketCard({ t, settleLeg, removeTicket }) {
             <div key={l.id} className="bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2" data-testid={`ticket-leg-${l.id}`}>
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs text-white font-semibold break-words">{l.home} <span className="text-zinc-600">vs</span> {l.away}</div>
-                  <div className="text-[11px] text-[#39FF14] font-bold break-words">{l.pickName} · <span className="text-white font-mono-num">{l.odds}</span></div>
+                  <div className="text-xs text-white font-semibold break-words">{l.home}{l.away ? <> <span className="text-zinc-600">vs</span> {l.away}</> : null}</div>
+                  <div className="text-[11px] text-[#39FF14] font-bold break-words">
+                    {l.manual && <span className="mr-1.5 align-middle text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#58a6ff]/15 text-[#58a6ff] border border-[#58a6ff]/30">Manual</span>}
+                    {l.pickName} · <span className="text-white font-mono-num">{l.odds}</span>
+                  </div>
                 </div>
                 <span className={`shrink-0 inline-flex items-center gap-1 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full ${lst.cls}`}><lst.icon className="w-2.5 h-2.5" /> {lst.label}</span>
               </div>
@@ -332,13 +339,13 @@ function TicketCard({ t, settleLeg, removeTicket }) {
 function TicketsView({ isPro }) {
   const { slip, removeFromSlip, updateSlipLegOdds, clearSlip, placeTicket, tickets, settleLeg, removeTicket } = usePortfolio();
   const [showHistory, setShowHistory] = useState(false);
-  // Keep the FULL ticket history for everyone (never deleted). Latest tickets are
-  // always visible; older ones collapse under HISTORY. The Free 5-limit applies
-  // only to Portfolio Match History, NOT to ticket history (#8).
+  // Anything still PENDING stays on top, in its own active section — only fully
+  // settled tickets drop into HISTORY (#4). CSS columns keep the cards packed
+  // so different card heights can't leave empty holes in the grid.
   const sorted = [...tickets].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-  const RECENT = 4;
-  const recent = sorted.slice(0, RECENT);
-  const older = sorted.slice(RECENT);
+  const active = sorted.filter((t) => computeTicket(t).status === "pending");
+  const older = sorted.filter((t) => computeTicket(t).status !== "pending");
+  const COLS = "columns-1 md:columns-2 lg:columns-3 gap-3 [&>*]:mb-3 [&>*]:break-inside-avoid";
 
   return (
     <div data-testid="portfolio-tickets-view">
@@ -351,7 +358,8 @@ function TicketsView({ isPro }) {
           <Receipt className="w-10 h-10 text-zinc-700 mx-auto" />
           <h3 className="font-display font-black uppercase text-lg text-white mt-4">No tickets yet</h3>
           <p className="text-zinc-500 text-sm mt-2 max-w-md mx-auto">
-            Open a match, choose <b className="text-white">Add to Portfolio → Accumulator</b> on a few picks, then place them as one ticket here.
+            Open a match, choose <b className="text-white">Add to Portfolio → Accumulator</b> on a few picks, then place them as one ticket here —
+            or hit <b className="text-white">Create a ticket</b> to type in one you already played.
           </p>
           <Link to="/matches?view=strong" className="inline-flex items-center gap-2 mt-5 bg-[#39FF14] text-black font-black uppercase text-sm tracking-wider px-5 py-2.5 rounded-lg hover:brightness-110 transition">
             <Flame className="w-4 h-4" /> Build a ticket
@@ -359,9 +367,18 @@ function TicketsView({ isPro }) {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 items-start" data-testid="tickets-grid">
-            {recent.map((t) => <TicketCard key={t.id} t={t} settleLeg={settleLeg} removeTicket={removeTicket} />)}
-          </div>
+          {active.length > 0 && (
+            <>
+              <div className="flex items-center gap-2 mb-3">
+                <Clock className="w-4 h-4 text-[#FFD60A]" />
+                <h3 className="font-display font-black uppercase tracking-tight text-lg text-white">Active tickets</h3>
+                <span className="text-xs text-zinc-500">· {active.length} still pending</span>
+              </div>
+              <div className={COLS} data-testid="tickets-grid">
+                {active.map((t) => <TicketCard key={t.id} t={t} settleLeg={settleLeg} removeTicket={removeTicket} />)}
+              </div>
+            </>
+          )}
 
           {older.length > 0 && (
             <div className="mt-6">
@@ -370,7 +387,7 @@ function TicketsView({ isPro }) {
                 <History className="w-4 h-4" /> History ({older.length}) {showHistory ? "▲" : "▼"}
               </button>
               {showHistory && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 items-start mt-3" data-testid="tickets-history-grid">
+                <div className={`${COLS} mt-3`} data-testid="tickets-history-grid">
                   {older.map((t) => <TicketCard key={t.id} t={t} settleLeg={settleLeg} removeTicket={removeTicket} />)}
                 </div>
               )}
@@ -393,6 +410,7 @@ export default function PortfolioPage() {
   const [settling, setSettling] = useState(false);
   const [params] = useSearchParams();
   const [tab, setTab] = useState(params.get("tab") === "tickets" ? "tickets" : "bets");
+  const [creating, setCreating] = useState(false);
 
   // On open, auto-settle finished matches from real results (one batched call).
   useEffect(() => { (async () => { await autoSettle(); clearNewlySettled(); })(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -495,7 +513,13 @@ export default function PortfolioPage() {
             className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${tab === "tickets" ? "bg-[#39FF14] text-black" : "bg-white/5 text-zinc-300 hover:bg-white/10"}`}>
             <Receipt className="w-4 h-4" /> My Tickets {slipCount > 0 && <span className="ml-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#FFD60A] text-black text-[10px] font-black flex items-center justify-center">{slipCount}</span>}
           </button>
+          <button onClick={() => { setTab("tickets"); setCreating(true); }} data-testid="portfolio-create-ticket"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold bg-[#39FF14]/10 text-[#39FF14] border border-[#39FF14]/40 hover:bg-[#39FF14]/20 transition-colors">
+            <PenLine className="w-4 h-4" /> Create a ticket
+          </button>
         </div>
+
+        <CreateTicketModal open={creating} onClose={() => setCreating(false)} />
 
         {tab === "tickets" ? (
           <TicketsView isPro={isPro} />
@@ -583,13 +607,26 @@ export default function PortfolioPage() {
               ))}
             </div>
 
+            {/* PENDING FIRST — open bets always sit ABOVE the history (#4) */}
+            {list.filter((b) => b.status === "pending").length > 0 && (
+              <div className="mb-2">
+                <div className="flex items-center gap-2 mb-3">
+                  <Clock className="w-4 h-4 text-[#FFD60A]" />
+                  <h3 className="font-display font-black uppercase tracking-tight text-lg text-white">Pending bets</h3>
+                </div>
+                <div className="columns-1 md:columns-2 lg:columns-3 gap-3 [&>*]:mb-3 [&>*]:break-inside-avoid" data-testid="portfolio-pending-bets">
+                  {list.filter((b) => b.status === "pending").map((b) => <BetRow key={b.id} b={b} settle={settle} remove={remove} />)}
+                </div>
+              </div>
+            )}
+
             {/* MATCH HISTORY — individual settled matches (single source of truth) */}
             <MatchHistory records={viewSource} isPro={isPro} />
 
-            {/* SINGLE BETS */}
-            {list.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-8" data-testid="portfolio-bets">
-                {list.map((b) => <BetRow key={b.id} b={b} settle={settle} remove={remove} />)}
+            {/* SETTLED SINGLE BETS */}
+            {list.filter((b) => b.status !== "pending").length > 0 && (
+              <div className="columns-1 md:columns-2 lg:columns-3 gap-3 [&>*]:mb-3 [&>*]:break-inside-avoid mt-8" data-testid="portfolio-bets">
+                {list.filter((b) => b.status !== "pending").map((b) => <BetRow key={b.id} b={b} settle={settle} remove={remove} />)}
               </div>
             )}
             {list.length === 0 && viewSource.length === 0 && (

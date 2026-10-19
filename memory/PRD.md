@@ -974,3 +974,41 @@ User approved full integration ("Ναι, βάλε Superbet τώρα").
 - Also confirmed the Superbet refresh cannot break a boot: it runs inside the non-blocking `_prewarm()` task with its own try/except, and can be switched off entirely with `SUPERBET=off` on small instances.
 - NOTE FOR FUTURE AGENTS: never run `pip freeze > backend/requirements.txt` in this repo — production builds on Render from the same file.
 - Production topology (discovered from the deployed bundle): frontend on Vercel -> backend **https://moka-k03f.onrender.com** (Render) -> shared Supabase. The Emergent deployer cannot inspect it; diagnose by calling the Render URL directly. `/api/specific-bets/{id}` now returns `priceSources` ({greekFeeds, apiFootball, superbet, sportmonks} counts) so an empty page is diagnosable from outside.
+
+## 2026-10-19 Match panel redesign, manual tickets, editable LION prices, ticket-loss fix
+User brief (5 items, "min credits"): create-your-own ticket, editable LION Ticket odds, tickets
+disappearing, pending above History, bookmaker-style match panel.
+### 1. Create a ticket (`components/CreateTicketModal.jsx`, new)
+- Green **Create a ticket** button sits next to the My Tickets tab (`portfolio-create-ticket`).
+- Free typing only (user's choice): match text + pick text + odds per row, add/remove rows, stake per
+  selection, live total/potential. Yellow warning states these do NOT settle automatically.
+- `addManualTicket()` in PortfolioContext builds the ticket with `manual:true` and `matchId:null`, so
+  `autoSettle()` skips it; card shows **MY TICKET** + a blue **MANUAL** badge per leg, user marks Won/Lost.
+### 2. LION Tickets
+- Header of every card now reads **LION TICKET**; Portfolio ticket cards label themselves LION TICKET /
+  MY TICKET / TICKET depending on their legs.
+- Every leg price is an **editable input** (`lt-odds-{pick}`); edited prices turn yellow, the "back for
+  N.00" figure and the maths line recompute live, and the edited price is what lands in the slip
+  (legs are no longer `locked`). Bookmaker moved into the meta line as the outbound link.
+- "Played" no longer blocks the ticket: the button becomes **Played · add anyway** and asks for a
+  confirmation that the LION Ticket is a separate play.
+### 3. Tickets disappearing (root cause + fix)
+- `PUT /me/portfolio` REPLACED the whole document and the client uploaded whatever it had, so a login
+  on a second device (phone) that read an empty/partial copy could overwrite the first device's tickets.
+- Backend now **merges by id** and only removes what the client explicitly names in `deleted:{bets,tickets}`;
+  the client queues deletions (`deletedRef`) and re-queues them if the PUT fails. On login the client
+  merges remote ∪ local instead of picking one. Verified by API: two PUTs from "different devices" kept
+  both tickets (5 total), then a `deleted` payload removed exactly the two named ids.
+### 4. Portfolio layout
+- Pending work never drops into History: **Active tickets** section above the History toggle, and a
+  **Pending bets** section above Match History. History holds only fully settled items.
+- Ragged-grid holes fixed by switching ticket/bet grids to CSS `columns` with `break-inside-avoid`.
+### 5. Match panel (`ValueCard.jsx`)
+- "Best odds"/"LION pick" text rows replaced by **four boxes — 1 / X / 2 / double chance** (`odds-box-{id}-{key}`),
+  each with the outcome name, best price and the **bookmaker as an outbound link** (Greek-licensed only,
+  otherwise plain text / "implied" for the derived DC price). LION's call = green box + **BEST** + lion mark;
+  the runner-up scenario = yellow box + lion mark.
+- Below them two green buttons side by side: **See Match Analysis** (left) · **See Specific Bets** (right).
+- **Add to slip always asks now**: dialog shows which scenario(s) could have been played and an editable
+  "odds you played" field, so the slip records the user's real price.
+- Verified in preview with screenshots on /matches, /lion-tickets and /portfolio; `yarn build` clean.

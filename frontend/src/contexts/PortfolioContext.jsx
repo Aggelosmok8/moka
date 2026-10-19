@@ -134,6 +134,14 @@ export function PortfolioProvider({ children }) {
     try { localStorage.setItem("moka_newly_settled", "0"); } catch {}
   }, []);
 
+  // Deletions have to travel to the server explicitly: the cloud copy MERGES by
+  // id (so a second device can never wipe tickets saved from the first one),
+  // which means a removed ticket must be named to actually disappear.
+  const deletedRef = useRef({ bets: [], tickets: [] });
+  const markDeleted = (kind, ids) => {
+    deletedRef.current[kind] = [...new Set([...deletedRef.current[kind], ...ids])];
+  };
+
   const persist = (next) => {
     setBets(next);
     try { localStorage.setItem(KEY, JSON.stringify(next)); } catch {}
@@ -184,6 +192,7 @@ export function PortfolioProvider({ children }) {
   }, []);
 
   const remove = useCallback((id) => {
+    markDeleted("bets", [id]);
     setBets((prev) => {
       const next = prev.filter((b) => b.id !== id);
       try { localStorage.setItem(KEY, JSON.stringify(next)); } catch {}
@@ -191,7 +200,10 @@ export function PortfolioProvider({ children }) {
     });
   }, []);
 
-  const clear = useCallback(() => persist([]), []);
+  const clear = useCallback(() => {
+    setBets((prev) => { markDeleted("bets", prev.map((b) => b.id)); return prev; });
+    persist([]);
+  }, []);
 
   // --- Bet slip (accumulator builder) ---
   const saveSlip = (next) => { setSlip(next); try { localStorage.setItem(SLIP_KEY, JSON.stringify(next)); } catch {} };
@@ -310,6 +322,7 @@ export function PortfolioProvider({ children }) {
   }, []);
 
   const removeTicket = useCallback((ticketId) => {
+    markDeleted("tickets", [ticketId]);
     setTickets((prev) => {
       const next = prev.filter((t) => t.id !== ticketId);
       try { localStorage.setItem(TICKETS_KEY, JSON.stringify(next)); } catch {}
@@ -317,7 +330,33 @@ export function PortfolioProvider({ children }) {
     });
   }, []);
 
-  const clearTickets = useCallback(() => saveTickets([]), []);
+  const clearTickets = useCallback(() => {
+    setTickets((prev) => { markDeleted("tickets", prev.map((t) => t.id)); return prev; });
+    saveTickets([]);
+  }, []);
+
+  // A ticket the user built by hand (teams/markets we may not even cover).
+  // No matchId -> auto-settlement skips it and the user marks won/lost.
+  const addManualTicket = useCallback((legs, stake) => {
+    const ticket = {
+      id: uid(),
+      manual: true,
+      stake: Number(stake) || 0,
+      createdAt: new Date().toISOString(),
+      legs: legs.map((l) => ({
+        id: uid(), status: "pending", manual: true,
+        matchId: null, home: l.home || "", away: l.away || "", league: l.league || "",
+        pick: "", pickName: l.pickName || "", odds: Number(l.odds) || 0,
+        bookmaker: l.bookmaker || "", kickoff: l.kickoff || null,
+      })),
+    };
+    setTickets((prev) => {
+      const next = [ticket, ...prev];
+      try { localStorage.setItem(TICKETS_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+    return ticket.id;
+  }, []);
 
   // --- Auto-settlement from real final scores -------------------------------
   // Finds every pending single bet + pending accumulator leg, fetches final
@@ -442,18 +481,23 @@ export function PortfolioProvider({ children }) {
     getPortfolioRemote()
       .then((remote) => {
         if (!active) return;
-        const remoteBets = remote?.bets || [];
-        const remoteTickets = remote?.tickets || [];
-        if (remoteBets.length || remoteTickets.length) {
-          setBets(remoteBets); try { localStorage.setItem(KEY, JSON.stringify(remoteBets)); } catch {}
-          setTickets(remoteTickets); try { localStorage.setItem(TICKETS_KEY, JSON.stringify(remoteTickets)); } catch {}
-        } else if (localBets.length || localTickets.length) {
-          setBets(localBets); try { localStorage.setItem(KEY, JSON.stringify(localBets)); } catch {}
-          setTickets(localTickets); try { localStorage.setItem(TICKETS_KEY, JSON.stringify(localTickets)); } catch {}
-          putPortfolioRemote({ bets: localBets, tickets: localTickets }).catch(() => {});
-        }
+        // MERGE, never replace: a ticket placed on the phone and one placed on
+        // the laptop must both survive. Same id -> the local (newer) copy wins.
+        const byId = (arr) => new Map((arr || []).filter((x) => x && x.id).map((x) => [x.id, x]));
+        const mergeLists = (rem, loc) => {
+          const m = byId(rem);
+          for (const [id, x] of byId(loc)) m.set(id, x);
+          return [...m.values()];
+        };
+        const mergedBets = mergeLists(remote?.bets, localBets);
+        const mergedTickets = mergeLists(remote?.tickets, localTickets);
+        setBets(mergedBets); try { localStorage.setItem(KEY, JSON.stringify(mergedBets)); } catch {}
+        setTickets(mergedTickets); try { localStorage.setItem(TICKETS_KEY, JSON.stringify(mergedTickets)); } catch {}
         try { localStorage.setItem(OWNER_KEY, meId); } catch {}
         syncedRef.current = true;
+        if (mergedBets.length || mergedTickets.length) {
+          putPortfolioRemote({ bets: mergedBets, tickets: mergedTickets }).catch(() => {});
+        }
       })
       // If the server copy can't be read, DO NOT enable upload — otherwise an
       // empty local state would overwrite (and lose) the user's saved tickets.
@@ -463,7 +507,18 @@ export function PortfolioProvider({ children }) {
 
   useEffect(() => {
     if (!user || !syncedRef.current) return;
-    const t = setTimeout(() => { putPortfolioRemote({ bets, tickets }).catch(() => {}); }, 800);
+    const t = setTimeout(() => {
+      const deleted = deletedRef.current;
+      const payload = { bets, tickets, deleted };
+      deletedRef.current = { bets: [], tickets: [] };
+      putPortfolioRemote(payload).catch(() => {
+        // keep the deletions queued for the next attempt
+        deletedRef.current = {
+          bets: [...new Set([...deletedRef.current.bets, ...deleted.bets])],
+          tickets: [...new Set([...deletedRef.current.tickets, ...deleted.tickets])],
+        };
+      });
+    }, 800);
     return () => clearTimeout(t);
   }, [bets, tickets, user]);
 
@@ -472,7 +527,7 @@ export function PortfolioProvider({ children }) {
       bets, addBet, settle, updateStake, remove, clear, pendingCount, stats,
       slip, addToSlip, removeFromSlip, updateSlipLegOdds, clearSlip, slipHas, slipHasPick,
       playedPick, playedMatch, slipCount: slip.length,
-      tickets, placeTicket, settleLeg, removeTicket, clearTickets, autoSettle,
+      tickets, placeTicket, settleLeg, removeTicket, clearTickets, autoSettle, addManualTicket,
       newlySettled, clearNewlySettled,
     }}>
       {children}
