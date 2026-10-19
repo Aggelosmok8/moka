@@ -99,37 +99,46 @@ function OddsBoxes({ match, value }) {
   ];
 
   return (
-    <div className="grid grid-cols-4 gap-1.5 border-t border-white/5 pt-2.5" data-testid={`odds-boxes-${match.id}`}>
+    <div className="grid grid-cols-4 gap-1.5 border-t border-white/5 pt-3" data-testid={`odds-boxes-${match.id}`}>
       {boxes.map((b) => {
         const o = best[b.key];
         const isBest = b.key === primary;
         const isSecond = b.key === secondary;
         const url = o?.bookmaker ? bookmakerUrl(o.bookmaker) : null;
         return (
-          <div key={b.key} data-testid={`odds-box-${match.id}-${b.key}`}
-            className={`rounded-lg px-1.5 py-1.5 border text-center ${
-              isBest ? "bg-[#39FF14]/10 border-[#39FF14]/60"
-                : isSecond ? "bg-[#FFD60A]/[0.07] border-[#FFD60A]/50"
-                : "bg-[#0d1117] border-[#30363d]"}`}>
-            <div className="flex items-center justify-center gap-1 h-3.5">
-              <span className={`text-[9px] font-black uppercase ${isBest ? "text-[#39FF14]" : isSecond ? "text-[#FFD60A]" : "text-zinc-500"}`}>{b.code}</span>
-              {isBest && <span className="text-[8px] font-black uppercase tracking-wide text-black bg-[#39FF14] rounded px-1 leading-[12px]">Best</span>}
-              {(isBest || isSecond) && <LionMark className="w-3 h-3" />}
+          <div key={b.key} className="min-w-0">
+            {/* The market code sits OUTSIDE the box, big and bold */}
+            <div className={`text-center font-display font-black leading-none mb-1 ${b.code.length > 1 ? "text-base" : "text-lg"} ${
+              isBest ? "text-[#39FF14]" : isSecond ? "text-[#FFD60A]" : "text-zinc-400"}`}>
+              {b.code}
             </div>
-            <div className="text-[9px] text-zinc-400 truncate mt-0.5" title={b.label}>{b.label}</div>
-            <div className={`font-display font-black text-sm font-mono-num leading-tight ${isBest ? "text-[#39FF14]" : "text-white"}`}>
-              {o?.odds ? o.odds.toFixed(2) : "—"}
+            <div data-testid={`odds-box-${match.id}-${b.key}`}
+              className={`relative rounded-lg px-1.5 pt-2 pb-1.5 border text-center ${
+                isBest ? "bg-[#39FF14]/10 border-[#39FF14]/60"
+                  : isSecond ? "bg-[#FFD60A]/[0.07] border-[#FFD60A]/50"
+                  : "bg-[#0d1117] border-[#30363d]"}`}>
+              {/* corner markers */}
+              {isBest && (
+                <span className="absolute -top-1.5 -left-1.5 text-[8px] font-black uppercase tracking-wide text-black bg-[#39FF14] rounded px-1 leading-[13px] shadow">Best</span>
+              )}
+              {(isBest || isSecond) && (
+                <LionMark className={`absolute -top-2 -right-2 w-4 h-4 rounded-full ${isBest ? "bg-[#39FF14]/20" : "bg-[#FFD60A]/20"} p-[1px]`} />
+              )}
+              <div className="text-[9px] text-zinc-400 truncate" title={b.label}>{b.label}</div>
+              <div className={`font-display font-black text-sm font-mono-num leading-tight ${isBest ? "text-[#39FF14]" : "text-white"}`}>
+                {o?.odds ? o.odds.toFixed(2) : "—"}
+              </div>
+              {url ? (
+                <a href={url} target="_blank" rel="noopener noreferrer" title={`Bet with ${o.bookmaker}`}
+                  data-testid={`odds-book-${match.id}-${b.key}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex items-center justify-center gap-0.5 text-[9px] font-bold text-zinc-300 hover:text-[#39FF14] truncate max-w-full transition-colors">
+                  <span className="truncate">{o.bookmaker}</span><ExternalLink className="w-2 h-2 shrink-0 opacity-70" />
+                </a>
+              ) : (
+                <span className="block text-[9px] text-zinc-600 truncate">{o?.bookmaker || (o?.odds ? "implied" : "no price")}</span>
+              )}
             </div>
-            {url ? (
-              <a href={url} target="_blank" rel="noopener noreferrer" title={`Bet with ${o.bookmaker}`}
-                data-testid={`odds-book-${match.id}-${b.key}`}
-                onClick={(e) => e.stopPropagation()}
-                className="inline-flex items-center justify-center gap-0.5 text-[9px] font-bold text-zinc-300 hover:text-[#39FF14] truncate max-w-full transition-colors">
-                <span className="truncate">{o.bookmaker}</span><ExternalLink className="w-2 h-2 shrink-0 opacity-70" />
-              </a>
-            ) : (
-              <span className="block text-[9px] text-zinc-600 truncate">{o?.bookmaker || (o?.odds ? "implied" : "no price")}</span>
-            )}
           </div>
         );
       })}
