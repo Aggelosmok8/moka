@@ -3,7 +3,6 @@ import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, Check, ExternalLink, Loader2, Sparkles, Languages, MapPin, Target, TrendingUp, Star } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import Header from "../components/Header";
-import AddToPortfolioButton from "../components/AddToPortfolioButton";
 import AddToChartButton from "../components/AddToChartButton";
 import AddToSlipButton from "../components/AddToSlipButton";
 import { bookmakerUrl, isGreekBook } from "../lib/bookmakers";
@@ -529,7 +528,6 @@ export default function MatchAnalysisPage() {
               </div>
             </div>
           ))}
-          <div className="mt-3"><AddToPortfolioButton entry={{ match, value }} /></div>
         </Card>
       )}
 
