@@ -199,14 +199,29 @@ async def get_portfolio(user=Depends(current_user)):
 
 @api_router.put("/me/portfolio")
 async def put_portfolio(payload: dict, user=Depends(current_user)):
-    data = {"bets": payload.get("bets", []), "tickets": payload.get("tickets", [])}
+    """Merge, never replace: the same account is used from phone AND desktop, so
+    a stale client must not be able to wipe records saved by the other device.
+    Removals travel explicitly in `deleted`."""
     now = datetime.now(timezone.utc).isoformat()
     existing = await db.user_portfolios.find_one({"user_id": user.user_id})
+    old = (existing or {}).get("data") or {}
+    deleted = payload.get("deleted") or {}
+
+    def _merge(kind: str):
+        by = {str(x.get("id")): x for x in (old.get(kind) or []) if isinstance(x, dict) and x.get("id")}
+        for x in payload.get(kind) or []:
+            if isinstance(x, dict) and x.get("id"):
+                by[str(x["id"])] = x
+        for i in deleted.get(kind) or []:
+            by.pop(str(i), None)
+        return list(by.values())
+
+    data = {"bets": _merge("bets"), "tickets": _merge("tickets")}
     if existing:
         await db.user_portfolios.update_one({"user_id": user.user_id}, {"$set": {"data": data, "updated_at": now}})
     else:
         await db.user_portfolios.insert_one({"user_id": user.user_id, "data": data, "updated_at": now})
-    return {"ok": True}
+    return {"ok": True, "bets": len(data["bets"]), "tickets": len(data["tickets"])}
 
 
 @api_router.get("/privacy/data-export")
@@ -504,6 +519,18 @@ async def specific_bets(match_id: str):
     h2h["book"] = best_book
 
     _val = (m or {}).get("value") or {}
+    if not _val.get("prediction") and not _val.get("probabilities"):
+        # CRITICAL for consistency: without the match model's own probabilities the
+        # Specific Bets engine falls back to raw team averages and can contradict
+        # the Analysis page (e.g. "Away or Draw" under a Home pick). Running the
+        # same value engine on the match we already have is pure arithmetic.
+        try:
+            from src.services.value_engine import rank_value_matches
+            ranked = rank_value_matches([m]) if m else []
+            if ranked:
+                _val = ranked[0].get("value") or _val
+        except Exception as e:
+            logger.warning("specific_bets value(%s): %s", match_id, e)
     _home = ((m or {}).get("home") or {}).get("name") or ""
     _away = ((m or {}).get("away") or {}).get("name") or ""
     import superbet_odds as _sb

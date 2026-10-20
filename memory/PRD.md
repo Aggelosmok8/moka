@@ -974,3 +974,83 @@ User approved full integration ("Ναι, βάλε Superbet τώρα").
 - Also confirmed the Superbet refresh cannot break a boot: it runs inside the non-blocking `_prewarm()` task with its own try/except, and can be switched off entirely with `SUPERBET=off` on small instances.
 - NOTE FOR FUTURE AGENTS: never run `pip freeze > backend/requirements.txt` in this repo — production builds on Render from the same file.
 - Production topology (discovered from the deployed bundle): frontend on Vercel -> backend **https://moka-k03f.onrender.com** (Render) -> shared Supabase. The Emergent deployer cannot inspect it; diagnose by calling the Render URL directly. `/api/specific-bets/{id}` now returns `priceSources` ({greekFeeds, apiFootball, superbet, sportmonks} counts) so an empty page is diagnosable from outside.
+
+## 2026-10-19 Match panel redesign, manual tickets, editable LION prices, ticket-loss fix
+User brief (5 items, "min credits"): create-your-own ticket, editable LION Ticket odds, tickets
+disappearing, pending above History, bookmaker-style match panel.
+### 1. Create a ticket (`components/CreateTicketModal.jsx`, new)
+- Green **Create a ticket** button sits next to the My Tickets tab (`portfolio-create-ticket`).
+- Free typing only (user's choice): match text + pick text + odds per row, add/remove rows, stake per
+  selection, live total/potential. Yellow warning states these do NOT settle automatically.
+- `addManualTicket()` in PortfolioContext builds the ticket with `manual:true` and `matchId:null`, so
+  `autoSettle()` skips it; card shows **MY TICKET** + a blue **MANUAL** badge per leg, user marks Won/Lost.
+### 2. LION Tickets
+- Header of every card now reads **LION TICKET**; Portfolio ticket cards label themselves LION TICKET /
+  MY TICKET / TICKET depending on their legs.
+- Every leg price is an **editable input** (`lt-odds-{pick}`); edited prices turn yellow, the "back for
+  N.00" figure and the maths line recompute live, and the edited price is what lands in the slip
+  (legs are no longer `locked`). Bookmaker moved into the meta line as the outbound link.
+- "Played" no longer blocks the ticket: the button becomes **Played · add anyway** and asks for a
+  confirmation that the LION Ticket is a separate play.
+### 3. Tickets disappearing (root cause + fix)
+- `PUT /me/portfolio` REPLACED the whole document and the client uploaded whatever it had, so a login
+  on a second device (phone) that read an empty/partial copy could overwrite the first device's tickets.
+- Backend now **merges by id** and only removes what the client explicitly names in `deleted:{bets,tickets}`;
+  the client queues deletions (`deletedRef`) and re-queues them if the PUT fails. On login the client
+  merges remote ∪ local instead of picking one. Verified by API: two PUTs from "different devices" kept
+  both tickets (5 total), then a `deleted` payload removed exactly the two named ids.
+### 4. Portfolio layout
+- Pending work never drops into History: **Active tickets** section above the History toggle, and a
+  **Pending bets** section above Match History. History holds only fully settled items.
+- Ragged-grid holes fixed by switching ticket/bet grids to CSS `columns` with `break-inside-avoid`.
+### 5. Match panel (`ValueCard.jsx`)
+- "Best odds"/"LION pick" text rows replaced by **four boxes — 1 / X / 2 / double chance** (`odds-box-{id}-{key}`),
+  each with the outcome name, best price and the **bookmaker as an outbound link** (Greek-licensed only,
+  otherwise plain text / "implied" for the derived DC price). LION's call = green box + **BEST** + lion mark;
+  the runner-up scenario = yellow box + lion mark.
+- Below them two green buttons side by side: **See Match Analysis** (left) · **See Specific Bets** (right).
+- **Add to slip always asks now**: dialog shows which scenario(s) could have been played and an editable
+  "odds you played" field, so the slip records the user's real price.
+- Verified in preview with screenshots on /matches, /lion-tickets and /portfolio; `yarn build` clean.
+
+## 2026-10-19 (b) Real double-chance prices, panel clean-up, no more 100%
+- **1X/X2 box had no bookmaker**: it was always the mathematically implied price. `/api/value-matches`
+  now attaches `match.dcOdds` (home_or_draw / away_or_draw / home_or_away) read from the Greek-feed and
+  Superbet snapshots that are ALREADY cached — zero extra provider requests — and `bestOddsByOutcome()`
+  prefers the real quote, falling back to "implied" only when nobody prices it. Live result: Superbet /
+  bwin / Pame Stoixima / Elabet now appear under the 4th box with a working outbound link.
+- **`_pct()` clamps to 1-99%**: the app never publishes a 100% (or 0%) probability again.
+- **Pointless selections dropped** (`_pointless` pass in `specific_bets.build`, after pricing):
+  anything priced under 1.10, and any unpriced row LION rates >= 96%. Panels/player blocks that empty
+  out are removed and the LION's pick is recomputed from what is left.
+- **Which team is being backed** is now explicit: Team Goals and per-keeper Saves rows carry the team
+  name in `selection` (with a `short` label for the split columns), like Handicap already did — so the
+  slip and the LION's-pick strip read "Tottenham over 0.5 goals", not "Over 0.5 goals".
+- **Width**: every split panel (Team Goals, Handicap, Saves, Shots) spans both columns (`lg:col-span-2`),
+  which removed the "Un…" truncation.
+- **Empty panels explained**: note now reads "Not quoted by any Greek-licensed bookmaker yet — these
+  markets usually open 1-2 days before kick-off".
+- Reality check on the "Superbet sends everything" assumption: the snapshot has 120 fixtures, 79 of them
+  WITH the stat markets (corners ~500 per side, cards, fouls, offsides, saves, shots) — but a book only
+  posts them 1-2 days out. Tottenham-Coventry and Monza-Cagliari: every panel 100% priced
+  (corners 56/56, saves 22/22, shots 28/28). Liverpool-Brighton (6 days out): goals markets only.
+  Score At Any Time is the one market no Greek book quotes at all.
+- Suite: **169 passed, 3 skipped** (the pinned-fixture iteration tests were re-pointed at current
+  fixtures and now skip instead of failing when a market is simply not posted yet).
+
+## 2026-10-19 (c) Specific Bets aligned with the match prediction + panel/badge polish
+- **ROOT CAUSE of the contradictions**: `/api/specific-bets` passed `m["value"]` to the engine, but the
+  match object it resolves (fsl detail OR the live list) carries NO `value` — so `_calibrate()` got
+  nothing and the whole Specific Bets model ran on raw team averages (`basis: "team averages"`). That is
+  why Analysis could say Home while Double Chance highlighted "Away or Draw". The route now runs the SAME
+  value engine on the match it already has (`rank_value_matches([m])`, pure arithmetic, no API call) when
+  the value is missing. Every fixture now reports `basis: "calibrated to LION's match model"`.
+- **Highlight alignment**: the Double Chance panel's LION's pick is forced to `{pick}_or_draw`, and the
+  Handicap panel's to a line on the predicted side (`top_from=`). Verified: Tottenham pick -> "Tottenham
+  or Draw" + "Tottenham +0.5"; Brighton pick -> "Brighton or Draw" + "Brighton +1.5".
+- **Match panel badges**: lion mark moved to the TOP-LEFT corner and the BEST badge to the BOTTOM-RIGHT
+  corner of the highlighted box, so they never sit on top of each other. League name and the team names
+  inside the four boxes are now white.
+- **Specific Bets layout**: panels moved from a grid to CSS multi-columns — narrow panels pair up two per
+  row with no holes, while wide (split) panels take the full width via `lg:[column-span:all]`.
+- Suite: 169 passed, 3 skipped.

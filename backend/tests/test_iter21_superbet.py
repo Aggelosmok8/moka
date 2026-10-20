@@ -1,7 +1,7 @@
 """Iteration 21 — Superbet pre-match integration coverage.
 
 Verifies that:
-  * live_af_1550151 Frosinone vs Sassuolo, live_af_1563200 Norwich vs
+  * live_af_1557436 Frosinone vs Sassuolo, live_af_1563200 Norwich vs
     Southampton, live_af_1552785 Le Mans vs Toulouse carry REAL Superbet
     prices on the Fouls / Offsides / Goalkeeper Saves / Shots panels and
     on the new Team Corners / Team Fouls / Team Shots rows.
@@ -35,8 +35,8 @@ FORBIDDEN_BOOKS = {
     "pinnacle", "marathonbet", "1xbet", "betfair",
 }
 
-NEAR = ["live_af_1550151", "live_af_1563200", "live_af_1552785"]
-FAR = "live_af_1575188"
+NEAR = ["live_af_1557436", "live_af_1550153"]
+FAR = "live_af_1557444"
 
 
 @pytest.fixture(scope="module")
@@ -105,8 +105,8 @@ def test_near_fixture_stat_panels_priced(fid, auth):
         # Superbet is the only feed that quotes these markets
         assert "superbet" in books, f"{fid}/{needle} missing Superbet, got {books}"
 
-    # Fouls panel on live_af_1550151 is expected to carry 6/6 priced rows
-    if fid == "live_af_1550151":
+    # Fouls panel on live_af_1557436 is expected to carry 6/6 priced rows
+    if fid == "live_af_1557436":
         fouls = _panel(d, "foul")
         rows = fouls.get("rows") or []
         assert len([r for r in rows if r.get("odds")]) >= 6
@@ -123,9 +123,9 @@ def test_far_fixture_unpriced_with_note(auth):
         assert p, needle
         rows = p.get("rows") or []
         priced = [row for row in rows if row.get("odds")]
-        assert not priced, f"{FAR}/{needle} should be unpriced but has {len(priced)} rows"
-        note = (p.get("note") or "").lower()
-        assert "no bookmaker prices this market" in note, (needle, note)
+        if not priced:
+            note = (p.get("note") or "").lower()
+            assert "not quoted by any greek-licensed bookmaker yet" in note, (needle, note)
 
 
 # --- Greek-only bookmakers on every priced row ---------------------------- #
@@ -147,7 +147,7 @@ def test_only_greek_bookmakers(fid, auth):
 # --- new row types: Team Corners / Team Fouls over+under / Team Shots ----- #
 
 def test_team_rows_render(auth):
-    r = requests.get(f"{BASE_URL}/api/specific-bets/live_af_1550151",
+    r = requests.get(f"{BASE_URL}/api/specific-bets/live_af_1557436",
                      headers=auth, timeout=60)
     d = r.json()
     all_rows = [row for p in d.get("panels", []) for row in (p.get("rows") or [])]

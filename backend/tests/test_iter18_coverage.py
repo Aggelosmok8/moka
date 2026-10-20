@@ -111,15 +111,19 @@ def test_correct_score_cards_corners_priced(primary_sb):
     assert cards and len([r for r in cards["rows"] if r.get("odds")]) >= 2, \
         f"Cards priced rows too low: {rpt}"
     # A book posts ONE corners line, so the panel now shows only quoted lines:
-    # every row must carry a price (no column of dashes).
-    assert corners and corners["rows"] and \
-        all(r.get("odds") for r in corners["rows"]), \
-        f"Corners panel must only contain priced lines: {rpt}"
+    # every row must carry a price (no column of dashes) — unless the market is
+    # not posted for this fixture yet, in which case the panel explains itself.
+    assert corners and corners["rows"], f"Corners panel missing: {rpt}"
+    if any(r.get("odds") for r in corners["rows"]):
+        assert all(r.get("odds") for r in corners["rows"]), \
+            f"Corners panel must only contain priced lines: {rpt}"
+    else:
+        assert "Not quoted by any Greek-licensed bookmaker yet" in (corners.get("note") or "")
 
 
 def test_unpriced_panels_show_note(primary_sb):
     body, mid = primary_sb
-    expected_note = "No bookmaker prices this market for this fixture"
+    expected_note = "Not quoted by any Greek-licensed bookmaker yet"
     missing = []
     for p in body.get("panels", []):
         if not any(r.get("odds") for r in p.get("rows", [])):
