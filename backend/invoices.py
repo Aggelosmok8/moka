@@ -284,6 +284,10 @@ async def issue_invoice_for_stripe_invoice(db, invoice: dict) -> dict | None:
         logger.warning("invoices: ISSUER_* not configured — skipping document")
         return None
     ref = f"in:{invoice.get('id')}"
+    if not invoice.get("subscription"):
+        # A one-off Checkout also produces a Stripe invoice (invoice_creation), and
+        # that purchase is already documented from the session — do not issue twice.
+        return None
     if await _already(db, ref):
         return None
     total = (invoice.get("amount_paid") or 0) / 100.0

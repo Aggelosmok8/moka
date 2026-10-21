@@ -81,3 +81,18 @@ def test_numbering_is_sequential_and_idempotent():
         assert await inv._already(db, "") is False
 
     asyncio.run(run())
+
+
+def test_one_off_invoice_is_not_issued_twice():
+    """A one-off Checkout emits BOTH checkout.session.completed and invoice.paid;
+    the second must be ignored or the customer gets two tax documents."""
+    import asyncio
+
+    class _Boom:
+        def __getattr__(self, _):
+            raise AssertionError("must not touch the database for a one-off invoice")
+
+    out = asyncio.run(inv.issue_invoice_for_stripe_invoice(
+        _Boom(), {"id": "in_oneoff_test", "amount_paid": 1099, "subscription": None,
+                  "currency": "eur", "lines": {"data": [{"description": "Pro"}]}}))
+    assert out is None

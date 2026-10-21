@@ -1177,3 +1177,11 @@ Free · **Pro 30-day access €10.99 one-off** (`pro_monthly_once`, Checkout `mo
   with asyncpg via `DATABASE_URL` (no supabase-js, no PostgREST/GraphQL anywhere in frontend or backend),
   so the new tables (`invoices`, `counters`) need no `GRANT ... TO anon/authenticated`. Only relevant if
   we ever add supabase-js on the frontend.
+
+## 2026-10-21 (f) Duplicate-document bug caught before go-live
+A one-off Checkout has `invoice_creation` enabled, so Stripe emits BOTH
+`checkout.session.completed` AND `invoice.paid` for the same purchase — which would have issued TWO tax
+documents (refs `cs:` and `in:`) with two series numbers for one payment. `issue_invoice_for_stripe_invoice`
+now ignores any Stripe invoice without a `subscription` (that purchase is already documented from the
+session); renewals and the first subscription charge are unaffected. Covered by
+`test_one_off_invoice_is_not_issued_twice` (asserts it never even touches the DB). Suite: 175 passed.
