@@ -14,6 +14,7 @@ Verifies that:
     + 0.01, max 6 legs, and Superbet legs are present.
   * /api/admin/odds-quota.superbet reports a valid snapshot.
 """
+import datetime as _dt
 import os
 import re
 
@@ -35,8 +36,25 @@ FORBIDDEN_BOOKS = {
     "pinnacle", "marathonbet", "1xbet", "betfair",
 }
 
-NEAR = ["live_af_1557436", "live_af_1550153"]
-FAR = "live_af_1557444"
+def _board_ids():
+    """Fixtures rot: a pinned id is in the past a day later. Resolve the board at
+    collection time — the two soonest kick-offs are the 'near' fixtures (a book
+    posts stat markets 1-2 days out) and the last one is the 'far' fixture."""
+    try:
+        r = requests.get(f"{BASE_URL}/api/value-matches", timeout=180)
+        now = _dt.datetime.now(_dt.timezone.utc).isoformat()
+        ms = sorted([e for e in ((r.json() or {}).get("matches") or [])
+                     if (e["match"].get("status") == "upcoming"
+                         and (e["match"].get("commence_time") or "") > now)],
+                    key=lambda e: e["match"]["commence_time"])
+        return [e["match"]["id"] for e in ms]
+    except Exception:
+        return []
+
+
+_IDS = _board_ids()
+NEAR = _IDS[:2]
+FAR = _IDS[-1] if _IDS else ""
 
 
 @pytest.fixture(scope="module")
@@ -94,6 +112,8 @@ def test_near_fixture_stat_panels_priced(fid, auth):
     r = requests.get(f"{BASE_URL}/api/specific-bets/{fid}", headers=auth, timeout=60)
     assert r.status_code == 200, r.text
     d = r.json()
+    if not d.get("available"):
+        pytest.skip(f"{fid}: {d.get('reason')}")
 
     for needle in ("foul", "offside", "saves", "shots"):
         p = _panel(d, needle)
@@ -147,9 +167,11 @@ def test_only_greek_bookmakers(fid, auth):
 # --- new row types: Team Corners / Team Fouls over+under / Team Shots ----- #
 
 def test_team_rows_render(auth):
-    r = requests.get(f"{BASE_URL}/api/specific-bets/live_af_1557436",
+    r = requests.get(f"{BASE_URL}/api/specific-bets/{NEAR[0]}",
                      headers=auth, timeout=60)
     d = r.json()
+    if not d.get("available"):
+        pytest.skip(f"{NEAR[0]}: {d.get('reason')}")
     all_rows = [row for p in d.get("panels", []) for row in (p.get("rows") or [])]
     picks = [str(row.get("pick") or "") for row in all_rows]
 

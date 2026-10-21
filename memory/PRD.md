@@ -1054,3 +1054,23 @@ disappearing, pending above History, bookmaker-style match panel.
 - **Specific Bets layout**: panels moved from a grid to CSS multi-columns — narrow panels pair up two per
   row with no holes, while wide (split) panels take the full width via `lg:[column-span:all]`.
 - Suite: 169 passed, 3 skipped.
+
+## 2026-10-21 Production showed no matches — root cause: /api/value-matches took ~105s
+- Symptom: www.lion-stats.com/matches stayed empty while provider calls WERE being consumed.
+- Diagnosis: the Render backend itself was healthy (170 matches, CORS fine, same Supabase DB as preview
+  — a prod login returned the SAME user_id, which also confirms pre-prod does NOT double provider calls).
+  Browser trace showed `/api/value-matches` was never completed: axios' 30s default timeout aborted it.
+  Measured on prod: full board **105s**, even `?limit=3` took **69s**.
+- ROOT CAUSE: the double-chance enrichment added on 19/10 called `rb.pick_prices()` + `sb.pick_prices()`
+  once PER MATCH (170x). Each call falls back to a fuzzy scan (`_same_team`/SequenceMatcher) over the
+  whole pick index of every provider when a fixture has no exact key — O(matches x providers x keys).
+  It also ran BEFORE the `limit`/`level` filters, so even a 3-match request paid for all 170.
+- FIX (`src/routes/value_matches.py::_attach_dc_prices`): filter/limit FIRST, then build ONE
+  double-chance-only index from the cached snapshots and resolve each fixture against that small index.
+  Preview: full board **2.7s** (was ~105s), `?limit=3` **0.4s**, 155/170 matches carry real DC prices.
+- Also: `fetchValueMatches` now uses a 90s timeout (cold starts on Render), and MatchesPage surfaces a
+  readable error instead of silently swallowing the failure (`.catch(() => {})` left the page blank).
+- Test rot fixed for good: iteration tests no longer pin fixture ids — they resolve the nearest upcoming
+  fixtures from the live board at collection time and skip when a fixture is not model-available
+  (e.g. UCL "Only a few league matches played so far"). Suite: 167 passed, 5 skipped.
+- ACTION REQUIRED BY USER: redeploy the backend on Render (and the frontend on Vercel for the timeout).

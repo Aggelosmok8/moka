@@ -81,7 +81,11 @@ export default function MatchesPage() {
         setNotice(d?.notice || "");
       })
       // Keep the previous list on a failed/limited refresh instead of emptying the page.
-      .catch(() => {})
+      .catch(() => {
+        if (active && !entries.length) {
+          setNotice("Could not load today's matches — the server took too long to answer. Pull to refresh or try again in a moment.");
+        }
+      })
       .finally(() => active && setLoading(false));
     return () => { active = false; };
   }, []);
