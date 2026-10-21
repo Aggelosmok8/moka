@@ -558,6 +558,28 @@ def make_invoices_router(db, current_user):
                               ("id", "number", "series", "doc_type", "issued_at", "total",
                                "mydata_status", "mydata_error")} for r in bad]}
 
+    @router.get("/admin/mydata-check")
+    async def mydata_check(user=Depends(current_user)):
+        """Prove the credentials work WITHOUT issuing anything: RequestDocs is a
+        read-only call, so a 200 means aade-user-id + subscription key are right."""
+        from auth import is_admin
+        if not is_admin(user):
+            raise HTTPException(status_code=403, detail="Admins only")
+        if not mydata_configured():
+            return {"ok": False, "reason": "MYDATA_USER_ID / MYDATA_SUBSCRIPTION_KEY not set"}
+        base = _env("MYDATA_BASE", "https://mydataapidev.aade.gr").rstrip("/")
+        try:
+            async with httpx.AsyncClient(timeout=30) as c:
+                r = await c.get(f"{base}/RequestDocs", params={"mark": "0"}, headers={
+                    "aade-user-id": _env("MYDATA_USER_ID"),
+                    "ocp-apim-subscription-key": _env("MYDATA_SUBSCRIPTION_KEY")})
+        except Exception as e:
+            return {"ok": False, "base": base, "reason": f"{type(e).__name__}: {e}"}
+        hint = {401: "wrong subscription key", 403: "wrong aade-user-id or no access to this environment",
+                404: "wrong MYDATA_BASE"}.get(r.status_code, "")
+        return {"ok": r.status_code == 200, "base": base, "http": r.status_code,
+                "reason": hint, "body": r.text[:200]}
+
     @router.post("/{invoice_id}/retransmit")
     async def retransmit(invoice_id: str, user=Depends(current_user)):
         """Re-send a document to myDATA — same series number, no gap in the books.
