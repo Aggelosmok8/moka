@@ -33,7 +33,7 @@ export default function TrialBanner() {
       <div className="bg-[#39FF14]/10 border-b border-[#39FF14]/20" data-testid="trial-banner-pro">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center gap-2 text-sm text-[#39FF14]">
           <Crown className="w-4 h-4" /> <b className="text-white">Pro active</b>
-          {user.plan ? <span className="text-zinc-300">· {user.plan === "yearly" ? "Annual" : "Monthly"} plan</span> : null}
+          {user.plan ? <span className="text-zinc-300">· {{ yearly: "Annual", monthly: "Monthly", monthly_once: "30-day access" }[user.plan] || "Pro"} plan</span> : null}
         </div>
       </div>
     );

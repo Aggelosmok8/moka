@@ -96,7 +96,8 @@ async def send_password_reset(name: str, to_email: str, link: str) -> bool:
 
 async def evaluate_lifecycle(db, user_doc: dict) -> None:
     """Send any due trial emails for this user (idempotent)."""
-    if not user_doc or user_doc.get("subscription_status") == "active":
+    # Paying users (subscription OR one-off access) never get trial nudges.
+    if not user_doc or user_doc.get("subscription_status") in ("active", "one_off"):
         return
     start_iso = user_doc.get("trial_start_date")
     if not start_iso:

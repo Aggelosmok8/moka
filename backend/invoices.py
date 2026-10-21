@@ -61,7 +61,17 @@ def mydata_configured() -> bool:
 
 
 def _vat_rate() -> float:
-    return float(_env("VAT_RATE", "24") or 24)
+    # 0 by default: the business is not VAT-registered yet. Set VAT_RATE=24 the day
+    # it is, and both the document and the myDATA category follow automatically.
+    return float(_env("VAT_RATE", "0") or 0)
+
+
+def _vat_category() -> str:
+    """myDATA vatCategory: 1=24%, 2=13%, 3=6%, 4=17%, 5=9%, 6=4%, 7=0%/exempt."""
+    override = _env("MYDATA_VAT_CATEGORY")
+    if override:
+        return override
+    return {24: "1", 13: "2", 6: "3", 17: "4", 9: "5", 4: "6"}.get(int(_vat_rate()), "7")
 
 
 def _split_vat(total: float) -> tuple:
@@ -117,8 +127,11 @@ def _build_xml(inv: dict) -> bytes:
     row = ET.SubElement(doc, "invoiceDetails")
     ET.SubElement(row, "lineNumber").text = "1"
     ET.SubElement(row, "netValue").text = f"{inv['net']:.2f}"
-    ET.SubElement(row, "vatCategory").text = _env("MYDATA_VAT_CATEGORY", "1")
+    ET.SubElement(row, "vatCategory").text = _vat_category()
     ET.SubElement(row, "vatAmount").text = f"{inv['vat']:.2f}"
+    if _vat_category() == "7":
+        # AADE rejects a 0% line without the reason for the exemption.
+        ET.SubElement(row, "vatExemptionCategory").text = _env("MYDATA_VAT_EXEMPTION", "1")
     cls = ET.SubElement(row, "incomeClassification")
     ET.SubElement(cls, "{%s}classificationType" % ICLS).text = _env("MYDATA_E3", "E3_561_003")
     ET.SubElement(cls, "{%s}classificationCategory" % ICLS).text = _env(
@@ -441,7 +454,9 @@ def render_pdf(inv: dict) -> bytes:
     line(y)
     y -= 8 * mm
     cur = "€" if inv.get("currency", "EUR") == "EUR" else inv.get("currency")
-    for lbl, val in (("Καθαρή αξία", inv["net"]), (f"ΦΠΑ {inv['vat_rate']:.0f}%", inv["vat"])):
+    rate = float(inv.get("vat_rate") or 0)
+    vat_label = f"ΦΠΑ {rate:.0f}%" if rate else "ΦΠΑ 0% (απαλλαγή)"
+    for lbl, val in (("Καθαρή αξία", inv["net"]), (vat_label, inv["vat"])):
         c.setFont(_FONT, 9)
         c.drawRightString(W - 45 * mm, y, lbl)
         c.drawRightString(W - 22 * mm, y, f"{cur}{val:.2f}")

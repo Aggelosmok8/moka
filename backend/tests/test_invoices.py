@@ -7,13 +7,27 @@ os.environ.setdefault("ISSUER_NAME", "LION STATS")
 os.environ.setdefault("ISSUER_VAT", "123456789")
 
 
-def test_vat_split_inclusive():
+def test_vat_zero_rated_by_default():
+    # The business is not VAT-registered yet: 0%, myDATA category 7 + exemption.
+    assert inv._vat_rate() == 0
+    assert inv._vat_category() == "7"
+    assert inv._split_vat(10.99) == (10.99, 0.0, 10.99)
+    xml = inv._build_xml({"series": "A", "aa": 1, "issued_at": "2026-10-21T19:00:00+00:00",
+                          "doc_type": "11.2", "currency": "EUR", "net": 10.99, "vat": 0.0,
+                          "total": 10.99, "counterparty": {}}).decode()
+    assert "<vatCategory>7</vatCategory>" in xml
+    assert "vatExemptionCategory" in xml
+
+
+def test_vat_split_inclusive(monkeypatch):
+    monkeypatch.setenv("VAT_RATE", "24")
     net, vat, total = inv._split_vat(10.99)
     assert (net, vat, total) == (8.86, 2.13, 10.99)
     assert round(net + vat, 2) == total
 
 
 def test_vat_split_exclusive(monkeypatch):
+    monkeypatch.setenv("VAT_RATE", "24")
     monkeypatch.setenv("PRICES_INCLUDE_VAT", "0")
     net, vat, total = inv._split_vat(10.0)
     assert (net, vat, total) == (10.0, 2.4, 12.4)
@@ -38,7 +52,8 @@ def test_pdf_renders_greek_and_mark():
     assert pdf.startswith(b"%PDF") and len(pdf) > 5000
 
 
-def test_mydata_xml_shape():
+def test_mydata_xml_shape(monkeypatch):
+    monkeypatch.setenv("VAT_RATE", "24")
     doc = {"series": "A", "aa": 7, "issued_at": "2026-10-21T19:00:00+00:00",
            "doc_type": "11.2", "currency": "EUR", "net": 8.86, "vat": 2.13, "total": 10.99,
            "counterparty": {}}

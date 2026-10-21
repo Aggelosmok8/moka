@@ -1162,3 +1162,18 @@ Free · **Pro 30-day access €10.99 one-off** (`pro_monthly_once`, Checkout `mo
 - STILL NEEDED from the user: issuer details (ISSUER_*), accountant's codes
   (MYDATA_INCOME_CLASSIFICATION / MYDATA_E3 / series), myDATA credentials (dev + prod), and the three
   `price_` ids. Until ISSUER_NAME+ISSUER_VAT exist, invoice issuance logs a warning and skips.
+
+## 2026-10-21 (e) VAT 0%, identical Pro treatment, Supabase Data API notice
+- **VAT is 0% for now** (business not VAT-registered). `VAT_RATE` now defaults to **0**, so €10.99 is
+  net 10.99 / ΦΠΑ 0.00. myDATA `vatCategory` is DERIVED from the rate (24->1, 13->2, 6->3, 0->**7**) and a
+  0% line automatically carries `vatExemptionCategory` (`MYDATA_VAT_EXEMPTION`, default 1) — AADE rejects
+  a zero-rated line without a reason. The PDF prints "ΦΠΑ 0% (απαλλαγή)". Set `VAT_RATE=24` the day the
+  company registers and everything (document + myDATA category) follows with no code change.
+- **All Pro users are treated identically** — verified, no change needed in gating: access is decided by
+  `_is_pro_now()` (status + `pro_until`), and `plan` is used ONLY for labels. one_off with a future
+  `pro_until` -> True; expired -> False. Fixed two label paths (`TrialBanner`, `AccountPage`) and stopped
+  trial-nudge emails for one-off buyers (`evaluate_lifecycle` now also skips `one_off`).
+- **Supabase Data API change (30 Oct) does NOT affect this app.** The backend talks to Postgres directly
+  with asyncpg via `DATABASE_URL` (no supabase-js, no PostgREST/GraphQL anywhere in frontend or backend),
+  so the new tables (`invoices`, `counters`) need no `GRANT ... TO anon/authenticated`. Only relevant if
+  we ever add supabase-js on the frontend.
