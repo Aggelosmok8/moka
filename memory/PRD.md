@@ -1074,3 +1074,24 @@ disappearing, pending above History, bookmaker-style match panel.
   fixtures from the live board at collection time and skip when a fixture is not model-available
   (e.g. UCL "Only a few league matches played so far"). Suite: 167 passed, 5 skipped.
 - ACTION REQUIRED BY USER: redeploy the backend on Render (and the frontend on Vercel for the timeout).
+
+## 2026-10-21 (b) Elabet hit 100% of its RapidAPI plan — two real leaks in rapid_books
+RapidAPI emailed "100% of BASIC used" for Elabet only, while the app's own counter said 150/150 and the
+other four providers sat at 22-25. Log forensics found WHY Elabet specifically:
+1. **Undercount race.** `_bump_usage()` read the row, added one and wrote the total back. Concurrent
+   refreshes of the same provider all read the same value — the log literally shows
+   "call 1/150" five times inside one second. Real provider calls were therefore HIGHER than the counter,
+   which is how a 150 ceiling let ~200 real calls through. Now an atomic `$inc` owns the counter and
+   `_write_db()` no longer touches `calls`.
+2. **Timeouts were free, and retried instantly.** The counter was bumped AFTER the HTTP response, so a
+   40s httpx timeout cost a real request but was never counted — and nothing recorded the failure, so the
+   next page view retried immediately. Elabet has by far the biggest snapshot (1000-2000 fixtures), so it
+   is the one that times out. Now: the call is reserved BEFORE it leaves, the read timeout is 90s so a
+   slow-but-valid response is not wasted, and any failure (timeout / non-200 / empty parse) starts a
+   `RAPID_BOOKS_FAIL_COOLDOWN_MIN` (default 60min) cooldown.
+3. **New daily ceiling** `RAPID_BOOKS_MAX_DAILY` (default 6/provider/day): a bad day can no longer eat the
+   month. `/api/admin/odds-quota` now reports `callsToday`, `dailyCeiling` and `coolingDownFor`.
+- Elabet is at 150/150 and serves its cached snapshot for the rest of the cycle — no further calls, so no
+  overage. NOTE for later: RapidAPI resets on the SUBSCRIPTION anniversary, not the 1st of the month,
+  while `_month()` is calendar-based; if the plan renews mid-month we should add `RAPID_BOOKS_CYCLE_DAY`.
+- Suite: 167 passed, 5 skipped.

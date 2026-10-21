@@ -26,7 +26,13 @@ logger = logging.getLogger(__name__)
 # takes while leaving room under RAPID_BOOKS_MAX_MONTHLY.
 CACHE_TTL = int(os.environ.get("RAPID_BOOKS_TTL_HOURS", "6")) * 3600
 MAX_MONTHLY = int(os.environ.get("RAPID_BOOKS_MAX_MONTHLY", "150"))
+# A bad hour must never be able to eat the month: 4 planned refreshes a day plus
+# a little slack. Elabet burned 127 calls in one day retrying a feed that kept
+# timing out, which is what tripped its 200/month plan.
+MAX_DAILY = int(os.environ.get("RAPID_BOOKS_MAX_DAILY", "6"))
+FAIL_COOLDOWN = int(os.environ.get("RAPID_BOOKS_FAIL_COOLDOWN_MIN", "60")) * 60
 CACHE_DIR = Path("/tmp/rapid_books")
+_fail: dict = {}                             # slug -> last failed attempt (epoch)
 
 _mem: dict = {}
 _locks: dict = {}
@@ -441,33 +447,76 @@ async def _read_db(slug: str):
             "month": row.get("month") or "", "calls": int(row.get("calls") or 0)}
 
 
-async def _write_db(slug: str, idx: dict, pidx: dict, at: float, calls: int):
+async def _write_db(slug: str, idx: dict, pidx: dict, at: float, calls: int = 0):
+    # `calls` is owned by _reserve_call()'s atomic $inc — never written here.
     try:
         await _db().update_one(
             {"slug": slug},
             {"$set": {"data": json.dumps({"idx": idx, "picks": pidx}),
-                      "fetched_at": str(at), "month": _month(), "calls": calls}},
+                      "fetched_at": str(at), "month": _month()}},
             upsert=True)
     except Exception as e:
         logger.warning("rapid_books[%s]: db write %s", slug, type(e).__name__)
 
 
+def _day() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+async def _reserve_call(slug: str) -> tuple:
+    """Count the request BEFORE it leaves.
+
+    Two leaks lived here: the old counter read the row, added one and wrote the
+    total back, so concurrent refreshes all wrote the SAME number (the log shows
+    "call 1/150" five times in one second); and a timed-out fetch was never
+    counted at all even though the provider had already served it. Together that
+    is how Elabet reached 200 real calls while the app believed it had made 150.
+    """
+    m, d = _month(), _day()
+    calls = day_calls = 0
+    try:
+        row = await _db().find_one({"slug": slug}) or {}
+        if row.get("month") != m:
+            upd = {"$set": {"month": m, "calls": 1, "day": d, "dayCalls": 1}}
+        elif row.get("day") != d:
+            upd = {"$set": {"day": d, "dayCalls": 1}, "$inc": {"calls": 1}}
+        else:
+            upd = {"$inc": {"calls": 1, "dayCalls": 1}}
+        await _db().update_one({"slug": slug}, upd, upsert=True)
+        fresh = await _db().find_one({"slug": slug}) or {}
+        calls, day_calls = int(fresh.get("calls") or 1), int(fresh.get("dayCalls") or 1)
+    except Exception as e:
+        logger.warning("rapid_books[%s]: usage write %s", slug, type(e).__name__)
+    _usage[slug] = {"month": m, "count": calls, "day": d, "dayCount": day_calls}
+    return calls, day_calls
+
+
+async def _usage_now(slug: str) -> dict:
+    m, d = _month(), _day()
+    u = _usage.get(slug)
+    if not u or u.get("month") != m or u.get("day") != d:
+        try:
+            row = await _db().find_one({"slug": slug}) or {}
+        except Exception:
+            row = {}
+        u = _usage[slug] = {
+            "month": m, "count": int(row.get("calls") or 0) if row.get("month") == m else 0,
+            "day": d, "dayCount": int(row.get("dayCalls") or 0) if row.get("day") == d else 0,
+        }
+    return u
+
+
 async def _bump_usage(slug: str) -> int:
-    """Count this request against the month, in the DB, and return the new total."""
-    row = await _read_db(slug)
-    calls = (row or {}).get("calls", 0) + 1 if (row or {}).get("month") == _month() else 1
-    _usage[slug] = {"month": _month(), "count": calls}
+    calls, _ = await _reserve_call(slug)
     return calls
 
 
 async def _quota_left(slug: str) -> int:
-    m = _month()
-    u = _usage.get(slug)
-    if not u or u["month"] != m:
-        row = await _read_db(slug)
-        used = row["calls"] if row and row.get("month") == m else 0
-        u = _usage[slug] = {"month": m, "count": used}
-    return MAX_MONTHLY - u["count"]
+    return MAX_MONTHLY - (await _usage_now(slug))["count"]
+
+
+async def _daily_left(slug: str) -> int:
+    return MAX_DAILY - (await _usage_now(slug))["dayCount"]
 
 
 def merge_prices(base: dict, extra: dict) -> dict:
@@ -520,10 +569,13 @@ async def quota_status() -> list:
     out = []
     for slug in active_slugs():
         row = await _read_db(slug)
+        u = await _usage_now(slug)
         left = await _quota_left(slug)
         out.append({"provider": PROVIDERS[slug][0], "slug": slug,
-                    "callsThisMonth": MAX_MONTHLY - left, "ceiling": MAX_MONTHLY,
+                    "callsThisMonth": u["count"], "ceiling": MAX_MONTHLY,
                     "left": left, "freePlanLimit": 200,
+                    "callsToday": u["dayCount"], "dailyCeiling": MAX_DAILY,
+                    "coolingDownFor": max(0, int(FAIL_COOLDOWN - (time.time() - _fail.get(slug, 0)))),
                     "cachedMatches": len((row or {}).get("idx") or {}),
                     "cachedAt": (datetime.fromtimestamp((row or {}).get("at") or 0, timezone.utc)
                                  .isoformat() if (row or {}).get("at") else None),
@@ -565,31 +617,46 @@ async def _refresh_index(slug: str) -> dict:
     if await _quota_left(slug) <= 0:
         logger.warning("rapid_books[%s]: monthly ceiling reached, serving stale", slug)
         return stale
+    if await _daily_left(slug) <= 0:
+        logger.warning("rapid_books[%s]: daily ceiling (%s) reached, serving stale", slug, MAX_DAILY)
+        return stale
+    since_fail = time.time() - _fail.get(slug, 0)
+    if since_fail < FAIL_COOLDOWN:
+        # Without this, every page view retried a failing feed and each retry
+        # cost a real request at the provider.
+        logger.info("rapid_books[%s]: in cooldown for %ss, serving stale",
+                    slug, int(FAIL_COOLDOWN - since_fail))
+        return stale
+    calls, day_calls = await _reserve_call(slug)
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(40.0, connect=8.0)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(90.0, connect=8.0)) as client:
             r = await client.get(f"https://{host}.p.rapidapi.com/v1/data/{file}",
                                  headers={"x-rapidapi-key": _key(),
                                           "x-rapidapi-host": f"{host}.p.rapidapi.com",
                                           "accept": "application/json"})
-        calls = await _bump_usage(slug)
         if r.status_code != 200:
-            logger.warning("rapid_books[%s]: HTTP %s (call %s/%s this month)",
-                           slug, r.status_code, calls, MAX_MONTHLY)
-            await _write_db(slug, (stale.get("idx") or {}), (stale.get("picks") or {}),
-                            stale.get("at") or 0, calls)
+            _fail[slug] = time.time()
+            logger.warning("rapid_books[%s]: HTTP %s (call %s/%s this month, %s/%s today)",
+                           slug, r.status_code, calls, MAX_MONTHLY, day_calls, MAX_DAILY)
             return stale
         idx, pidx = {}, {}
         parser(r.json(), book, idx, pidx)
     except Exception as e:
-        logger.warning("rapid_books[%s]: %s", slug, type(e).__name__)
+        _fail[slug] = time.time()
+        logger.warning("rapid_books[%s]: %s (call %s/%s this month) — cooling down %smin",
+                       slug, type(e).__name__, calls, MAX_MONTHLY, FAIL_COOLDOWN // 60)
         return stale
     if not idx:
+        _fail[slug] = time.time()
+        logger.warning("rapid_books[%s]: empty parse (call %s/%s) — cooling down %smin",
+                       slug, calls, MAX_MONTHLY, FAIL_COOLDOWN // 60)
         return stale
+    _fail.pop(slug, None)
     _mem[slug] = {"idx": idx, "picks": pidx, "at": now}
     _write_disk(slug, idx, pidx, now)
-    await _write_db(slug, idx, pidx, now, calls)
-    logger.info("rapid_books[%s]: %s matches priced, %s with extra markets (call %s/%s this month)",
-                slug, len(idx), len(pidx), calls, MAX_MONTHLY)
+    await _write_db(slug, idx, pidx, now)
+    logger.info("rapid_books[%s]: %s matches priced, %s with extra markets (call %s/%s this month, %s/%s today)",
+                slug, len(idx), len(pidx), calls, MAX_MONTHLY, day_calls, MAX_DAILY)
     return _mem[slug]
 
 
