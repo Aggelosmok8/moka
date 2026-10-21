@@ -33,6 +33,7 @@ PACKAGES = {
         "interval": "month",
         "days": 30,
         "product_name": "Moka Pro",
+        "price_env": "STRIPE_PRICE_MONTHLY",
     },
     "pro_yearly": {
         "amount": 79.0,
@@ -41,6 +42,7 @@ PACKAGES = {
         "interval": "year",
         "days": 365,
         "product_name": "Moka Pro",
+        "price_env": "STRIPE_PRICE_YEARLY",
     },
 }
 
@@ -170,17 +172,22 @@ def make_billing_router(db, current_user, current_user_optional) -> APIRouter:
         origin = body.origin_url.rstrip("/")
         _stripe_init()
 
-        # Inline price_data so we don't need to call Product/Price endpoints
-        # (the Emergent test proxy doesn't expose those).
-        line_item = {
-            "price_data": {
-                "currency": pkg["currency"],
-                "unit_amount": int(round(pkg["amount"] * 100)),
-                "recurring": {"interval": pkg["interval"]},
-                "product_data": {"name": pkg["product_name"]},
-            },
-            "quantity": 1,
-        }
+        # A Price created in the Stripe Dashboard wins when its id is configured:
+        # it carries the tax behaviour (VAT inclusive/exclusive) and lets the price
+        # change without a deploy. Otherwise fall back to an inline price_data.
+        price_id = (os.environ.get(pkg.get("price_env", ""), "") or "").strip()
+        if price_id.startswith("price_"):
+            line_item = {"price": price_id, "quantity": 1}
+        else:
+            line_item = {
+                "price_data": {
+                    "currency": pkg["currency"],
+                    "unit_amount": int(round(pkg["amount"] * 100)),
+                    "recurring": {"interval": pkg["interval"]},
+                    "product_data": {"name": pkg["product_name"]},
+                },
+                "quantity": 1,
+            }
         meta = {"user_id": user.user_id, "package_id": body.package_id}
         session_args = dict(
             mode="subscription",
