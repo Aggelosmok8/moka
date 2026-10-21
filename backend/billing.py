@@ -27,7 +27,7 @@ ACTIVE_SUBSCRIPTION_STATUSES = {"active", "trialing"}
 
 PACKAGES = {
     "pro_monthly": {
-        "amount": 8.99,
+        "amount": 10.99,
         "currency": "eur",
         "label": "Moka Pro · Monthly",
         "interval": "month",
@@ -36,7 +36,7 @@ PACKAGES = {
         "price_env": "STRIPE_PRICE_MONTHLY",
     },
     "pro_yearly": {
-        "amount": 79.0,
+        "amount": 79.99,
         "currency": "eur",
         "label": "Moka Pro · Annual",
         "interval": "year",

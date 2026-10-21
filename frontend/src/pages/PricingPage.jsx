@@ -146,7 +146,7 @@ export default function PricingPage() {
           <div className="surface rounded-xl p-7" data-testid="plan-monthly">
             <div className="text-[10px] uppercase tracking-[0.22em] font-bold text-white mb-2">Pro · Monthly</div>
             <div className="flex items-baseline gap-1 mb-5">
-              <span className="font-display font-black text-5xl text-white">€{monthly ? monthly.amount.toFixed(2) : "8.99"}</span>
+              <span className="font-display font-black text-5xl text-white">€{monthly ? monthly.amount.toFixed(2) : "10.99"}</span>
               <span className="text-zinc-500">/ month</span>
             </div>
             <ul className="space-y-2.5 mb-6">
@@ -169,10 +169,10 @@ export default function PricingPage() {
               <span className="text-[11px] font-bold text-[#39FF14]" data-testid="annual-savings">Save €{savings}+ / year</span>
             </div>
             <div className="flex items-baseline gap-1">
-              <span className="font-display font-black text-5xl text-white">€{yearly ? yearly.amount.toFixed(0) : "79"}</span>
+              <span className="font-display font-black text-5xl text-white">€{yearly ? yearly.amount.toFixed(2) : "79.99"}</span>
               <span className="text-zinc-500">/ year</span>
             </div>
-            <div className="text-xs text-zinc-500 mb-5 mt-1">≈ €{yearly ? (yearly.amount / 12).toFixed(2) : "6.58"}/month, billed yearly</div>
+            <div className="text-xs text-zinc-500 mb-5 mt-1">≈ €{yearly ? (yearly.amount / 12).toFixed(2) : "6.67"}/month, billed yearly</div>
             <ul className="space-y-2.5 mb-6">
               {["Everything in Monthly", "2 months effectively free", "Priority data refresh", "Lock in the lowest price"].map((f) => (
                 <li key={f} className="flex items-start gap-2 text-sm text-white">
