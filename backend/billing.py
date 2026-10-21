@@ -11,7 +11,7 @@ All Stripe SDK calls (sync) are wrapped in `asyncio.to_thread`.
 import os
 import logging
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import stripe
@@ -19,19 +19,33 @@ from fastapi import APIRouter, Request, Depends, HTTPException
 from pydantic import BaseModel
 
 from auth import grant_pro
+from invoices import (issue_credit_note, issue_invoice_for_session,
+                      issue_invoice_for_stripe_invoice)
 
 logger = logging.getLogger(__name__)
 
 # Subscription statuses Stripe considers "good standing" for granting Pro access.
-ACTIVE_SUBSCRIPTION_STATUSES = {"active", "trialing"}
+ACTIVE_SUBSCRIPTION_STATUSES = {"active", "trialing", "one_off"}
 
 PACKAGES = {
+    # One-off: pay once, 30 days of Pro, nothing auto-renews.
+    "pro_monthly_once": {
+        "amount": 10.99,
+        "currency": "eur",
+        "label": "Moka Pro · 30-day access",
+        "interval": None,
+        "mode": "payment",
+        "days": 30,
+        "product_name": "Moka Pro — 30-day access",
+        "price_env": "STRIPE_PRICE_MONTHLY_ONCE",
+    },
     "pro_monthly": {
         "amount": 10.99,
         "currency": "eur",
         "label": "Moka Pro · Monthly",
         "interval": "month",
         "days": 30,
+        "mode": "subscription",
         "product_name": "Moka Pro",
         "price_env": "STRIPE_PRICE_MONTHLY",
     },
@@ -41,6 +55,7 @@ PACKAGES = {
         "label": "Moka Pro · Annual",
         "interval": "year",
         "days": 365,
+        "mode": "subscription",
         "product_name": "Moka Pro",
         "price_env": "STRIPE_PRICE_YEARLY",
     },
@@ -66,6 +81,8 @@ async def is_active_subscription(db, user_id: str) -> bool:
     if status not in ACTIVE_SUBSCRIPTION_STATUSES:
         return False
     pro_until = u.get("pro_until")
+    if status == "one_off" and not pro_until:
+        return False          # a paid-once window without an end date is not access
     if not pro_until:
         # Status is active but we don't yet know the period end — trust Stripe status.
         return True
@@ -106,6 +123,17 @@ async def _persist_subscription_state(
         return
     update["subscription_updated_at"] = datetime.now(timezone.utc).isoformat()
     await db.users.update_one({"user_id": user_id}, {"$set": update})
+
+
+async def _grant_one_off(db, user_id: str, days: int) -> None:
+    """Paid-once access: no subscription object exists, so the end date IS the access."""
+    until = datetime.now(timezone.utc) + timedelta(days=days)
+    await db.users.update_one({"user_id": user_id}, {"$set": {
+        "subscription_status": "one_off",
+        "pro_until": until.isoformat(),
+        "plan": "monthly_once",
+        "subscription_updated_at": datetime.now(timezone.utc).isoformat(),
+    }})
 
 
 def _stripe_init():
@@ -175,28 +203,37 @@ def make_billing_router(db, current_user, current_user_optional) -> APIRouter:
         # A Price created in the Stripe Dashboard wins when its id is configured:
         # it carries the tax behaviour (VAT inclusive/exclusive) and lets the price
         # change without a deploy. Otherwise fall back to an inline price_data.
+        mode = pkg.get("mode") or "subscription"
         price_id = (os.environ.get(pkg.get("price_env", ""), "") or "").strip()
         if price_id.startswith("price_"):
             line_item = {"price": price_id, "quantity": 1}
         else:
-            line_item = {
-                "price_data": {
-                    "currency": pkg["currency"],
-                    "unit_amount": int(round(pkg["amount"] * 100)),
-                    "recurring": {"interval": pkg["interval"]},
-                    "product_data": {"name": pkg["product_name"]},
-                },
-                "quantity": 1,
+            price_data = {
+                "currency": pkg["currency"],
+                "unit_amount": int(round(pkg["amount"] * 100)),
+                "product_data": {"name": pkg["product_name"]},
             }
+            if mode == "subscription":
+                price_data["recurring"] = {"interval": pkg["interval"]}
+            line_item = {"price_data": price_data, "quantity": 1}
         meta = {"user_id": user.user_id, "package_id": body.package_id}
         session_args = dict(
-            mode="subscription",
+            mode=mode,
             line_items=[line_item],
             success_url=f"{origin}/pricing/success?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{origin}/pricing?canceled=1",
             metadata=meta,
-            subscription_data={"metadata": meta},
+            # A VAT number turns the receipt (ΑΠΥ 11.2) into an invoice (ΤΠΥ 2.1) and
+            # is the counterparty myDATA needs, so always offer the field.
+            tax_id_collection={"enabled": True},
+            billing_address_collection="auto",
         )
+        if mode == "subscription":
+            session_args["subscription_data"] = {"metadata": meta}
+        else:
+            # Needed on the invoice (and by myDATA) for a one-off purchase.
+            session_args["payment_intent_data"] = {"metadata": meta}
+            session_args["invoice_creation"] = {"enabled": True}
         if customer_id:
             session_args["customer"] = customer_id
         else:
@@ -219,11 +256,11 @@ def make_billing_router(db, current_user, current_user_optional) -> APIRouter:
             "metadata": meta,
             "status": "initiated",
             "payment_status": "pending",
-            "mode": "subscription",
+            "mode": mode,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat(),
         })
-        return {"url": session.url, "session_id": session.id, "mode": "subscription"}
+        return {"url": session.url, "session_id": session.id, "mode": mode}
 
     @router.get("/status/{session_id}")
     async def checkout_status(session_id: str, user=Depends(current_user)):
@@ -264,6 +301,19 @@ def make_billing_router(db, current_user, current_user_optional) -> APIRouter:
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }},
         )
+
+        if tx.get("mode") == "payment":
+            if payment_status == "paid":
+                await _grant_one_off(db, user.user_id, PACKAGES[tx["package_id"]]["days"])
+                if customer_id:
+                    await db.users.update_one({"user_id": user.user_id},
+                                              {"$set": {"stripe_customer_id": customer_id}})
+                await issue_invoice_for_session(db, session, tx)
+            u = await db.users.find_one({"user_id": user.user_id}, {"_id": 0}) or {}
+            return {"status": status, "payment_status": payment_status,
+                    "subscription_status": u.get("subscription_status"),
+                    "is_pro": await is_active_subscription(db, user.user_id),
+                    "pro_until": u.get("pro_until")}
 
         # Persist subscription state on the user document — single source of truth.
         if sub_id or customer_id or sub_status:
@@ -385,6 +435,18 @@ def make_webhook_router(db) -> APIRouter:
             customer = data.get("customer")
             user_id = (data.get("metadata") or {}).get("user_id")
             package_id = (data.get("metadata") or {}).get("package_id")
+            if user_id and data.get("mode") == "payment":
+                pkg = PACKAGES.get(package_id) or {}
+                await _grant_one_off(db, user_id, pkg.get("days", 30))
+                if customer:
+                    await db.users.update_one({"user_id": user_id},
+                                              {"$set": {"stripe_customer_id": customer}})
+                if sid:
+                    await db.payment_transactions.update_one(
+                        {"session_id": sid},
+                        {"$set": {"status": "completed", "payment_status": "paid"}})
+                await issue_invoice_for_session(db, data, None)
+                return {"ok": True}
             if user_id:
                 sub_status = None
                 period_end = None
@@ -413,6 +475,13 @@ def make_webhook_router(db) -> APIRouter:
                     {"session_id": sid},
                     {"$set": {"status": "completed", "payment_status": "paid", "stripe_subscription_id": sub_id}},
                 )
+
+        elif etype == "invoice.paid":
+            # Every renewal lands here — this is what triggers the Greek receipt.
+            await issue_invoice_for_stripe_invoice(db, data)
+
+        elif etype == "charge.refunded":
+            await issue_credit_note(db, data)
 
         elif etype in ("customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted"):
             sub_id = data.get("id")

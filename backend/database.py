@@ -140,6 +140,36 @@ _SQLITE_SCHEMA = """
         month TEXT DEFAULT '',
         calls INTEGER DEFAULT 0
     );
+    CREATE TABLE IF NOT EXISTS invoices (
+        id TEXT PRIMARY KEY,
+        user_id TEXT,
+        number TEXT,
+        series TEXT,
+        aa INTEGER DEFAULT 0,
+        doc_type TEXT,
+        issued_at TEXT,
+        currency TEXT DEFAULT 'EUR',
+        net REAL DEFAULT 0,
+        vat REAL DEFAULT 0,
+        total REAL DEFAULT 0,
+        vat_rate REAL DEFAULT 24,
+        counterparty TEXT,
+        lines TEXT,
+        payment TEXT,
+        stripe_ref TEXT,
+        mark TEXT DEFAULT '',
+        uid TEXT DEFAULT '',
+        qr TEXT DEFAULT '',
+        mydata_status TEXT DEFAULT 'pending',
+        mydata_error TEXT DEFAULT '',
+        emailed TEXT DEFAULT '',
+        created_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS counters (
+        id TEXT PRIMARY KEY,
+        value INTEGER DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_invoices_user ON invoices(user_id);
     CREATE INDEX IF NOT EXISTS idx_user_sessions_token ON user_sessions(session_token);
     CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_events_user_ts ON events(user_id, ts);
@@ -252,6 +282,36 @@ _PG_SCHEMA = """
         month TEXT DEFAULT '',
         calls INTEGER DEFAULT 0
     );
+    CREATE TABLE IF NOT EXISTS invoices (
+        id TEXT PRIMARY KEY,
+        user_id TEXT,
+        number TEXT,
+        series TEXT,
+        aa INTEGER DEFAULT 0,
+        doc_type TEXT,
+        issued_at TEXT,
+        currency TEXT DEFAULT 'EUR',
+        net REAL DEFAULT 0,
+        vat REAL DEFAULT 0,
+        total REAL DEFAULT 0,
+        vat_rate REAL DEFAULT 24,
+        counterparty TEXT,
+        lines TEXT,
+        payment TEXT,
+        stripe_ref TEXT,
+        mark TEXT DEFAULT '',
+        uid TEXT DEFAULT '',
+        qr TEXT DEFAULT '',
+        mydata_status TEXT DEFAULT 'pending',
+        mydata_error TEXT DEFAULT '',
+        emailed TEXT DEFAULT '',
+        created_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS counters (
+        id TEXT PRIMARY KEY,
+        value INTEGER DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_invoices_user ON invoices(user_id);
     CREATE INDEX IF NOT EXISTS idx_user_sessions_token ON user_sessions(session_token);
     CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_events_user_ts ON events(user_id, ts);

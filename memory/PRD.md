@@ -1124,3 +1124,41 @@ call was made. New module **`/app/backend/quota_cycle.py`** is now the single bu
   `coolingDownFor` for every provider including Superbet.
 - Suite: 168 passed, 4 skipped. Iteration tests no longer pin a fixture's market menu (a book quotes a
   different mix per match), so they stop failing for non-regressions.
+
+## 2026-10-21 (d) Four tiers + Greek tax documents (παραστατικά) end-to-end
+### Plans (4)
+Free · **Pro 30-day access €10.99 one-off** (`pro_monthly_once`, Checkout `mode=payment`, no renewal)
+· **Pro Monthly €10.99** (subscription) · **Pro Annual €79.99** (subscription).
+- `billing.py`: packages carry `mode`; checkout builds `price_data` without `recurring` for one-off,
+  adds `payment_intent_data` + `invoice_creation` there, and `tax_id_collection` on every session so a
+  buyer can enter a VAT number (that is what turns an ΑΠΥ into a ΤΠΥ and gives myDATA its counterparty).
+- One-off access: `_grant_one_off()` sets `subscription_status="one_off"`, `pro_until=+30d`,
+  `plan="monthly_once"`; `"one_off"` added to ACTIVE_SUBSCRIPTION_STATUSES and the `pro_until` check
+  expires it. Granted from BOTH the webhook and `/billing/status/{id}` (whichever lands first).
+- Webhook now also handles `invoice.paid` (renewals) and `charge.refunded` (credit note).
+- `PricingPage.jsx`: 4 cards (`md:grid-cols-2 xl:grid-cols-4`), one-off card badged "ONE-OFF" with
+  "no auto-renewal", VAT/renewal footnote. `AccountPage` shows the one-off plan label.
+### Tax documents — `/app/backend/invoices.py` (new)
+- Stripe is the money; the legal document is ours. Flow: payment -> row -> **atomic per-series number**
+  (`counters` table, `$inc`) -> **myDATA SendInvoices** -> store ΜΑΡΚ/UID/QR -> render PDF -> email.
+  The PDF is produced AFTER myDATA answers because the QR only exists then.
+- Doc type: **11.2 ΑΠΥ** for a private buyer, **2.1 ΤΠΥ** when a VAT number was given, **5.1** for refunds.
+- VAT: prices are VAT-inclusive by default (`PRICES_INCLUDE_VAT=1`), so €10.99 -> net 8.86 + ΦΠΑ 2.13.
+- Idempotent on `stripe_ref` (`cs:` / `in:` / `re:`) — Stripe retries webhooks, a document must not double.
+- PDF (reportlab) follows the user's template: crest + issuer block, doc title, Αρ. Παραστατικού,
+  date/time, customer block (ΑΦΜ when present), payment + transaction ref, line table, net/ΦΠΑ/ΤΕΛΙΚΟ
+  ΠΟΣΟ, AADE QR, **ΜΑΡΚ + UID**, and a footer line that switches between "μέσω παρόχου" and
+  "Διαβιβάστηκε στο myDATA" via `MYDATA_ISSUED_BY_PROVIDER`.
+  **DejaVu is vendored in `backend/assets/`** — Helvetica has no Greek accents ("Αθήνα" rendered "Αθ να").
+- New table `invoices` + `counters` (idempotent CREATEs in both SQLite and PG schemas).
+- Routes: `GET /api/invoices` (own documents) and `GET /api/invoices/{id}/pdf`; `InvoicesCard.jsx`
+  lists them under Account with ΜΑΡΚ and a download.
+- Email: `send_invoice_email()` attaches the PDF through the existing Resend setup.
+- Tests: `tests/test_invoices.py` (VAT split inclusive/exclusive, doc type, PDF bytes, myDATA XML shape,
+  sequential numbering) — suite **173 passed, 5 skipped**. requirements.txt += reportlab/qrcode/pillow.
+### Production status (verified live, 21/10)
+- `STRIPE_WEBHOOK_SECRET` ✅ loaded (unsigned POST -> 400). `STRIPE_API_KEY` ❌ still a TEST key
+  (checkout returns `cs_test_…`). Live webhook + test key = events never arrive -> Pro never activates.
+- STILL NEEDED from the user: issuer details (ISSUER_*), accountant's codes
+  (MYDATA_INCOME_CLASSIFICATION / MYDATA_E3 / series), myDATA credentials (dev + prod), and the three
+  `price_` ids. Until ISSUER_NAME+ISSUER_VAT exist, invoice issuance logs a warning and skips.

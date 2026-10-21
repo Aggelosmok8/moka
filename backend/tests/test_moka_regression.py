@@ -45,11 +45,16 @@ def test_billing_packages(s):
     assert r.status_code == 200, r.text[:300]
     pkgs = r.json()["packages"]
     by_id = {p["id"]: p for p in pkgs}
-    assert set(by_id) == {"pro_monthly", "pro_yearly"}
-    assert float(by_id["pro_monthly"]["amount"]) == 8.99
+    assert set(by_id) == {"pro_monthly_once", "pro_monthly", "pro_yearly"}
+    assert float(by_id["pro_monthly"]["amount"]) == 10.99
     assert by_id["pro_monthly"]["currency"].lower() == "eur"
     assert by_id["pro_monthly"]["interval"] == "month"
-    assert float(by_id["pro_yearly"]["amount"]) == 79.0
+    assert by_id["pro_monthly"]["mode"] == "subscription"
+    # one-off: single payment, no interval
+    assert float(by_id["pro_monthly_once"]["amount"]) == 10.99
+    assert by_id["pro_monthly_once"]["mode"] == "payment"
+    assert by_id["pro_monthly_once"]["interval"] is None
+    assert float(by_id["pro_yearly"]["amount"]) == 79.99
     assert by_id["pro_yearly"]["currency"].lower() == "eur"
     assert by_id["pro_yearly"]["interval"] == "year"
 

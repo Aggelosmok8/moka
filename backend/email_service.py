@@ -134,3 +134,30 @@ async def evaluate_lifecycle(db, user_doc: dict) -> None:
 
     await db.users.update_one({"user_id": user_doc["user_id"]},
                               {"$set": {"emails_sent": json.dumps(sorted(sent))}})
+
+
+async def send_invoice_email(to_email: str, inv: dict, pdf: bytes) -> bool:
+    """Deliver the Greek tax document as a PDF attachment."""
+    if not _api_key():
+        logger.info("[invoice email skipped — no RESEND_API_KEY] to=%s %s", to_email, inv.get("number"))
+        return False
+    import base64
+    name = f"{inv['series']}-{inv['number']}.pdf"
+    title = {"5.1": "Πιστωτικό παραστατικό"}.get(inv.get("doc_type"), "Το παραστατικό σας")
+    body = (f"Ευχαριστούμε για την αγορά σου. Επισυνάπτουμε το παραστατικό "
+            f"<b>{inv['series']}-{inv['number']}</b> ποσού <b>€{inv['total']:.2f}</b>"
+            + (f", ΜΑΡΚ <b>{inv['mark']}</b>." if inv.get("mark") else "."))
+    try:
+        import resend
+        resend.api_key = _api_key()
+        resend.Emails.send({
+            "from": f"{_BRAND} <{_sender()}>",
+            "to": [to_email],
+            "subject": f"{title} — {inv['series']}-{inv['number']}",
+            "html": _wrap(title, body, _pricing_url()),
+            "attachments": [{"filename": name, "content": base64.b64encode(pdf).decode()}],
+        })
+        return True
+    except Exception:
+        logger.exception("invoice email failed to %s", to_email)
+        return False

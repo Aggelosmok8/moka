@@ -49,6 +49,8 @@ current_user_optional = auth_router.current_user_optional
 require_admin = auth_router.require_admin
 billing_router = make_billing_router(db, current_user, current_user_optional)
 webhook_router = make_webhook_router(db)
+from invoices import make_invoices_router
+invoices_router = make_invoices_router(db, current_user)
 alerts_router = make_alerts_router(db, current_user, current_user_optional)
 analytics_router = make_analytics_router(db, current_user_optional)
 access_router = make_access_router(current_user_optional)
@@ -787,6 +789,7 @@ app.include_router(api_router)
 app.include_router(auth_router)
 app.include_router(billing_router)
 app.include_router(webhook_router)
+app.include_router(invoices_router)
 app.include_router(alerts_router)
 app.include_router(analytics_router)
 app.include_router(access_router)

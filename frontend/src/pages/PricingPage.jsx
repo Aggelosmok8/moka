@@ -32,6 +32,7 @@ export default function PricingPage() {
     authApi.get("/billing/packages").then((r) => setPackages(r.data.packages || [])).catch(() => {});
   }, []);
 
+  const once = packages.find((p) => p.id === "pro_monthly_once");
   const monthly = packages.find((p) => p.id === "pro_monthly");
   const yearly = packages.find((p) => p.id === "pro_yearly");
   const savings = monthly && yearly ? (monthly.amount * 12 - yearly.amount).toFixed(0) : "25";
@@ -73,7 +74,8 @@ export default function PricingPage() {
 
   const PaidButton = ({ pkgId, label, primary }) => {
     if (loading) return <button disabled className="w-full px-5 py-3 rounded-lg bg-white/10 text-zinc-400 text-sm font-bold uppercase tracking-wider">Loading…</button>;
-    if (isPro && user?.plan && ((user.plan === "yearly" && pkgId === "pro_yearly") || (user.plan === "monthly" && pkgId === "pro_monthly")))
+    const PLAN_OF = { pro_yearly: "yearly", pro_monthly: "monthly", pro_monthly_once: "monthly_once" };
+    if (isPro && user?.plan && user.plan === PLAN_OF[pkgId])
       return <div className="w-full px-5 py-3 rounded-lg bg-[#39FF14]/10 text-[#39FF14] text-center text-sm font-bold uppercase tracking-wider border border-[#39FF14]/30">Current plan</div>;
     return (
       <button
@@ -115,7 +117,7 @@ export default function PricingPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 items-start">
           {/* Free */}
           <div className="surface rounded-xl p-7" data-testid="plan-free">
             <div className="text-[10px] uppercase tracking-[0.22em] font-bold text-zinc-500 mb-2">Free</div>
@@ -142,6 +144,27 @@ export default function PricingPage() {
             ) : null}
           </div>
 
+          {/* One-off 30-day access — pay once, nothing renews */}
+          <div className="surface rounded-xl p-7" data-testid="plan-monthly-once">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-[10px] uppercase tracking-[0.22em] font-bold text-white">Pro · 30-day access</div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#FFD60A] bg-[#FFD60A]/10 border border-[#FFD60A]/30 rounded px-1.5 py-0.5">One-off</span>
+            </div>
+            <div className="flex items-baseline gap-1">
+              <span className="font-display font-black text-5xl text-white">€{once ? once.amount.toFixed(2) : "10.99"}</span>
+              <span className="text-zinc-500">/ once</span>
+            </div>
+            <div className="text-xs text-zinc-500 mb-5 mt-1">Pay once, 30 days of Pro. <b className="text-zinc-300">No auto-renewal.</b></div>
+            <ul className="space-y-2.5 mb-6">
+              {["Everything in Pro for 30 days", "No card stored, no renewal", "Perfect for trying a big weekend", "Buy again whenever you want"].map((f) => (
+                <li key={f} className="flex items-start gap-2 text-sm text-white">
+                  <Check className="w-4 h-4 text-[#FFD60A] mt-0.5 shrink-0" /> {f}
+                </li>
+              ))}
+            </ul>
+            <PaidButton pkgId="pro_monthly_once" label="Buy 30 days" />
+          </div>
+
           {/* Monthly */}
           <div className="surface rounded-xl p-7" data-testid="plan-monthly">
             <div className="text-[10px] uppercase tracking-[0.22em] font-bold text-white mb-2">Pro · Monthly</div>
@@ -149,6 +172,7 @@ export default function PricingPage() {
               <span className="font-display font-black text-5xl text-white">€{monthly ? monthly.amount.toFixed(2) : "10.99"}</span>
               <span className="text-zinc-500">/ month</span>
             </div>
+            <div className="text-xs text-zinc-500 mb-5 mt-1">Renews automatically. Cancel any time.</div>
             <ul className="space-y-2.5 mb-6">
               {PRO_FEATURES.map((f) => (
                 <li key={f} className="flex items-start gap-2 text-sm text-white">
@@ -187,7 +211,8 @@ export default function PricingPage() {
         {error && <p className="text-[#FF3B30] text-sm mt-4 text-center" data-testid="checkout-error">{error}</p>}
 
         <p className="mt-10 text-center text-xs text-zinc-600 max-w-lg mx-auto leading-relaxed">
-          Test mode — Stripe test card 4242 4242 4242 4242. Your 7-day trial gives full Pro access with no card. Cancel anytime.
+          Prices include VAT. Subscriptions renew automatically until you cancel; the 30-day access is a single payment that never renews.
+          A tax document (ΑΠΥ/ΤΠΥ) is emailed to you automatically after every payment.
         </p>
       </main>
     </div>
