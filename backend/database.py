@@ -303,6 +303,10 @@ async def init_db():
             for col in ("email", "package_id", "metadata", "payment_status", "mode",
                         "updated_at", "stripe_subscription_id"):
                 await conn.execute(f"ALTER TABLE payment_transactions ADD COLUMN IF NOT EXISTS {col} TEXT")
+            # Provider budgets anchored to the first call ever (see quota_cycle.py)
+            for col in ("anchor", "cycle", "day"):
+                await conn.execute(f"ALTER TABLE odds_cache ADD COLUMN IF NOT EXISTS {col} TEXT")
+            await conn.execute("ALTER TABLE odds_cache ADD COLUMN IF NOT EXISTS day_calls INTEGER DEFAULT 0")
         logger.info("Postgres DB initialized (Supabase/Render).")
     else:
         async with aiosqlite.connect(DB_PATH) as conn:
@@ -318,6 +322,13 @@ async def init_db():
             for col in ("email", "package_id", "metadata", "payment_status", "mode", "updated_at"):
                 try:
                     await conn.execute(f"ALTER TABLE payment_transactions ADD COLUMN {col} TEXT")
+                    await conn.commit()
+                except Exception:
+                    pass
+            for col, typ in (("anchor", "TEXT"), ("cycle", "TEXT"), ("day", "TEXT"),
+                             ("day_calls", "INTEGER DEFAULT 0")):
+                try:
+                    await conn.execute(f"ALTER TABLE odds_cache ADD COLUMN {col} {typ}")
                     await conn.commit()
                 except Exception:
                     pass

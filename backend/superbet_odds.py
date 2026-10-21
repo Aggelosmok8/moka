@@ -20,6 +20,7 @@ import datetime as _dt
 import httpx
 import ijson
 
+import quota_cycle
 import rapid_books as rb
 
 logger = logging.getLogger(__name__)
@@ -29,9 +30,14 @@ HOST = "superbet-odds"
 FILE = "site_pregame_superbet_soccer.json"
 TTL = float(os.environ.get("SUPERBET_TTL_HOURS", "6")) * 3600
 MAX_MONTHLY = int(os.environ.get("SUPERBET_MAX_MONTHLY", "120"))
+# 4 planned refreshes a day + slack, and an hour of silence after any failure:
+# this feed is ~550MB, so a retry storm is the most expensive mistake possible.
+MAX_DAILY = int(os.environ.get("SUPERBET_MAX_DAILY", "6"))
+FAIL_COOLDOWN = int(os.environ.get("SUPERBET_FAIL_COOLDOWN_MIN", "60")) * 60
 HORIZON_DAYS = 12
 
-_mem = {"picks": {}, "at": 0.0, "calls": 0, "month": ""}
+_mem = {"picks": {}, "at": 0.0, "calls": 0, "day_calls": 0}
+_fail_at = [0.0]
 _lock = asyncio.Lock()
 
 
@@ -163,8 +169,6 @@ async def _load_db():
             data = json.loads(data)
         _mem["picks"] = (data or {}).get("picks") or {}
         _mem["at"] = float(row.get("fetched_at") or 0)
-        _mem["month"] = row.get("month") or ""
-        _mem["calls"] = int(row.get("calls") or 0)
     except Exception as e:
         logger.warning("superbet load: %s", type(e).__name__)
 
@@ -173,9 +177,9 @@ async def _save_db():
     try:
         await (await _db()).update_one(
             {"slug": "superbet"},
+            # `calls` is owned by quota_cycle.reserve()'s atomic $inc
             {"$set": {"data": json.dumps({"picks": _mem["picks"]}),
-                      "fetched_at": str(_mem["at"]), "month": _mem["month"],
-                      "calls": _mem["calls"]}}, upsert=True)
+                      "fetched_at": str(_mem["at"])}}, upsert=True)
     except Exception as e:
         logger.warning("superbet save: %s", type(e).__name__)
 
@@ -243,12 +247,11 @@ async def refresh(force: bool = False) -> bool:
     async with _lock:
         if not _mem["at"]:
             await _load_db()
-        if _mem["month"] != _month():
-            _mem["month"], _mem["calls"] = _month(), 0
         if not force and time.time() - _mem["at"] < TTL:
             return False
-        if _mem["calls"] >= MAX_MONTHLY:
-            logger.warning("superbet: monthly call ceiling reached (%s)", MAX_MONTHLY)
+        since_fail = time.time() - _fail_at[0]
+        if since_fail < FAIL_COOLDOWN:
+            logger.info("superbet: in cooldown for %ss", int(FAIL_COOLDOWN - since_fail))
             return False
         try:
             import live_values
@@ -257,19 +260,32 @@ async def refresh(force: bool = False) -> bool:
             wanted = set()
         if not wanted:
             return False
+        # Budget check + count happen BEFORE the download: this feed is ~550MB and
+        # a failed stream still costs a call at the provider.
+        res = await quota_cycle.reserve(await _db(), "superbet", MAX_MONTHLY, MAX_DAILY)
+        if not res["allowed"]:
+            logger.warning("superbet: %s", res["reason"])
+            return False
+        _mem["calls"], _mem["day_calls"] = res["calls"], res["day_calls"]
         key = (os.environ.get("RAPIDAPI_ODDS_KEY") or "").strip()
         t0 = time.time()
         try:
-            _mem["calls"] += 1
             picks = await asyncio.to_thread(_download_and_parse, key, wanted)
         except Exception as e:
-            logger.warning("superbet refresh: %s: %s", type(e).__name__, e)
+            _fail_at[0] = time.time()
+            logger.warning("superbet refresh: %s: %s — cooling down %smin",
+                           type(e).__name__, e, FAIL_COOLDOWN // 60)
             return False
         if picks:
+            _fail_at[0] = 0.0
             _mem["picks"], _mem["at"] = picks, time.time()
             await _save_db()
-            logger.info("superbet: %d fixtures, %d prices in %.0fs",
-                        len(picks), sum(len(v) for v in picks.values()), time.time() - t0)
+            logger.info("superbet: %d fixtures, %d prices in %.0fs (call %s/%s this cycle, %s/%s today)",
+                        len(picks), sum(len(v) for v in picks.values()), time.time() - t0,
+                        res["calls"], MAX_MONTHLY, res["day_calls"], MAX_DAILY)
+        else:
+            _fail_at[0] = time.time()
+            logger.warning("superbet: stream produced no prices — cooling down %smin", FAIL_COOLDOWN // 60)
         return bool(picks)
 
 
@@ -297,7 +313,11 @@ async def snapshot_at() -> float:
 async def status() -> dict:
     if not _mem["at"]:
         await _load_db()
-    return {"provider": BOOK, "callsThisMonth": _mem["calls"], "ceiling": MAX_MONTHLY,
+    u = await quota_cycle.usage(await _db(), "superbet")
+    return {"provider": BOOK, "callsThisMonth": u["calls"], "ceiling": MAX_MONTHLY,
+            "callsToday": u["day_calls"], "dailyCeiling": MAX_DAILY,
+            "cycleStarted": u["cycle"], "firstCallEver": u["anchor"],
+            "coolingDownFor": max(0, int(FAIL_COOLDOWN - (time.time() - _fail_at[0]))),
             "fixtures": len(_mem["picks"]),
             "cachedAt": _dt.datetime.fromtimestamp(_mem["at"], _dt.timezone.utc).isoformat()
             if _mem["at"] else None}

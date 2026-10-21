@@ -19,6 +19,8 @@ from pathlib import Path
 
 import httpx
 
+import quota_cycle
+
 logger = logging.getLogger(__name__)
 
 # Prices move: a measured 18-minute gap already shifted 3.4% of Elabet's lines.
@@ -385,14 +387,6 @@ def enabled() -> bool:
     return bool(_key()) and bool(active_slugs())
 
 
-def _quota_left(slug: str) -> int:
-    m = datetime.now(timezone.utc).strftime("%Y-%m")
-    u = _usage.setdefault(slug, {"month": "", "count": 0})
-    if u["month"] != m:
-        u.update(month=m, count=0)
-    return MAX_MONTHLY - u["count"]
-
-
 def _disk(slug: str) -> Path:
     return CACHE_DIR / f"{slug}.json"
 
@@ -459,56 +453,14 @@ async def _write_db(slug: str, idx: dict, pidx: dict, at: float, calls: int = 0)
         logger.warning("rapid_books[%s]: db write %s", slug, type(e).__name__)
 
 
-def _day() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
-
-
-async def _reserve_call(slug: str) -> tuple:
-    """Count the request BEFORE it leaves.
-
-    Two leaks lived here: the old counter read the row, added one and wrote the
-    total back, so concurrent refreshes all wrote the SAME number (the log shows
-    "call 1/150" five times in one second); and a timed-out fetch was never
-    counted at all even though the provider had already served it. Together that
-    is how Elabet reached 200 real calls while the app believed it had made 150.
-    """
-    m, d = _month(), _day()
-    calls = day_calls = 0
-    try:
-        row = await _db().find_one({"slug": slug}) or {}
-        if row.get("month") != m:
-            upd = {"$set": {"month": m, "calls": 1, "day": d, "dayCalls": 1}}
-        elif row.get("day") != d:
-            upd = {"$set": {"day": d, "dayCalls": 1}, "$inc": {"calls": 1}}
-        else:
-            upd = {"$inc": {"calls": 1, "dayCalls": 1}}
-        await _db().update_one({"slug": slug}, upd, upsert=True)
-        fresh = await _db().find_one({"slug": slug}) or {}
-        calls, day_calls = int(fresh.get("calls") or 1), int(fresh.get("dayCalls") or 1)
-    except Exception as e:
-        logger.warning("rapid_books[%s]: usage write %s", slug, type(e).__name__)
-    _usage[slug] = {"month": m, "count": calls, "day": d, "dayCount": day_calls}
-    return calls, day_calls
+async def _bump_usage(slug: str) -> int:
+    res = await quota_cycle.reserve(_db(), slug, MAX_MONTHLY, MAX_DAILY)
+    return res["calls"]
 
 
 async def _usage_now(slug: str) -> dict:
-    m, d = _month(), _day()
-    u = _usage.get(slug)
-    if not u or u.get("month") != m or u.get("day") != d:
-        try:
-            row = await _db().find_one({"slug": slug}) or {}
-        except Exception:
-            row = {}
-        u = _usage[slug] = {
-            "month": m, "count": int(row.get("calls") or 0) if row.get("month") == m else 0,
-            "day": d, "dayCount": int(row.get("dayCalls") or 0) if row.get("day") == d else 0,
-        }
-    return u
-
-
-async def _bump_usage(slug: str) -> int:
-    calls, _ = await _reserve_call(slug)
-    return calls
+    u = await quota_cycle.usage(_db(), slug)
+    return {"count": u["calls"], "dayCount": u["day_calls"], "cycle": u["cycle"], "anchor": u["anchor"]}
 
 
 async def _quota_left(slug: str) -> int:
@@ -575,6 +527,7 @@ async def quota_status() -> list:
                     "callsThisMonth": u["count"], "ceiling": MAX_MONTHLY,
                     "left": left, "freePlanLimit": 200,
                     "callsToday": u["dayCount"], "dailyCeiling": MAX_DAILY,
+                    "cycleStarted": u["cycle"], "firstCallEver": u["anchor"],
                     "coolingDownFor": max(0, int(FAIL_COOLDOWN - (time.time() - _fail.get(slug, 0)))),
                     "cachedMatches": len((row or {}).get("idx") or {}),
                     "cachedAt": (datetime.fromtimestamp((row or {}).get("at") or 0, timezone.utc)
@@ -604,8 +557,7 @@ async def _refresh_index(slug: str) -> dict:
         # wipes /tmp, still costs no request.
         row = await _read_db(slug)
         if not row or row["at"] < disk["at"]:
-            keep = (row or {}).get("calls", 0) if (row or {}).get("month") == _month() else 0
-            await _write_db(slug, disk["idx"], disk.get("picks") or {}, disk["at"], keep)
+            await _write_db(slug, disk["idx"], disk.get("picks") or {}, disk["at"])
         return _mem[slug]
     # /tmp is empty after a redeploy — the DB copy means a restart costs no request.
     row = await _read_db(slug)
@@ -614,12 +566,6 @@ async def _refresh_index(slug: str) -> dict:
         _write_disk(slug, row["idx"], row["picks"], row["at"])
         return _mem[slug]
     stale = disk or mem or ({"idx": row["idx"], "picks": row["picks"], "at": row["at"]} if row else {})
-    if await _quota_left(slug) <= 0:
-        logger.warning("rapid_books[%s]: monthly ceiling reached, serving stale", slug)
-        return stale
-    if await _daily_left(slug) <= 0:
-        logger.warning("rapid_books[%s]: daily ceiling (%s) reached, serving stale", slug, MAX_DAILY)
-        return stale
     since_fail = time.time() - _fail.get(slug, 0)
     if since_fail < FAIL_COOLDOWN:
         # Without this, every page view retried a failing feed and each retry
@@ -627,7 +573,11 @@ async def _refresh_index(slug: str) -> dict:
         logger.info("rapid_books[%s]: in cooldown for %ss, serving stale",
                     slug, int(FAIL_COOLDOWN - since_fail))
         return stale
-    calls, day_calls = await _reserve_call(slug)
+    res = await quota_cycle.reserve(_db(), slug, MAX_MONTHLY, MAX_DAILY)
+    if not res["allowed"]:
+        logger.warning("rapid_books[%s]: %s, serving stale", slug, res["reason"])
+        return stale
+    calls, day_calls = res["calls"], res["day_calls"]
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(90.0, connect=8.0)) as client:
             r = await client.get(f"https://{host}.p.rapidapi.com/v1/data/{file}",

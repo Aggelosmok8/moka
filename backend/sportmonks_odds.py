@@ -18,6 +18,8 @@ from difflib import SequenceMatcher
 
 import httpx
 
+import quota_cycle
+
 import rapid_books as rb
 from apifootball import _c_get, _c_set, _bookmaker_approved, player_key
 
@@ -25,6 +27,10 @@ logger = logging.getLogger(__name__)
 
 BASE = "https://api.sportmonks.com/v3/football"
 MAX_PER_HOUR = int(os.environ.get("SPORTMONKS_MAX_HOURLY", "150"))
+# Persisted budgets too: the hourly counter lives in memory and therefore resets
+# on every redeploy, which is exactly how a provider plan gets drained unnoticed.
+MAX_DAILY = int(os.environ.get("SPORTMONKS_MAX_DAILY", "300"))
+MAX_CYCLE = int(os.environ.get("SPORTMONKS_MAX_CYCLE", "3000"))
 _hour = {"slot": 0, "count": 0}
 
 
@@ -45,6 +51,10 @@ def _budget_ok() -> bool:
 async def _get(path: str, params: dict) -> dict:
     if not _budget_ok():
         raise RuntimeError("sportmonks hourly odds budget reached")
+    from database import Database
+    res = await quota_cycle.reserve(Database().odds_cache, "sportmonks", MAX_CYCLE, MAX_DAILY)
+    if not res["allowed"]:
+        raise RuntimeError(f"sportmonks budget: {res['reason']}")
     p = dict(params or {})
     p["api_token"] = (os.environ.get("SPORTMONKS_API_KEY") or "").strip()
     async with httpx.AsyncClient(timeout=30) as c:

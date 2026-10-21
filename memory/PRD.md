@@ -1095,3 +1095,32 @@ other four providers sat at 22-25. Log forensics found WHY Elabet specifically:
   overage. NOTE for later: RapidAPI resets on the SUBSCRIPTION anniversary, not the 1st of the month,
   while `_month()` is calendar-based; if the plan renews mid-month we should add `RAPID_BOOKS_CYCLE_DAY`.
 - Suite: 167 passed, 5 skipped.
+
+## 2026-10-21 (c) Provider budgets anchored to the FIRST call ever — never again, for any feed
+User asked to guarantee no odds provider can blow its plan again, counting from the day the very first
+call was made. New module **`/app/backend/quota_cycle.py`** is now the single budget authority:
+- **Anchored cycles.** Each provider stores `anchor` = the date of its first call ever. The budget window
+  runs from the MONTHLY ANNIVERSARY of that date (`cycle_start()` handles short months: a 31st anchor maps
+  to the 28th/30th). This matches how RapidAPI actually resets (subscription anniversary), whereas the old
+  calendar `_month()` could reset the app's counter while the provider's window still had two weeks left.
+- **Reserve before you fetch, atomically.** `reserve()` checks both ceilings and counts the call BEFORE
+  the request leaves, via `$inc` -> SQL `COALESCE(calls,0)+1`. A timed-out request is therefore counted
+  (the provider charges it) and two concurrent refreshes can never write the same total.
+- **Two ceilings per provider**: cycle + daily, plus a failure cooldown. Defaults:
+  Greek feeds 150/cycle, 6/day, 60min cooldown (`RAPID_BOOKS_MAX_DAILY`, `RAPID_BOOKS_FAIL_COOLDOWN_MIN`);
+  Superbet 120/cycle, 6/day, 60min (`SUPERBET_MAX_DAILY`, `SUPERBET_FAIL_COOLDOWN_MIN`);
+  SportMonks 3000/cycle, 300/day on top of its in-memory hourly cap (its counter lived ONLY in memory, so
+  it reset on every redeploy). API-Football is unchanged: it reads the provider's own authoritative
+  `/status` daily usage.
+- **Superbet had the same leak as Elabet**: `_mem["calls"] += 1` was in-memory and only persisted by
+  `_save_db()` on SUCCESS, so every failed 550MB stream was free and forgotten — and `_maybe_refresh()`
+  fires from any request while stale. Now reserved up front and cooled down on failure.
+- **Schema**: `odds_cache` gained `anchor`, `cycle`, `day`, `day_calls` (idempotent ALTERs in `init_db`;
+  lowercase names — Postgres folds unquoted identifiers, a `"dayCalls"` column broke the UPDATE).
+- **Anchors seeded from the logs**: Greek feeds 2026-10-07 (first ever call), Superbet 2026-10-14, with
+  existing counts preserved — so Elabet stays at 150/150 and makes NO call until its window rolls on
+  2026-11-07. Preview and production share the same Supabase DB, so the seed covers both.
+- `/api/admin/odds-quota` now reports `cycleStarted`, `firstCallEver`, `callsToday`, `dailyCeiling`,
+  `coolingDownFor` for every provider including Superbet.
+- Suite: 168 passed, 4 skipped. Iteration tests no longer pin a fixture's market menu (a book quotes a
+  different mix per match), so they stop failing for non-regressions.
