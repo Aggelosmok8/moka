@@ -1185,3 +1185,13 @@ documents (refs `cs:` and `in:`) with two series numbers for one payment. `issue
 now ignores any Stripe invoice without a `subscription` (that purchase is already documented from the
 session); renewals and the first subscription charge are unaffected. Covered by
 `test_one_off_invoice_is_not_issued_twice` (asserts it never even touches the DB). Suite: 175 passed.
+
+## 2026-10-21 (g) Live Stripe confirmed + myDATA retransmission
+- **Production is on the LIVE Stripe key** — verified: `/api/billing/checkout` now returns `cs_live_…`
+  and the webhook rejects unsigned calls. Real payments are active.
+- Added admin-only `GET /api/invoices/admin/failed` (everything AADE has not accepted, with the exact
+  error and the active `MYDATA_BASE`) and `POST /api/invoices/{id}/retransmit` (re-sends the SAME series
+  number, so the books have no gap, and emails the PDF once accepted). Needed in two real cases: a
+  rejected XML (wrong accountant code) and switching `MYDATA_BASE` from the AADE sandbox to production.
+- Clarified for the user: `MYDATA_BASE` is about the AADE environment (mydataapidev = sandbox, no real
+  filing, separate credentials), NOT about Stripe test mode or pre-prod.

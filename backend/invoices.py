@@ -543,4 +543,42 @@ def make_invoices_router(db, current_user):
         return Response(render_pdf(inv), media_type="application/pdf", headers={
             "Content-Disposition": f'inline; filename="{inv["series"]}-{inv["number"]}.pdf"'})
 
+    @router.get("/admin/failed")
+    async def failed_invoices(user=Depends(current_user)):
+        """Anything AADE has not accepted yet, with the exact reason it gave."""
+        from auth import is_admin
+        if not is_admin(user):
+            raise HTTPException(status_code=403, detail="Admins only")
+        rows = [_hydrate(r) async for r in await db.invoices.find({}, {"_id": 0})]
+        bad = [r for r in rows if r.get("mydata_status") != "sent"]
+        bad.sort(key=lambda r: r.get("issued_at") or "", reverse=True)
+        return {"base": _env("MYDATA_BASE", "https://mydataapidev.aade.gr"),
+                "configured": mydata_configured(),
+                "invoices": [{k: r.get(k) for k in
+                              ("id", "number", "series", "doc_type", "issued_at", "total",
+                               "mydata_status", "mydata_error")} for r in bad]}
+
+    @router.post("/{invoice_id}/retransmit")
+    async def retransmit(invoice_id: str, user=Depends(current_user)):
+        """Re-send a document to myDATA — same series number, no gap in the books.
+        Needed after a rejected XML (wrong accountant code) or after switching
+        MYDATA_BASE from the AADE sandbox to production."""
+        from auth import is_admin
+        if not is_admin(user):
+            raise HTTPException(status_code=403, detail="Admins only")
+        row = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+        if not row:
+            raise HTTPException(status_code=404, detail="Not found")
+        inv = _hydrate(row)
+        if inv.get("mark"):
+            return {"ok": True, "already": True, "mark": inv["mark"]}
+        res = await send_to_mydata(inv)
+        await db.invoices.update_one({"id": invoice_id}, {"$set": {
+            "mark": res.get("mark", ""), "uid": res.get("uid", ""), "qr": res.get("qr", ""),
+            "mydata_status": res.get("status", "pending"), "mydata_error": res.get("error", "")}})
+        if res.get("status") == "sent":
+            inv.update(res)
+            await _deliver(db, inv)
+        return {"ok": res.get("status") == "sent", **res}
+
     return router
