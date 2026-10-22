@@ -117,6 +117,18 @@ class SetPasswordIn(BaseModel):
     current_password: Optional[str] = ""
 
 
+def _until_in_future(pro_until_iso: Optional[str]) -> bool:
+    if not pro_until_iso:
+        return False
+    try:
+        dt = datetime.fromisoformat(pro_until_iso)
+    except Exception:
+        return False
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt > datetime.now(timezone.utc)
+
+
 def _is_pro_now(user_doc: dict) -> bool:
     doc = user_doc or {}
     # Admins (email allowlist) always have full Pro access.
@@ -125,6 +137,9 @@ def _is_pro_now(user_doc: dict) -> bool:
     sub = doc.get("subscription_status")
     if sub == "active":
         return True
+    # A paid-once purchase has no Stripe subscription — `pro_until` IS the access.
+    if sub == "one_off":
+        return _until_in_future(doc.get("pro_until"))
     # Trial ("trialing") grants Pro only while pro_until is still in the future.
     pro_until_iso = doc.get("pro_until")
     if not pro_until_iso:
@@ -147,8 +162,15 @@ def _effective_status(user_doc: dict) -> tuple[str, int]:
     # Admins (email allowlist) are shown as active Pro.
     if (doc.get("email") or "").strip().lower() in ADMIN_EMAILS:
         return "active", 0
-    if doc.get("subscription_status") == "active":
+    sub = doc.get("subscription_status")
+    if sub == "active":
         return "active", 0
+    # Every PAID plan gets the same "active" treatment as a live subscription:
+    # the one-off 30-day access, and a cancelled/past-due sub that still has time
+    # left. When the paid window ends they drop to "expired" (never back to the
+    # free-trial pitch — the trial is not offered to someone who already paid).
+    if sub in ("one_off", "past_due", "unpaid", "canceled", "incomplete"):
+        return ("active", 0) if _until_in_future(doc.get("pro_until")) else ("expired", 0)
     trial_end = doc.get("trial_end_date") or doc.get("pro_until")
     if doc.get("subscription_status") == "trialing" and trial_end:
         try:

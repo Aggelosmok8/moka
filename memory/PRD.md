@@ -1195,3 +1195,33 @@ session); renewals and the first subscription charge are unaffected. Covered by
   rejected XML (wrong accountant code) and switching `MYDATA_BASE` from the AADE sandbox to production.
 - Clarified for the user: `MYDATA_BASE` is about the AADE environment (mydataapidev = sandbox, no real
   filing, separate credentials), NOT about Stripe test mode or pre-prod.
+
+## 2026-10-22 Three reported bugs fixed (Pro status, Annual checkout, cross-device portfolio)
+1. **"Start free trial" shown to a paying user** — root cause in `auth._effective_status()`: only
+   `subscription_status == "active"` mapped to the Pro state, so a one-off 30-day purchase
+   (`status = "one_off"`) fell through to "free" and `TrialBanner` pitched the trial even though the
+   header showed PRO (`is_pro` was already true). Every PAID status (`one_off`, `past_due`, `unpaid`,
+   `canceled`, `incomplete`) now resolves to `active` while `pro_until` is in the future and to
+   `expired` once it passes — so Pro → Free on expiry happens automatically, and an expired payer is
+   never offered the free trial again. Frontend guard added too (`is_pro` wins over status) and the
+   expired banner says "Your Pro access has ended" for a former payer.
+   Verified on preview: a one-off user gets `subscription_status: "active"` from `/api/auth/me` and the
+   banner reads "Pro active · 30-day access plan".
+2. **Annual checkout error (production only)** — reproduced: `pro_monthly_once` and `pro_monthly`
+   returned `cs_live_…`, `pro_yearly` returned 502. Cause: `STRIPE_PRICE_YEARLY` in the Render env is a
+   Price that Stripe rejects for `mode=subscription` (one-time / wrong interval / archived / not found),
+   and the code used it blindly. `billing._price_problem()` now validates the configured Price before
+   checkout and falls back to the built-in €79.99/year price with a loud log line, so a bad env var can
+   never block a sale again. New admin diagnostic: `GET /api/billing/admin/price-check`.
+   NOTE: takes effect in production only after the backend is redeployed to Render.
+3. **Portfolio/tickets not visible on the other device** — the cloud copy was pulled ONCE per session
+   with no retry: any failed/timed-out pull (Render cold start > 30 s axios timeout) left that device
+   permanently unsynced AND blocked uploads for the whole session. `PortfolioContext` now retries the
+   pull (3 attempts, backoff), re-pulls on tab focus/visibility and on a 60 s poll, merges by id keeping
+   the MORE SETTLED copy on conflict, and "Refresh results" forces a sync first. The open bet slip is
+   now synced too (`slip` + `slip_updated_at`, last-writer-wins) — a slip started on the phone appears on
+   the laptop. Backend `PUT/GET /api/me/portfolio` extended for the slip; record merge-by-id unchanged.
+   Verified e2e on preview with a two-device simulation (phone writes via API → laptop tab picks it up
+   on focus).
+- Backend suite: 168 passed, 3 skipped (9 pre-existing failures are odds-coverage tests pinned to the
+  stale fixture `live_af_1563200`, unrelated).

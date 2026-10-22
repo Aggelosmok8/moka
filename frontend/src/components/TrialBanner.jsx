@@ -28,7 +28,9 @@ export default function TrialBanner() {
   }
 
   const status = user.subscription_status;
-  if (status === "active") {
+  // `is_pro` is the authoritative access flag — a paid plan (incl. the one-off
+  // 30-day access) must never fall through to the "start a free trial" pitch.
+  if (status === "active" || (user.is_pro && status !== "trial")) {
     return (
       <div className="bg-[#39FF14]/10 border-b border-[#39FF14]/20" data-testid="trial-banner-pro">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center gap-2 text-sm text-[#39FF14]">
@@ -89,7 +91,9 @@ export default function TrialBanner() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center justify-between gap-3 flex-wrap">
           <span className="text-sm text-[#FF3B30] flex items-center gap-2">
             <AlertTriangle className="w-4 h-4" />
-            <span className="text-zinc-200"><b className="text-white">Your free trial has already been used.</b> Upgrade to unlock all leagues, value bets &amp; odds.</span>
+            <span className="text-zinc-200">
+              <b className="text-white">{user.plan ? "Your Pro access has ended." : "Your free trial has already been used."}</b> Upgrade to unlock all leagues, value bets &amp; odds.
+            </span>
           </span>
           <Link to="/pricing" data-testid="banner-upgrade-link" className="text-xs font-black uppercase tracking-wider neon-bg text-black px-3 py-1.5 rounded hover:bg-[#32E612] transition-colors">
             Upgrade to Pro

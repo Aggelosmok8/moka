@@ -196,7 +196,14 @@ async def league_detail(slug: str):
 async def get_portfolio(user=Depends(current_user)):
     doc = await db.user_portfolios.find_one({"user_id": user.user_id})
     data = (doc or {}).get("data") or {}
-    return {"bets": data.get("bets", []), "tickets": data.get("tickets", [])}
+    return {
+        "bets": data.get("bets", []),
+        "tickets": data.get("tickets", []),
+        # The open bet slip travels too, so a slip started on the phone is there
+        # on the laptop. Last writer wins — hence the timestamp.
+        "slip": data.get("slip", []),
+        "slip_updated_at": data.get("slip_updated_at"),
+    }
 
 
 @api_router.put("/me/portfolio")
@@ -219,6 +226,15 @@ async def put_portfolio(payload: dict, user=Depends(current_user)):
         return list(by.values())
 
     data = {"bets": _merge("bets"), "tickets": _merge("tickets")}
+    # The slip is a draft, not a record: keep whichever device wrote it last.
+    incoming_slip_ts = payload.get("slip_updated_at") or ""
+    old_slip_ts = old.get("slip_updated_at") or ""
+    if isinstance(payload.get("slip"), list) and incoming_slip_ts >= old_slip_ts:
+        data["slip"] = payload["slip"]
+        data["slip_updated_at"] = incoming_slip_ts or now
+    else:
+        data["slip"] = old.get("slip", [])
+        data["slip_updated_at"] = old.get("slip_updated_at")
     if existing:
         await db.user_portfolios.update_one({"user_id": user.user_id}, {"$set": {"data": data, "updated_at": now}})
     else:
