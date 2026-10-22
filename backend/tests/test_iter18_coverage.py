@@ -20,7 +20,18 @@ GREEK = {"stoiximan","novibet","bwin","pame stoixima","pamestoixima","opap",
 BLOCKED = {"betano","unibet","william hill","betvictor","pinnacle","marathonbet",
            "1xbet","betfair","betway","dafabet"}
 
-PRIMARY_FIXTURE = "live_af_1563195"  # Millwall vs Swansea per review
+def _nearest_fixture():
+    """Nearest kick-off on the live board — pinned ids go stale within a day."""
+    try:
+        r = requests.get(f"{BASE}/api/value-matches", timeout=180)
+        ms = sorted((r.json() or {}).get("matches") or [],
+                    key=lambda e: e["match"].get("commence_time") or "")
+        return ms[0]["match"]["id"] if ms else ""
+    except Exception:
+        return ""
+
+
+PRIMARY_FIXTURE = _nearest_fixture()
 
 
 def _norm(n):

@@ -1054,3 +1054,144 @@ disappearing, pending above History, bookmaker-style match panel.
 - **Specific Bets layout**: panels moved from a grid to CSS multi-columns — narrow panels pair up two per
   row with no holes, while wide (split) panels take the full width via `lg:[column-span:all]`.
 - Suite: 169 passed, 3 skipped.
+
+## 2026-10-21 Production showed no matches — root cause: /api/value-matches took ~105s
+- Symptom: www.lion-stats.com/matches stayed empty while provider calls WERE being consumed.
+- Diagnosis: the Render backend itself was healthy (170 matches, CORS fine, same Supabase DB as preview
+  — a prod login returned the SAME user_id, which also confirms pre-prod does NOT double provider calls).
+  Browser trace showed `/api/value-matches` was never completed: axios' 30s default timeout aborted it.
+  Measured on prod: full board **105s**, even `?limit=3` took **69s**.
+- ROOT CAUSE: the double-chance enrichment added on 19/10 called `rb.pick_prices()` + `sb.pick_prices()`
+  once PER MATCH (170x). Each call falls back to a fuzzy scan (`_same_team`/SequenceMatcher) over the
+  whole pick index of every provider when a fixture has no exact key — O(matches x providers x keys).
+  It also ran BEFORE the `limit`/`level` filters, so even a 3-match request paid for all 170.
+- FIX (`src/routes/value_matches.py::_attach_dc_prices`): filter/limit FIRST, then build ONE
+  double-chance-only index from the cached snapshots and resolve each fixture against that small index.
+  Preview: full board **2.7s** (was ~105s), `?limit=3` **0.4s**, 155/170 matches carry real DC prices.
+- Also: `fetchValueMatches` now uses a 90s timeout (cold starts on Render), and MatchesPage surfaces a
+  readable error instead of silently swallowing the failure (`.catch(() => {})` left the page blank).
+- Test rot fixed for good: iteration tests no longer pin fixture ids — they resolve the nearest upcoming
+  fixtures from the live board at collection time and skip when a fixture is not model-available
+  (e.g. UCL "Only a few league matches played so far"). Suite: 167 passed, 5 skipped.
+- ACTION REQUIRED BY USER: redeploy the backend on Render (and the frontend on Vercel for the timeout).
+
+## 2026-10-21 (b) Elabet hit 100% of its RapidAPI plan — two real leaks in rapid_books
+RapidAPI emailed "100% of BASIC used" for Elabet only, while the app's own counter said 150/150 and the
+other four providers sat at 22-25. Log forensics found WHY Elabet specifically:
+1. **Undercount race.** `_bump_usage()` read the row, added one and wrote the total back. Concurrent
+   refreshes of the same provider all read the same value — the log literally shows
+   "call 1/150" five times inside one second. Real provider calls were therefore HIGHER than the counter,
+   which is how a 150 ceiling let ~200 real calls through. Now an atomic `$inc` owns the counter and
+   `_write_db()` no longer touches `calls`.
+2. **Timeouts were free, and retried instantly.** The counter was bumped AFTER the HTTP response, so a
+   40s httpx timeout cost a real request but was never counted — and nothing recorded the failure, so the
+   next page view retried immediately. Elabet has by far the biggest snapshot (1000-2000 fixtures), so it
+   is the one that times out. Now: the call is reserved BEFORE it leaves, the read timeout is 90s so a
+   slow-but-valid response is not wasted, and any failure (timeout / non-200 / empty parse) starts a
+   `RAPID_BOOKS_FAIL_COOLDOWN_MIN` (default 60min) cooldown.
+3. **New daily ceiling** `RAPID_BOOKS_MAX_DAILY` (default 6/provider/day): a bad day can no longer eat the
+   month. `/api/admin/odds-quota` now reports `callsToday`, `dailyCeiling` and `coolingDownFor`.
+- Elabet is at 150/150 and serves its cached snapshot for the rest of the cycle — no further calls, so no
+  overage. NOTE for later: RapidAPI resets on the SUBSCRIPTION anniversary, not the 1st of the month,
+  while `_month()` is calendar-based; if the plan renews mid-month we should add `RAPID_BOOKS_CYCLE_DAY`.
+- Suite: 167 passed, 5 skipped.
+
+## 2026-10-21 (c) Provider budgets anchored to the FIRST call ever — never again, for any feed
+User asked to guarantee no odds provider can blow its plan again, counting from the day the very first
+call was made. New module **`/app/backend/quota_cycle.py`** is now the single budget authority:
+- **Anchored cycles.** Each provider stores `anchor` = the date of its first call ever. The budget window
+  runs from the MONTHLY ANNIVERSARY of that date (`cycle_start()` handles short months: a 31st anchor maps
+  to the 28th/30th). This matches how RapidAPI actually resets (subscription anniversary), whereas the old
+  calendar `_month()` could reset the app's counter while the provider's window still had two weeks left.
+- **Reserve before you fetch, atomically.** `reserve()` checks both ceilings and counts the call BEFORE
+  the request leaves, via `$inc` -> SQL `COALESCE(calls,0)+1`. A timed-out request is therefore counted
+  (the provider charges it) and two concurrent refreshes can never write the same total.
+- **Two ceilings per provider**: cycle + daily, plus a failure cooldown. Defaults:
+  Greek feeds 150/cycle, 6/day, 60min cooldown (`RAPID_BOOKS_MAX_DAILY`, `RAPID_BOOKS_FAIL_COOLDOWN_MIN`);
+  Superbet 120/cycle, 6/day, 60min (`SUPERBET_MAX_DAILY`, `SUPERBET_FAIL_COOLDOWN_MIN`);
+  SportMonks 3000/cycle, 300/day on top of its in-memory hourly cap (its counter lived ONLY in memory, so
+  it reset on every redeploy). API-Football is unchanged: it reads the provider's own authoritative
+  `/status` daily usage.
+- **Superbet had the same leak as Elabet**: `_mem["calls"] += 1` was in-memory and only persisted by
+  `_save_db()` on SUCCESS, so every failed 550MB stream was free and forgotten — and `_maybe_refresh()`
+  fires from any request while stale. Now reserved up front and cooled down on failure.
+- **Schema**: `odds_cache` gained `anchor`, `cycle`, `day`, `day_calls` (idempotent ALTERs in `init_db`;
+  lowercase names — Postgres folds unquoted identifiers, a `"dayCalls"` column broke the UPDATE).
+- **Anchors seeded from the logs**: Greek feeds 2026-10-07 (first ever call), Superbet 2026-10-14, with
+  existing counts preserved — so Elabet stays at 150/150 and makes NO call until its window rolls on
+  2026-11-07. Preview and production share the same Supabase DB, so the seed covers both.
+- `/api/admin/odds-quota` now reports `cycleStarted`, `firstCallEver`, `callsToday`, `dailyCeiling`,
+  `coolingDownFor` for every provider including Superbet.
+- Suite: 168 passed, 4 skipped. Iteration tests no longer pin a fixture's market menu (a book quotes a
+  different mix per match), so they stop failing for non-regressions.
+
+## 2026-10-21 (d) Four tiers + Greek tax documents (παραστατικά) end-to-end
+### Plans (4)
+Free · **Pro 30-day access €10.99 one-off** (`pro_monthly_once`, Checkout `mode=payment`, no renewal)
+· **Pro Monthly €10.99** (subscription) · **Pro Annual €79.99** (subscription).
+- `billing.py`: packages carry `mode`; checkout builds `price_data` without `recurring` for one-off,
+  adds `payment_intent_data` + `invoice_creation` there, and `tax_id_collection` on every session so a
+  buyer can enter a VAT number (that is what turns an ΑΠΥ into a ΤΠΥ and gives myDATA its counterparty).
+- One-off access: `_grant_one_off()` sets `subscription_status="one_off"`, `pro_until=+30d`,
+  `plan="monthly_once"`; `"one_off"` added to ACTIVE_SUBSCRIPTION_STATUSES and the `pro_until` check
+  expires it. Granted from BOTH the webhook and `/billing/status/{id}` (whichever lands first).
+- Webhook now also handles `invoice.paid` (renewals) and `charge.refunded` (credit note).
+- `PricingPage.jsx`: 4 cards (`md:grid-cols-2 xl:grid-cols-4`), one-off card badged "ONE-OFF" with
+  "no auto-renewal", VAT/renewal footnote. `AccountPage` shows the one-off plan label.
+### Tax documents — `/app/backend/invoices.py` (new)
+- Stripe is the money; the legal document is ours. Flow: payment -> row -> **atomic per-series number**
+  (`counters` table, `$inc`) -> **myDATA SendInvoices** -> store ΜΑΡΚ/UID/QR -> render PDF -> email.
+  The PDF is produced AFTER myDATA answers because the QR only exists then.
+- Doc type: **11.2 ΑΠΥ** for a private buyer, **2.1 ΤΠΥ** when a VAT number was given, **5.1** for refunds.
+- VAT: prices are VAT-inclusive by default (`PRICES_INCLUDE_VAT=1`), so €10.99 -> net 8.86 + ΦΠΑ 2.13.
+- Idempotent on `stripe_ref` (`cs:` / `in:` / `re:`) — Stripe retries webhooks, a document must not double.
+- PDF (reportlab) follows the user's template: crest + issuer block, doc title, Αρ. Παραστατικού,
+  date/time, customer block (ΑΦΜ when present), payment + transaction ref, line table, net/ΦΠΑ/ΤΕΛΙΚΟ
+  ΠΟΣΟ, AADE QR, **ΜΑΡΚ + UID**, and a footer line that switches between "μέσω παρόχου" and
+  "Διαβιβάστηκε στο myDATA" via `MYDATA_ISSUED_BY_PROVIDER`.
+  **DejaVu is vendored in `backend/assets/`** — Helvetica has no Greek accents ("Αθήνα" rendered "Αθ να").
+- New table `invoices` + `counters` (idempotent CREATEs in both SQLite and PG schemas).
+- Routes: `GET /api/invoices` (own documents) and `GET /api/invoices/{id}/pdf`; `InvoicesCard.jsx`
+  lists them under Account with ΜΑΡΚ and a download.
+- Email: `send_invoice_email()` attaches the PDF through the existing Resend setup.
+- Tests: `tests/test_invoices.py` (VAT split inclusive/exclusive, doc type, PDF bytes, myDATA XML shape,
+  sequential numbering) — suite **173 passed, 5 skipped**. requirements.txt += reportlab/qrcode/pillow.
+### Production status (verified live, 21/10)
+- `STRIPE_WEBHOOK_SECRET` ✅ loaded (unsigned POST -> 400). `STRIPE_API_KEY` ❌ still a TEST key
+  (checkout returns `cs_test_…`). Live webhook + test key = events never arrive -> Pro never activates.
+- STILL NEEDED from the user: issuer details (ISSUER_*), accountant's codes
+  (MYDATA_INCOME_CLASSIFICATION / MYDATA_E3 / series), myDATA credentials (dev + prod), and the three
+  `price_` ids. Until ISSUER_NAME+ISSUER_VAT exist, invoice issuance logs a warning and skips.
+
+## 2026-10-21 (e) VAT 0%, identical Pro treatment, Supabase Data API notice
+- **VAT is 0% for now** (business not VAT-registered). `VAT_RATE` now defaults to **0**, so €10.99 is
+  net 10.99 / ΦΠΑ 0.00. myDATA `vatCategory` is DERIVED from the rate (24->1, 13->2, 6->3, 0->**7**) and a
+  0% line automatically carries `vatExemptionCategory` (`MYDATA_VAT_EXEMPTION`, default 1) — AADE rejects
+  a zero-rated line without a reason. The PDF prints "ΦΠΑ 0% (απαλλαγή)". Set `VAT_RATE=24` the day the
+  company registers and everything (document + myDATA category) follows with no code change.
+- **All Pro users are treated identically** — verified, no change needed in gating: access is decided by
+  `_is_pro_now()` (status + `pro_until`), and `plan` is used ONLY for labels. one_off with a future
+  `pro_until` -> True; expired -> False. Fixed two label paths (`TrialBanner`, `AccountPage`) and stopped
+  trial-nudge emails for one-off buyers (`evaluate_lifecycle` now also skips `one_off`).
+- **Supabase Data API change (30 Oct) does NOT affect this app.** The backend talks to Postgres directly
+  with asyncpg via `DATABASE_URL` (no supabase-js, no PostgREST/GraphQL anywhere in frontend or backend),
+  so the new tables (`invoices`, `counters`) need no `GRANT ... TO anon/authenticated`. Only relevant if
+  we ever add supabase-js on the frontend.
+
+## 2026-10-21 (f) Duplicate-document bug caught before go-live
+A one-off Checkout has `invoice_creation` enabled, so Stripe emits BOTH
+`checkout.session.completed` AND `invoice.paid` for the same purchase — which would have issued TWO tax
+documents (refs `cs:` and `in:`) with two series numbers for one payment. `issue_invoice_for_stripe_invoice`
+now ignores any Stripe invoice without a `subscription` (that purchase is already documented from the
+session); renewals and the first subscription charge are unaffected. Covered by
+`test_one_off_invoice_is_not_issued_twice` (asserts it never even touches the DB). Suite: 175 passed.
+
+## 2026-10-21 (g) Live Stripe confirmed + myDATA retransmission
+- **Production is on the LIVE Stripe key** — verified: `/api/billing/checkout` now returns `cs_live_…`
+  and the webhook rejects unsigned calls. Real payments are active.
+- Added admin-only `GET /api/invoices/admin/failed` (everything AADE has not accepted, with the exact
+  error and the active `MYDATA_BASE`) and `POST /api/invoices/{id}/retransmit` (re-sends the SAME series
+  number, so the books have no gap, and emails the PDF once accepted). Needed in two real cases: a
+  rejected XML (wrong accountant code) and switching `MYDATA_BASE` from the AADE sandbox to production.
+- Clarified for the user: `MYDATA_BASE` is about the AADE environment (mydataapidev = sandbox, no real
+  filing, separate credentials), NOT about Stripe test mode or pre-prod.

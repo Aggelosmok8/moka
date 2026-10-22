@@ -4,7 +4,9 @@ import { api } from "./api";
 
 // --- Value Betting Intelligence Engine (single source of truth) ---
 export const fetchValueMatches = (opts = {}) =>
-  api.get(`/value-matches${opts.limit ? `?limit=${opts.limit}` : ""}`).then((r) => r.data);
+  // Production runs on a host that can cold-start, so the board gets a longer
+  // leash than the 30s default: a timeout here leaves the page with no matches.
+  api.get(`/value-matches${opts.limit ? `?limit=${opts.limit}` : ""}`, { timeout: 90000 }).then((r) => r.data);
 export const fetchMatches = () => api.get("/matches").then((r) => r.data);
 export const fetchMatchById = (id) => api.get(`/matches/${id}`).then((r) => r.data);
 export const fetchLive = () => api.get(`/live`).then((r) => r.data.matches || []);

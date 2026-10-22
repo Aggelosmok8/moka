@@ -140,6 +140,36 @@ _SQLITE_SCHEMA = """
         month TEXT DEFAULT '',
         calls INTEGER DEFAULT 0
     );
+    CREATE TABLE IF NOT EXISTS invoices (
+        id TEXT PRIMARY KEY,
+        user_id TEXT,
+        number TEXT,
+        series TEXT,
+        aa INTEGER DEFAULT 0,
+        doc_type TEXT,
+        issued_at TEXT,
+        currency TEXT DEFAULT 'EUR',
+        net REAL DEFAULT 0,
+        vat REAL DEFAULT 0,
+        total REAL DEFAULT 0,
+        vat_rate REAL DEFAULT 24,
+        counterparty TEXT,
+        lines TEXT,
+        payment TEXT,
+        stripe_ref TEXT,
+        mark TEXT DEFAULT '',
+        uid TEXT DEFAULT '',
+        qr TEXT DEFAULT '',
+        mydata_status TEXT DEFAULT 'pending',
+        mydata_error TEXT DEFAULT '',
+        emailed TEXT DEFAULT '',
+        created_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS counters (
+        id TEXT PRIMARY KEY,
+        value INTEGER DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_invoices_user ON invoices(user_id);
     CREATE INDEX IF NOT EXISTS idx_user_sessions_token ON user_sessions(session_token);
     CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_events_user_ts ON events(user_id, ts);
@@ -252,6 +282,36 @@ _PG_SCHEMA = """
         month TEXT DEFAULT '',
         calls INTEGER DEFAULT 0
     );
+    CREATE TABLE IF NOT EXISTS invoices (
+        id TEXT PRIMARY KEY,
+        user_id TEXT,
+        number TEXT,
+        series TEXT,
+        aa INTEGER DEFAULT 0,
+        doc_type TEXT,
+        issued_at TEXT,
+        currency TEXT DEFAULT 'EUR',
+        net REAL DEFAULT 0,
+        vat REAL DEFAULT 0,
+        total REAL DEFAULT 0,
+        vat_rate REAL DEFAULT 24,
+        counterparty TEXT,
+        lines TEXT,
+        payment TEXT,
+        stripe_ref TEXT,
+        mark TEXT DEFAULT '',
+        uid TEXT DEFAULT '',
+        qr TEXT DEFAULT '',
+        mydata_status TEXT DEFAULT 'pending',
+        mydata_error TEXT DEFAULT '',
+        emailed TEXT DEFAULT '',
+        created_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS counters (
+        id TEXT PRIMARY KEY,
+        value INTEGER DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_invoices_user ON invoices(user_id);
     CREATE INDEX IF NOT EXISTS idx_user_sessions_token ON user_sessions(session_token);
     CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_events_user_ts ON events(user_id, ts);
@@ -303,6 +363,10 @@ async def init_db():
             for col in ("email", "package_id", "metadata", "payment_status", "mode",
                         "updated_at", "stripe_subscription_id"):
                 await conn.execute(f"ALTER TABLE payment_transactions ADD COLUMN IF NOT EXISTS {col} TEXT")
+            # Provider budgets anchored to the first call ever (see quota_cycle.py)
+            for col in ("anchor", "cycle", "day"):
+                await conn.execute(f"ALTER TABLE odds_cache ADD COLUMN IF NOT EXISTS {col} TEXT")
+            await conn.execute("ALTER TABLE odds_cache ADD COLUMN IF NOT EXISTS day_calls INTEGER DEFAULT 0")
         logger.info("Postgres DB initialized (Supabase/Render).")
     else:
         async with aiosqlite.connect(DB_PATH) as conn:
@@ -318,6 +382,13 @@ async def init_db():
             for col in ("email", "package_id", "metadata", "payment_status", "mode", "updated_at"):
                 try:
                     await conn.execute(f"ALTER TABLE payment_transactions ADD COLUMN {col} TEXT")
+                    await conn.commit()
+                except Exception:
+                    pass
+            for col, typ in (("anchor", "TEXT"), ("cycle", "TEXT"), ("day", "TEXT"),
+                             ("day_calls", "INTEGER DEFAULT 0")):
+                try:
+                    await conn.execute(f"ALTER TABLE odds_cache ADD COLUMN {col} {typ}")
                     await conn.commit()
                 except Exception:
                     pass

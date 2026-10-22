@@ -4,6 +4,7 @@ import { ProBadge, UpgradeButton } from "../components/Gating";
 import { useEntitlements } from "../hooks/useEntitlements";
 import { useAuth } from "../contexts/AuthContext";
 import PasswordCard from "../components/PasswordCard";
+import InvoicesCard from "../components/InvoicesCard";
 
 function Row({ label, value }) {
   return (
@@ -21,6 +22,7 @@ export default function AccountPage() {
   const status = user?.subscription_status;
   const planLabel = {
     active: user?.plan === "yearly" ? "Pro · Annual" : "Pro · Monthly",
+    one_off: "Pro · 30-day access (one-off)",
     trial: `Free trial · ${user?.trial_days_left ?? 0} day${user?.trial_days_left === 1 ? "" : "s"} left`,
     expired: "Free (trial ended)",
     free: "Free",
@@ -44,6 +46,7 @@ export default function AccountPage() {
             </div>
           )}
         </div>
+        <InvoicesCard />
         <PasswordCard hasPassword={!!user?.has_password} />
         {!isPro && (
           <p className="text-zinc-500 text-sm mt-4">
