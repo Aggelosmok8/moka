@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 logger = logging.getLogger(__name__)
 
 TRIAL_DAYS = 7
-_BRAND = "Moka"
+_BRAND = "LION.STATS"
 
 
 def _api_key() -> str:
@@ -22,6 +22,13 @@ def _api_key() -> str:
 
 def _sender() -> str:
     return os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
+
+
+def _from() -> str:
+    """Resend rejects a malformed `from`. SENDER_EMAIL may already be a full
+    "Name <addr>" header — in that case use it as-is instead of nesting it."""
+    s = _sender().strip()
+    return s if "<" in s else f"{_BRAND} <{s}>"
 
 
 def _pricing_url() -> str:
@@ -73,7 +80,7 @@ async def _send(to_email: str, subject: str, html: str) -> bool:
     try:
         import resend
         resend.api_key = _api_key()
-        params = {"from": _sender(), "to": [to_email], "subject": subject, "html": html}
+        params = {"from": _from(), "to": [to_email], "subject": subject, "html": html}
         result = await asyncio.to_thread(resend.Emails.send, params)
         logger.info("Email sent to %s id=%s", to_email, (result or {}).get("id"))
         return True
@@ -137,11 +144,11 @@ async def evaluate_lifecycle(db, user_doc: dict) -> None:
                               {"$set": {"emails_sent": json.dumps(sorted(sent))}})
 
 
-async def send_invoice_email(to_email: str, inv: dict, pdf: bytes) -> bool:
-    """Deliver the Greek tax document as a PDF attachment."""
+async def send_invoice_email(to_email: str, inv: dict, pdf: bytes) -> tuple[bool, str]:
+    """Deliver the Greek tax document as a PDF attachment. Returns (ok, error)."""
     if not _api_key():
         logger.info("[invoice email skipped — no RESEND_API_KEY] to=%s %s", to_email, inv.get("number"))
-        return False
+        return False, "RESEND_API_KEY not set"
     import base64
     name = f"{inv['series']}-{inv['number']}.pdf"
     title = {"5.1": "Πιστωτικό παραστατικό"}.get(inv.get("doc_type"), "Το παραστατικό σας")
@@ -151,14 +158,34 @@ async def send_invoice_email(to_email: str, inv: dict, pdf: bytes) -> bool:
     try:
         import resend
         resend.api_key = _api_key()
-        resend.Emails.send({
-            "from": f"{_BRAND} <{_sender()}>",
+        await asyncio.to_thread(resend.Emails.send, {
+            "from": _from(),
             "to": [to_email],
             "subject": f"{title} — {inv['series']}-{inv['number']}",
             "html": _wrap(title, body, _pricing_url()),
             "attachments": [{"filename": name, "content": base64.b64encode(pdf).decode()}],
         })
-        return True
-    except Exception:
-        logger.exception("invoice email failed to %s", to_email)
-        return False
+        return True, ""
+    except Exception as exc:
+        # The provider's own message is what tells us WHY (unverified domain,
+        # invalid from, sandbox recipient restriction) — keep it, don't bury it.
+        logger.error("invoice email failed to %s: %s: %s", to_email, type(exc).__name__, exc)
+        return False, f"{type(exc).__name__}: {exc}"[:300]
+
+
+async def send_test_email(to_email: str) -> tuple[bool, str]:
+    """Admin diagnostic: prove the mail provider works and surface its exact error."""
+    if not _api_key():
+        return False, "RESEND_API_KEY not set"
+    try:
+        import resend
+        resend.api_key = _api_key()
+        await asyncio.to_thread(resend.Emails.send, {
+            "from": _from(),
+            "to": [to_email],
+            "subject": f"{_BRAND} — email test",
+            "html": _wrap("Email test", "Αν το βλέπεις αυτό, η αποστολή email δουλεύει.", _pricing_url()),
+        })
+        return True, ""
+    except Exception as exc:
+        return False, f"{type(exc).__name__}: {exc}"[:300]

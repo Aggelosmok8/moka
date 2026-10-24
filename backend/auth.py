@@ -89,6 +89,7 @@ class User(BaseModel):
     trial_days_left: int = 0
     trial_used: bool = False
     has_password: bool = False
+    is_admin: bool = False
 
 
 class RegisterIn(BaseModel):
@@ -287,6 +288,7 @@ def make_auth_router(db) -> APIRouter:
             trial_days_left=days_left,
             trial_used=_truthy(user_doc.get("trial_used")) or eff_status in ("trial", "expired"),
             has_password=bool(user_doc.get("password_hash")),
+            is_admin=(user_doc.get("email") or "").strip().lower() in ADMIN_EMAILS,
         )
 
     async def current_user(request: Request) -> User:

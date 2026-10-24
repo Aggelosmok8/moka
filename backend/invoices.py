@@ -23,6 +23,7 @@ import os
 import uuid
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -156,12 +157,27 @@ def _build_xml(inv: dict) -> bytes:
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
 
+def _mydata_url(path: str) -> str:
+    """AADE's ERP interface uses a DIFFERENT path per environment:
+       production  https://mydatapi.aade.gr/myDATA/<path>
+       sandbox     https://mydataapidev.aade.gr/<path>   (no /myDATA segment!)
+    Calling the sandbox with the /myDATA prefix returns HTTP 404 "Resource not
+    found", which is exactly what bit us. Only the host from MYDATA_BASE is used,
+    so a value pasted with a trailing path can't break the call either.
+    """
+    raw = (_env("MYDATA_BASE", "https://mydataapidev.aade.gr") or "").strip().rstrip("/")
+    if not raw.startswith("http"):
+        raw = "https://" + raw
+    host = urlsplit(raw).netloc
+    prefix = "" if "dev" in host else "/myDATA"
+    return f"https://{host}{prefix}/{path.lstrip('/')}"
+
+
 async def send_to_mydata(inv: dict) -> dict:
     """POST one document. Returns {'mark','uid','qr','status','error'}."""
     if not mydata_configured():
         return {"status": "skipped", "error": "myDATA credentials not configured"}
-    base = _env("MYDATA_BASE", "https://mydataapidev.aade.gr").rstrip("/")
-    url = f"{base}/myDATA/SendInvoices"
+    url = _mydata_url("SendInvoices")
     headers = {
         "aade-user-id": _env("MYDATA_USER_ID"),
         "ocp-apim-subscription-key": _env("MYDATA_SUBSCRIPTION_KEY"),
@@ -173,7 +189,7 @@ async def send_to_mydata(inv: dict) -> dict:
     except Exception as e:
         return {"status": "error", "error": f"{type(e).__name__}: {e}"}
     if r.status_code != 200:
-        return {"status": "error", "error": f"HTTP {r.status_code}: {r.text[:300]}"}
+        return {"status": "error", "error": f"HTTP {r.status_code} at {url}: {r.text[:260]}"}
     try:
         tree = ET.fromstring(r.text)
     except ET.ParseError as e:
@@ -331,18 +347,21 @@ async def issue_credit_note(db, charge: dict) -> dict | None:
 
 
 async def _deliver(db, inv: dict) -> None:
-    """Email the PDF. Never let a mail failure undo a valid document."""
+    """Email the PDF. Never let a mail failure undo a valid document, but DO record
+    why it failed so it can be seen (and retried) without digging through logs."""
     to = (inv.get("counterparty") or {}).get("email")
     if not to:
         return
     try:
         from email_service import send_invoice_email
-        ok = await send_invoice_email(to, inv, render_pdf(inv))
-        if ok:
-            await db.invoices.update_one({"id": inv["id"]},
-                                         {"$set": {"emailed": datetime.now(timezone.utc).isoformat()}})
-    except Exception:
+        ok, err = await send_invoice_email(to, inv, render_pdf(inv))
+    except Exception as exc:
+        ok, err = False, f"{type(exc).__name__}: {exc}"[:300]
         logger.exception("invoice %s: email failed", inv.get("number"))
+    await db.invoices.update_one({"id": inv["id"]}, {"$set": {
+        "emailed": datetime.now(timezone.utc).isoformat() if ok else "",
+        "email_error": "" if ok else err,
+    }})
 
 
 # --------------------------------------------------------------------- PDF --
@@ -552,11 +571,37 @@ def make_invoices_router(db, current_user):
         rows = [_hydrate(r) async for r in await db.invoices.find({}, {"_id": 0})]
         bad = [r for r in rows if r.get("mydata_status") != "sent"]
         bad.sort(key=lambda r: r.get("issued_at") or "", reverse=True)
-        return {"base": _env("MYDATA_BASE", "https://mydataapidev.aade.gr"),
+        return {"base": _mydata_url(""),
                 "configured": mydata_configured(),
                 "invoices": [{k: r.get(k) for k in
                               ("id", "number", "series", "doc_type", "issued_at", "total",
-                               "mydata_status", "mydata_error")} for r in bad]}
+                               "mydata_status", "mydata_error", "emailed", "email_error")} for r in bad]}
+
+    @router.post("/admin/email-test")
+    async def email_test(body: dict | None = None, user=Depends(current_user)):
+        """Admin diagnostic: send a plain test email and return the provider's exact error."""
+        from auth import is_admin
+        if not is_admin(user):
+            raise HTTPException(status_code=403, detail="Admins only")
+        from email_service import send_test_email, _from
+        to = ((body or {}).get("to") or user.email or "").strip()
+        ok, err = await send_test_email(to)
+        return {"ok": ok, "to": to, "from": _from(), "error": err}
+
+    @router.post("/{invoice_id}/resend-email")
+    async def resend_email(invoice_id: str, user=Depends(current_user)):
+        """Admin: re-send the PDF of an already issued document (no new numbering)."""
+        from auth import is_admin
+        if not is_admin(user):
+            raise HTTPException(status_code=403, detail="Admins only")
+        row = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+        if not row:
+            raise HTTPException(status_code=404, detail="Not found")
+        inv = _hydrate(row)
+        await _deliver(db, inv)
+        fresh = await db.invoices.find_one({"id": invoice_id}, {"_id": 0}) or {}
+        return {"ok": bool(fresh.get("emailed")), "emailed": fresh.get("emailed"),
+                "error": fresh.get("email_error")}
 
     @router.get("/admin/mydata-check")
     async def mydata_check(user=Depends(current_user)):
@@ -567,10 +612,10 @@ def make_invoices_router(db, current_user):
             raise HTTPException(status_code=403, detail="Admins only")
         if not mydata_configured():
             return {"ok": False, "reason": "MYDATA_USER_ID / MYDATA_SUBSCRIPTION_KEY not set"}
-        base = _env("MYDATA_BASE", "https://mydataapidev.aade.gr").rstrip("/")
+        base = _mydata_url("")
         try:
             async with httpx.AsyncClient(timeout=30) as c:
-                r = await c.get(f"{base}/RequestDocs", params={"mark": "0"}, headers={
+                r = await c.get(_mydata_url("RequestDocs"), params={"mark": "0"}, headers={
                     "aade-user-id": _env("MYDATA_USER_ID"),
                     "ocp-apim-subscription-key": _env("MYDATA_SUBSCRIPTION_KEY")})
         except Exception as e:

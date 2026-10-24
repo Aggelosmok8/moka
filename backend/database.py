@@ -163,6 +163,7 @@ _SQLITE_SCHEMA = """
         mydata_status TEXT DEFAULT 'pending',
         mydata_error TEXT DEFAULT '',
         emailed TEXT DEFAULT '',
+        email_error TEXT DEFAULT '',
         created_at TEXT
     );
     CREATE TABLE IF NOT EXISTS counters (
@@ -305,6 +306,7 @@ _PG_SCHEMA = """
         mydata_status TEXT DEFAULT 'pending',
         mydata_error TEXT DEFAULT '',
         emailed TEXT DEFAULT '',
+        email_error TEXT DEFAULT '',
         created_at TEXT
     );
     CREATE TABLE IF NOT EXISTS counters (
@@ -367,6 +369,7 @@ async def init_db():
             for col in ("anchor", "cycle", "day"):
                 await conn.execute(f"ALTER TABLE odds_cache ADD COLUMN IF NOT EXISTS {col} TEXT")
             await conn.execute("ALTER TABLE odds_cache ADD COLUMN IF NOT EXISTS day_calls INTEGER DEFAULT 0")
+            await conn.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS email_error TEXT DEFAULT ''")
         logger.info("Postgres DB initialized (Supabase/Render).")
     else:
         async with aiosqlite.connect(DB_PATH) as conn:
@@ -392,6 +395,11 @@ async def init_db():
                     await conn.commit()
                 except Exception:
                     pass
+            try:
+                await conn.execute("ALTER TABLE invoices ADD COLUMN email_error TEXT DEFAULT ''")
+                await conn.commit()
+            except Exception:
+                pass
         logger.info("SQLite DB initialized at %s", DB_PATH)
 
 

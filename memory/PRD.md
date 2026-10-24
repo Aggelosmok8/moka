@@ -1225,3 +1225,32 @@ session); renewals and the first subscription charge are unaffected. Covered by
    on focus).
 - Backend suite: 168 passed, 3 skipped (9 pre-existing failures are odds-coverage tests pinned to the
   stale fixture `live_af_1563200`, unrelated).
+
+## 2026-10-24 myDATA 404 + invoice email not delivered
+**myDATA HTTP 404 "Resource not found"** — the AADE **ERP interface uses a different path per
+environment**: production is `https://mydatapi.aade.gr/myDATA/SendInvoices` but the sandbox is
+`https://mydataapidev.aade.gr/SendInvoices` (NO `/myDATA` segment). The code always appended
+`/myDATA/SendInvoices`, so with `MYDATA_BASE` on the sandbox every call 404'd. New `invoices._mydata_url()`
+derives the path from the host (and ignores any path pasted into `MYDATA_BASE`), used by both
+SendInvoices and the mydata-check probe; the failing URL is now part of the stored error.
+
+**Invoice email never arrived (ROOT CAUSE = Resend account, not code)** — verified against the live
+Resend API: the account has **no verified domain** (`GET /domains` → empty). Resend therefore allows
+sending only from `onboarding@resend.dev` and only to the account owner (`aggelosmok8@gmail.com`); the
+buyer `thaniakouzi@gmail.com` was rejected with HTTP 403 "You can only send testing emails to your own
+email address". Proof both ways: the same code + PDF attachment delivered successfully to the owner's
+address, while `no-reply@lion-stats.com` returned "The lion-stats.com domain is not verified".
+**ACTION REQUIRED BY THE USER: verify lion-stats.com at resend.com/domains (DNS records) and set
+SENDER_EMAIL to an address on that domain.** No code change can bypass this.
+
+Code hardening shipped with it:
+- `_from()` builds a valid `From` header (no more nesting when SENDER_EMAIL already has a display name)
+  and the brand is now LION.STATS, not Moka; invoice/test sends moved off the event loop (`to_thread`).
+- `send_invoice_email` returns `(ok, error)`; `_deliver` stores `email_error` on the invoice
+  (new column + idempotent migration) so a delivery failure is visible, not only in the logs.
+- New admin endpoints: `POST /api/invoices/admin/email-test` (returns the provider's exact error) and
+  `POST /api/invoices/{id}/resend-email` (re-sends an already numbered document).
+- `/auth/me` now exposes `is_admin`, and **Account → Diagnostics** (admin only, `AdminDiagnosticsCard`)
+  runs Stripe price-check / myDATA check / failed documents / test email straight from the browser —
+  this is how production env problems get diagnosed without Render log access.
+Verified on preview: diagnostics panel renders and returns the real Resend error; invoice tests 8 passed.
