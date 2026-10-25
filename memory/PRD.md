@@ -1288,3 +1288,13 @@ Still outstanding, both OUTSIDE the code: `MYDATA_BASE` is the AADE sandbox (rea
 `https://mydatapi.aade.gr` + production credentials), and the Resend domain is still unverified, so the
 customer email can only go out after `lion-stats.com` (or `mail.lion-stats.com`) is verified. The PDF is
 downloadable from Account → Invoices meanwhile.
+
+## 2026-10-25 (c) ΜΑΡΚ received — email is the only thing left
+Invoice 20261024-0001 now has **mark=400001974031505, mydata_status=sent** (the retry ran on production),
+so the myDATA path fix works end to end. Remaining failure is delivery only:
+`email_error = ResendError: The lion-stats.com domain is not verified` (and with the preview sender,
+"You can only send testing emails to your own email address"). Resend blocks it, not our code.
+IMPORTANT: verify whether that ΜΑΡΚ came from the AADE **sandbox** (`MYDATA_BASE=mydataapidev...`) —
+if so the document is NOT officially filed and must be re-sent against `https://mydatapi.aade.gr`.
+`GET /api/invoices/admin/failed` now also lists and RETRIES documents whose email never went out, so one
+admin click delivers every pending receipt once the Resend domain is verified.
