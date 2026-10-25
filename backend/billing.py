@@ -159,6 +159,27 @@ async def _get_or_create_customer(db, user) -> Optional[str]:
     return None
 
 
+async def _price_problem(price_id: str, pkg: dict) -> Optional[str]:
+    """Return a human-readable reason the configured Stripe Price can't be used, else None."""
+    try:
+        price = await asyncio.to_thread(stripe.Price.retrieve, price_id)
+    except Exception as exc:
+        return f"could not be retrieved ({exc})"
+    if not price.get("active", True):
+        return "price is archived/inactive"
+    recurring = price.get("recurring") or None
+    if (pkg.get("mode") or "subscription") == "subscription":
+        if not recurring:
+            return "price is one-time but the plan is a subscription"
+        if pkg.get("interval") and recurring.get("interval") != pkg["interval"]:
+            return f"price renews every {recurring.get('interval')}, plan needs {pkg['interval']}"
+    elif recurring:
+        return "price is recurring but the plan is a one-off payment"
+    if price.get("currency") and price["currency"] != pkg["currency"]:
+        return f"price currency is {price['currency']}, expected {pkg['currency']}"
+    return None
+
+
 class CheckoutRequest(BaseModel):
     package_id: str
     origin_url: str
@@ -205,9 +226,18 @@ def make_billing_router(db, current_user, current_user_optional) -> APIRouter:
         # change without a deploy. Otherwise fall back to an inline price_data.
         mode = pkg.get("mode") or "subscription"
         price_id = (os.environ.get(pkg.get("price_env", ""), "") or "").strip()
+        line_item = None
         if price_id.startswith("price_"):
-            line_item = {"price": price_id, "quantity": 1}
-        else:
+            # Validate the configured Price BEFORE checkout: a yearly plan pointed at
+            # a one-time (or wrong-interval) Price makes Stripe reject the session and
+            # the user just sees "could not start checkout".
+            problem = await _price_problem(price_id, pkg)
+            if problem:
+                logger.error("Ignoring %s=%s: %s — falling back to the built-in price",
+                             pkg.get("price_env"), price_id, problem)
+            else:
+                line_item = {"price": price_id, "quantity": 1}
+        if line_item is None:
             price_data = {
                 "currency": pkg["currency"],
                 "unit_amount": int(round(pkg["amount"] * 100)),
@@ -261,6 +291,32 @@ def make_billing_router(db, current_user, current_user_optional) -> APIRouter:
             "updated_at": datetime.now(timezone.utc).isoformat(),
         })
         return {"url": session.url, "session_id": session.id, "mode": mode}
+
+    @router.get("/admin/price-check")
+    async def price_check(user=Depends(current_user)):
+        """Admin-only: verify every configured Stripe Price ID is usable for its plan."""
+        from auth import is_admin
+        if not is_admin(user):
+            raise HTTPException(status_code=403, detail="Admin only")
+        _stripe_init()
+        out = {}
+        for pid, pkg in PACKAGES.items():
+            env_name = pkg.get("price_env", "")
+            value = (os.environ.get(env_name, "") or "").strip()
+            if not value:
+                out[pid] = {"env": env_name, "configured": False,
+                            "using": "built-in price", "ok": True}
+                continue
+            if not value.startswith("price_"):
+                out[pid] = {"env": env_name, "configured": True, "ok": False,
+                            "problem": "value is not a Stripe Price ID (must start with 'price_')",
+                            "using": "built-in price"}
+                continue
+            problem = await _price_problem(value, pkg)
+            out[pid] = {"env": env_name, "configured": True, "price_id": value,
+                        "ok": problem is None, "problem": problem,
+                        "using": "built-in price" if problem else "configured price"}
+        return {"packages": out}
 
     @router.get("/status/{session_id}")
     async def checkout_status(session_id: str, user=Depends(current_user)):

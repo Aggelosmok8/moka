@@ -400,7 +400,7 @@ function TicketsView({ isPro }) {
 }
 
 export default function PortfolioPage() {
-  const { bets, settle, remove, clear, clearTickets, slipCount, autoSettle, clearNewlySettled, tickets } = usePortfolio();
+  const { bets, settle, remove, clear, clearTickets, slipCount, autoSettle, clearNewlySettled, tickets, syncNow } = usePortfolio();
   const { role } = useEntitlements();
   const isPro = role === "pro";
   const [filter, setFilter] = useState("all");
@@ -418,6 +418,8 @@ export default function PortfolioPage() {
   const refresh = async () => {
     setSettling(true);
     try {
+      // Pull whatever was played on another device FIRST, then settle.
+      await syncNow();
       const { settled } = await autoSettle();
       toast.success(settled ? `${settled} pick${settled > 1 ? "s" : ""} settled from final results` : "No finished matches to settle yet");
     } finally {

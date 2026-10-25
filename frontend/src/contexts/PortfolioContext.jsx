@@ -6,6 +6,7 @@ import { fetchResults } from "../lib/catalogApi";
 
 const KEY = "moka_portfolio_bets";
 const SLIP_KEY = "moka_bet_slip";
+const SLIP_TS_KEY = "moka_slip_updated_at";   // last local slip edit (cross-device LWW)
 const TICKETS_KEY = "moka_tickets";
 const OWNER_KEY = "moka_portfolio_owner";  // who the local data belongs to (userId | "guest")
 const Ctx = createContext(null);
@@ -206,7 +207,8 @@ export function PortfolioProvider({ children }) {
   }, []);
 
   // --- Bet slip (accumulator builder) ---
-  const saveSlip = (next) => { setSlip(next); try { localStorage.setItem(SLIP_KEY, JSON.stringify(next)); } catch {} };
+  const touchSlip = () => { try { localStorage.setItem(SLIP_TS_KEY, new Date().toISOString()); } catch {} };
+  const saveSlip = (next) => { setSlip(next); touchSlip(); try { localStorage.setItem(SLIP_KEY, JSON.stringify(next)); } catch {} };
   const saveTickets = (next) => { setTickets(next); try { localStorage.setItem(TICKETS_KEY, JSON.stringify(next)); } catch {} };
 
   const addToSlip = useCallback((leg) => {
@@ -226,6 +228,7 @@ export function PortfolioProvider({ children }) {
         kickoff: leg.kickoff || leg.commence_time || null,
       }];
       try { localStorage.setItem(SLIP_KEY, JSON.stringify(next)); } catch {}
+      touchSlip();
       return next;
     });
   }, []);
@@ -239,6 +242,7 @@ export function PortfolioProvider({ children }) {
       const next = prev.filter((l) => !(isMatch(l)
         && (pick ? (l.pick || "") === pick : l.kind !== "specific")));
       try { localStorage.setItem(SLIP_KEY, JSON.stringify(next)); } catch {}
+      touchSlip();
       return next;
     });
   }, []);
@@ -249,6 +253,7 @@ export function PortfolioProvider({ children }) {
       const next = prev.map((l) => (l.matchId === matchId && (!pick || (l.pick || "") === pick)
         ? { ...l, odds: Number(odds) || 0 } : l));
       try { localStorage.setItem(SLIP_KEY, JSON.stringify(next)); } catch {}
+      touchSlip();
       return next;
     });
   }, []);
@@ -306,6 +311,7 @@ export function PortfolioProvider({ children }) {
       });
       placed = true;
       try { localStorage.setItem(SLIP_KEY, JSON.stringify([])); } catch {}
+      touchSlip();
       return [];
     });
     return placed;
@@ -445,6 +451,7 @@ export function PortfolioProvider({ children }) {
       localStorage.removeItem(KEY);
       localStorage.removeItem(TICKETS_KEY);
       localStorage.removeItem(SLIP_KEY);
+      localStorage.removeItem(SLIP_TS_KEY);
       localStorage.removeItem("moka_newly_settled");
       localStorage.removeItem(OWNER_KEY);
     } catch {}
@@ -460,16 +467,72 @@ export function PortfolioProvider({ children }) {
     prevUserRef.current = curId;
   }, [user, _wipeLocal]);
 
+  const pullingRef = useRef(false);
+  const lastPullRef = useRef(0);
+
+  // Pull the cloud copy and MERGE it in. Retries, because a cold backend can take
+  // longer than one request's timeout — and a failed pull used to leave the
+  // device permanently out of sync for that whole session.
+  const pullRemote = useCallback(async (meId, retries = 3) => {
+    if (pullingRef.current) return false;
+    pullingRef.current = true;
+    let remote = null;
+    for (let i = 0; i < retries; i++) {
+      try { remote = await getPortfolioRemote(); break; }
+      catch { await new Promise((r) => setTimeout(r, 2000 * (i + 1))); }
+    }
+    pullingRef.current = false;
+    // Never upload over a cloud copy we failed to read: that would wipe it.
+    if (!remote) return false;
+
+    // Same id on both sides -> keep the MORE SETTLED copy, so a bet marked
+    // won/lost on the phone shows as settled on the laptop too.
+    const settledScore = (x) => (x.legs
+      ? x.legs.filter((l) => l.status && l.status !== "pending").length
+      : (x.status && x.status !== "pending" ? 1 : 0));
+    const mergeLists = (rem, loc) => {
+      const m = new Map();
+      for (const x of rem || []) if (x && x.id) m.set(x.id, x);
+      for (const x of loc || []) {
+        if (!x || !x.id) continue;
+        const r = m.get(x.id);
+        m.set(x.id, r && settledScore(r) > settledScore(x) ? r : x);
+      }
+      return [...m.values()];
+    };
+
+    setBets((prev) => {
+      const next = mergeLists(remote.bets, prev);
+      try { localStorage.setItem(KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+    setTickets((prev) => {
+      const next = mergeLists(remote.tickets, prev);
+      try { localStorage.setItem(TICKETS_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+    // Open slip: last writer wins (it's a draft, not a record).
+    const remoteTs = remote.slip_updated_at || "";
+    const localTs = (() => { try { return localStorage.getItem(SLIP_TS_KEY) || ""; } catch { return ""; } })();
+    if (Array.isArray(remote.slip) && remoteTs > localTs) {
+      setSlip(remote.slip);
+      try {
+        localStorage.setItem(SLIP_KEY, JSON.stringify(remote.slip));
+        localStorage.setItem(SLIP_TS_KEY, remoteTs);
+      } catch {}
+    }
+    if (meId) { try { localStorage.setItem(OWNER_KEY, meId); } catch {} }
+    lastPullRef.current = Date.now();
+    syncedRef.current = true;
+    return true;
+  }, []);
+
   useEffect(() => {
     if (!user) { syncedRef.current = false; return; }
-    let active = true;
     const meId = user.user_id || user.email;
     const owner = (() => { try { return localStorage.getItem(OWNER_KEY); } catch { return null; } })();
     // Local data is claimable only if it's already ours or from a guest session.
-    const claimable = !owner || owner === "guest" || owner === meId;
-    const localBets = claimable ? bets : [];
-    const localTickets = claimable ? tickets : [];
-    if (!claimable) {
+    if (!(!owner || owner === "guest" || owner === meId)) {
       // Stale data from a different user — discard before showing anything.
       setBets([]); setTickets([]); setSlip([]);
       try {
@@ -478,38 +541,31 @@ export function PortfolioProvider({ children }) {
         localStorage.removeItem(SLIP_KEY);
       } catch {}
     }
-    getPortfolioRemote()
-      .then((remote) => {
-        if (!active) return;
-        // MERGE, never replace: a ticket placed on the phone and one placed on
-        // the laptop must both survive. Same id -> the local (newer) copy wins.
-        const byId = (arr) => new Map((arr || []).filter((x) => x && x.id).map((x) => [x.id, x]));
-        const mergeLists = (rem, loc) => {
-          const m = byId(rem);
-          for (const [id, x] of byId(loc)) m.set(id, x);
-          return [...m.values()];
-        };
-        const mergedBets = mergeLists(remote?.bets, localBets);
-        const mergedTickets = mergeLists(remote?.tickets, localTickets);
-        setBets(mergedBets); try { localStorage.setItem(KEY, JSON.stringify(mergedBets)); } catch {}
-        setTickets(mergedTickets); try { localStorage.setItem(TICKETS_KEY, JSON.stringify(mergedTickets)); } catch {}
-        try { localStorage.setItem(OWNER_KEY, meId); } catch {}
-        syncedRef.current = true;
-        if (mergedBets.length || mergedTickets.length) {
-          putPortfolioRemote({ bets: mergedBets, tickets: mergedTickets }).catch(() => {});
-        }
-      })
-      // If the server copy can't be read, DO NOT enable upload — otherwise an
-      // empty local state would overwrite (and lose) the user's saved tickets.
-      .catch(() => { syncedRef.current = false; });
-    return () => { active = false; };
-  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+    pullRemote(meId);
+
+    // Re-pull when the user comes back to the tab (and on a slow poll) so a bet
+    // placed on the phone appears on an already-open laptop tab.
+    const onWake = () => {
+      if (document.visibilityState === "hidden") return;
+      if (Date.now() - lastPullRef.current < 20000) return;
+      pullRemote(meId, 1);
+    };
+    window.addEventListener("focus", onWake);
+    document.addEventListener("visibilitychange", onWake);
+    const iv = setInterval(onWake, 60000);
+    return () => {
+      window.removeEventListener("focus", onWake);
+      document.removeEventListener("visibilitychange", onWake);
+      clearInterval(iv);
+    };
+  }, [user, pullRemote]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!user || !syncedRef.current) return;
     const t = setTimeout(() => {
       const deleted = deletedRef.current;
-      const payload = { bets, tickets, deleted };
+      const slipTs = (() => { try { return localStorage.getItem(SLIP_TS_KEY); } catch { return null; } })();
+      const payload = { bets, tickets, slip, slip_updated_at: slipTs, deleted };
       deletedRef.current = { bets: [], tickets: [] };
       putPortfolioRemote(payload).catch(() => {
         // keep the deletions queued for the next attempt
@@ -520,7 +576,7 @@ export function PortfolioProvider({ children }) {
       });
     }, 800);
     return () => clearTimeout(t);
-  }, [bets, tickets, user]);
+  }, [bets, tickets, slip, user]);
 
   return (
     <Ctx.Provider value={{
@@ -528,6 +584,7 @@ export function PortfolioProvider({ children }) {
       slip, addToSlip, removeFromSlip, updateSlipLegOdds, clearSlip, slipHas, slipHasPick,
       playedPick, playedMatch, slipCount: slip.length,
       tickets, placeTicket, settleLeg, removeTicket, clearTickets, autoSettle, addManualTicket,
+      syncNow: () => pullRemote(user?.user_id || user?.email, 2),
       newlySettled, clearNewlySettled,
     }}>
       {children}

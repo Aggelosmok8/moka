@@ -5,6 +5,7 @@ import { useEntitlements } from "../hooks/useEntitlements";
 import { useAuth } from "../contexts/AuthContext";
 import PasswordCard from "../components/PasswordCard";
 import InvoicesCard from "../components/InvoicesCard";
+import AdminDiagnosticsCard from "../components/AdminDiagnosticsCard";
 
 function Row({ label, value }) {
   return (
@@ -21,7 +22,7 @@ export default function AccountPage() {
   const isPro = role === "pro";
   const status = user?.subscription_status;
   const planLabel = {
-    active: user?.plan === "yearly" ? "Pro · Annual" : "Pro · Monthly",
+    active: { yearly: "Pro · Annual", monthly: "Pro · Monthly", monthly_once: "Pro · 30-day access (one-off)" }[user?.plan] || "Pro",
     one_off: "Pro · 30-day access (one-off)",
     trial: `Free trial · ${user?.trial_days_left ?? 0} day${user?.trial_days_left === 1 ? "" : "s"} left`,
     expired: "Free (trial ended)",
@@ -47,6 +48,7 @@ export default function AccountPage() {
           )}
         </div>
         <InvoicesCard />
+        {user?.is_admin && <AdminDiagnosticsCard />}
         <PasswordCard hasPassword={!!user?.has_password} />
         {!isPro && (
           <p className="text-zinc-500 text-sm mt-4">

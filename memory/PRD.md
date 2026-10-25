@@ -1195,3 +1195,85 @@ session); renewals and the first subscription charge are unaffected. Covered by
   rejected XML (wrong accountant code) and switching `MYDATA_BASE` from the AADE sandbox to production.
 - Clarified for the user: `MYDATA_BASE` is about the AADE environment (mydataapidev = sandbox, no real
   filing, separate credentials), NOT about Stripe test mode or pre-prod.
+
+## 2026-10-22 Three reported bugs fixed (Pro status, Annual checkout, cross-device portfolio)
+1. **"Start free trial" shown to a paying user** — root cause in `auth._effective_status()`: only
+   `subscription_status == "active"` mapped to the Pro state, so a one-off 30-day purchase
+   (`status = "one_off"`) fell through to "free" and `TrialBanner` pitched the trial even though the
+   header showed PRO (`is_pro` was already true). Every PAID status (`one_off`, `past_due`, `unpaid`,
+   `canceled`, `incomplete`) now resolves to `active` while `pro_until` is in the future and to
+   `expired` once it passes — so Pro → Free on expiry happens automatically, and an expired payer is
+   never offered the free trial again. Frontend guard added too (`is_pro` wins over status) and the
+   expired banner says "Your Pro access has ended" for a former payer.
+   Verified on preview: a one-off user gets `subscription_status: "active"` from `/api/auth/me` and the
+   banner reads "Pro active · 30-day access plan".
+2. **Annual checkout error (production only)** — reproduced: `pro_monthly_once` and `pro_monthly`
+   returned `cs_live_…`, `pro_yearly` returned 502. Cause: `STRIPE_PRICE_YEARLY` in the Render env is a
+   Price that Stripe rejects for `mode=subscription` (one-time / wrong interval / archived / not found),
+   and the code used it blindly. `billing._price_problem()` now validates the configured Price before
+   checkout and falls back to the built-in €79.99/year price with a loud log line, so a bad env var can
+   never block a sale again. New admin diagnostic: `GET /api/billing/admin/price-check`.
+   NOTE: takes effect in production only after the backend is redeployed to Render.
+3. **Portfolio/tickets not visible on the other device** — the cloud copy was pulled ONCE per session
+   with no retry: any failed/timed-out pull (Render cold start > 30 s axios timeout) left that device
+   permanently unsynced AND blocked uploads for the whole session. `PortfolioContext` now retries the
+   pull (3 attempts, backoff), re-pulls on tab focus/visibility and on a 60 s poll, merges by id keeping
+   the MORE SETTLED copy on conflict, and "Refresh results" forces a sync first. The open bet slip is
+   now synced too (`slip` + `slip_updated_at`, last-writer-wins) — a slip started on the phone appears on
+   the laptop. Backend `PUT/GET /api/me/portfolio` extended for the slip; record merge-by-id unchanged.
+   Verified e2e on preview with a two-device simulation (phone writes via API → laptop tab picks it up
+   on focus).
+- Backend suite: 168 passed, 3 skipped (9 pre-existing failures are odds-coverage tests pinned to the
+  stale fixture `live_af_1563200`, unrelated).
+
+## 2026-10-24 myDATA 404 + invoice email not delivered
+**myDATA HTTP 404 "Resource not found"** — the AADE **ERP interface uses a different path per
+environment**: production is `https://mydatapi.aade.gr/myDATA/SendInvoices` but the sandbox is
+`https://mydataapidev.aade.gr/SendInvoices` (NO `/myDATA` segment). The code always appended
+`/myDATA/SendInvoices`, so with `MYDATA_BASE` on the sandbox every call 404'd. New `invoices._mydata_url()`
+derives the path from the host (and ignores any path pasted into `MYDATA_BASE`), used by both
+SendInvoices and the mydata-check probe; the failing URL is now part of the stored error.
+
+**Invoice email never arrived (ROOT CAUSE = Resend account, not code)** — verified against the live
+Resend API: the account has **no verified domain** (`GET /domains` → empty). Resend therefore allows
+sending only from `onboarding@resend.dev` and only to the account owner (`aggelosmok8@gmail.com`); the
+buyer `thaniakouzi@gmail.com` was rejected with HTTP 403 "You can only send testing emails to your own
+email address". Proof both ways: the same code + PDF attachment delivered successfully to the owner's
+address, while `no-reply@lion-stats.com` returned "The lion-stats.com domain is not verified".
+**ACTION REQUIRED BY THE USER: verify lion-stats.com at resend.com/domains (DNS records) and set
+SENDER_EMAIL to an address on that domain.** No code change can bypass this.
+
+Code hardening shipped with it:
+- `_from()` builds a valid `From` header (no more nesting when SENDER_EMAIL already has a display name)
+  and the brand is now LION.STATS, not Moka; invoice/test sends moved off the event loop (`to_thread`).
+- `send_invoice_email` returns `(ok, error)`; `_deliver` stores `email_error` on the invoice
+  (new column + idempotent migration) so a delivery failure is visible, not only in the logs.
+- New admin endpoints: `POST /api/invoices/admin/email-test` (returns the provider's exact error) and
+  `POST /api/invoices/{id}/resend-email` (re-sends an already numbered document).
+- `/auth/me` now exposes `is_admin`, and **Account → Diagnostics** (admin only, `AdminDiagnosticsCard`)
+  runs Stripe price-check / myDATA check / failed documents / test email straight from the browser —
+  this is how production env problems get diagnosed without Render log access.
+Verified on preview: diagnostics panel renders and returns the real Resend error; invoice tests 8 passed.
+
+## 2026-10-25 Why the ΜΑΡΚ is missing + proof that production runs pre-fix code
+Investigated invoice `20261024-0001` (user_4830068c1c74 / thaniakouzi@gmail.com, €10.99, doc 11.2):
+`mydata_status=error`, `mydata_error=HTTP 404 Resource not found`, `mark=''`. Same 404 as 2026-10-24 →
+it IS the sandbox path bug, already fixed in code. Proof of the path rule (probed live, no credentials):
+  mydataapidev.aade.gr/SendInvoices        -> 401 (endpoint exists)
+  mydataapidev.aade.gr/myDATA/SendInvoices -> 404  <-- what production was calling
+  mydatapi.aade.gr/myDATA/SendInvoices     -> 401 (endpoint exists)
+  mydatapi.aade.gr/SendInvoices            -> 404
+The 404 also proves MYDATA_USER_ID/SUBSCRIPTION_KEY ARE set in production (the config guard was passed)
+and that MYDATA_BASE points at the AADE **sandbox** — for real fiscal documents it must become
+`https://mydatapi.aade.gr` with production credentials.
+Added self-healing: `GET /api/invoices` retries any `mydata_status=error` document (max 6 attempts,
+`mydata_attempts` column) and re-emails it once it gets a ΜΑΡΚ — no admin action needed.
+
+**Cross-device portfolio: the fix is correct but was never deployed.** The user's 3 tickets ARE in the
+cloud (`user_portfolios`, saved 2026-10-24 12:11, incl. matchId/home/away/pick), so the server side is
+fine. The live bundle `https://www.lion-stats.com/assets/index-DI_6fMCf.js` contains NONE of the
+2026-10-22 sync code (`slip_updated_at`, `admin-diagnostics-card` -> 0 matches), and the production
+backend returns 404 for `/api/billing/admin/price-check` and `/api/invoices/admin/email-test` while
+`/auth/me` has no `is_admin`. **Both Render and Vercel are running pre-fix code — everything from
+2026-10-22 onwards (Pro status, Annual checkout, portfolio sync, myDATA path, email) only takes effect
+after Save to Github + redeploy.**
