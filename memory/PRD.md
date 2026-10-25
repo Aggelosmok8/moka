@@ -1288,3 +1288,23 @@ Still outstanding, both OUTSIDE the code: `MYDATA_BASE` is the AADE sandbox (rea
 `https://mydatapi.aade.gr` + production credentials), and the Resend domain is still unverified, so the
 customer email can only go out after `lion-stats.com` (or `mail.lion-stats.com`) is verified. The PDF is
 downloadable from Account → Invoices meanwhile.
+
+## 2026-10-25 (c) ΜΑΡΚ received — email is the only thing left
+Invoice 20261024-0001 now has **mark=400001974031505, mydata_status=sent** (the retry ran on production),
+so the myDATA path fix works end to end. Remaining failure is delivery only:
+`email_error = ResendError: The lion-stats.com domain is not verified` (and with the preview sender,
+"You can only send testing emails to your own email address"). Resend blocks it, not our code.
+IMPORTANT: verify whether that ΜΑΡΚ came from the AADE **sandbox** (`MYDATA_BASE=mydataapidev...`) —
+if so the document is NOT officially filed and must be re-sent against `https://mydatapi.aade.gr`.
+`GET /api/invoices/admin/failed` now also lists and RETRIES documents whose email never went out, so one
+admin click delivers every pending receipt once the Resend domain is verified.
+
+## 2026-10-25 (d) Invoice download button did nothing — fixed
+Reproduced with a throw-away invoice on a test account: `GET /api/invoices/{id}/pdf` returned **HTTP 500**
+`UnicodeEncodeError: 'latin-1' codec can't encode character '\u0391'` — HTTP headers are latin-1 and the
+Content-Disposition carried the **Greek series letter Α**, so every single download 500'd.
+Fixed with an ASCII filename plus RFC 5987 `filename*=UTF-8''…` (the browser still saves it as
+`Α-20261025-0001.pdf`). Two client-side faults fixed alongside: the blob was opened with
+`window.open()` after an await (treated as a blocked popup — nothing happened, no error either), now a
+real `<a download>` click; and the catch block swallowed every failure, now a spinner + visible
+"Could not download the document" message. Verified end to end in a browser: the PDF (351 KB) downloads.

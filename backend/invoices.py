@@ -23,7 +23,7 @@ import os
 import uuid
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, quote
 
 import httpx
 
@@ -583,8 +583,13 @@ def make_invoices_router(db, current_user):
         if row.get("user_id") != user.user_id:
             raise HTTPException(status_code=403, detail="Not your invoice")
         inv = _hydrate(row)
+        # HTTP headers are latin-1: the Greek series letter (Α) raised
+        # UnicodeEncodeError -> HTTP 500, which is why the download button did nothing.
+        pretty = f'{inv["series"]}-{inv["number"]}.pdf'
+        ascii_name = f'invoice-{inv["number"]}.pdf'.encode("ascii", "ignore").decode() or "invoice.pdf"
         return Response(render_pdf(inv), media_type="application/pdf", headers={
-            "Content-Disposition": f'inline; filename="{inv["series"]}-{inv["number"]}.pdf"'})
+            "Content-Disposition":
+                f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(pretty)}"})
 
     @router.get("/admin/failed")
     async def failed_invoices(user=Depends(current_user)):
@@ -593,7 +598,7 @@ def make_invoices_router(db, current_user):
         if not is_admin(user):
             raise HTTPException(status_code=403, detail="Admins only")
         rows = [_hydrate(r) async for r in await db.invoices.find({}, {"_id": 0})]
-        bad = [r for r in rows if r.get("mydata_status") != "sent"]
+        bad = [r for r in rows if r.get("mydata_status") != "sent" or not r.get("emailed")]
         bad.sort(key=lambda r: r.get("issued_at") or "", reverse=True)
         # Opening this list also RETRIES each document, so one click gets the ΜΑΡΚ
         # and re-sends the corrected email to the customer.
@@ -603,6 +608,13 @@ def make_invoices_router(db, current_user):
                     res = await _retry_mydata(r)
                     r.update({"mark": res.get("mark", ""), "mydata_status": res.get("status", "error"),
                               "mydata_error": res.get("error", "")})
+        for r in bad:
+            # e.g. the mail provider rejected the sender domain at the time — now
+            # that it's fixed, one click delivers the receipt.
+            if not r.get("emailed") and (r.get("counterparty") or {}).get("email"):
+                await _deliver(db, r)
+                fresh = await db.invoices.find_one({"id": r["id"]}, {"_id": 0}) or {}
+                r.update({"emailed": fresh.get("emailed"), "email_error": fresh.get("email_error")})
         return {"base": _mydata_url(""),
                 "configured": mydata_configured(),
                 "invoices": [{k: r.get(k) for k in

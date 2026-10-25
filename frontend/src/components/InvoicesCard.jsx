@@ -6,19 +6,32 @@ const TYPE = { "11.2": "Receipt", "2.1": "Invoice", "5.1": "Credit note" };
 
 export const InvoicesCard = () => {
   const [rows, setRows] = useState(null);
+  const [busy, setBusy] = useState("");
+  const [err, setErr] = useState("");
 
   useEffect(() => {
     authApi.get("/invoices").then((r) => setRows(r.data.invoices || [])).catch(() => setRows([]));
   }, []);
 
   const open = async (inv) => {
+    setBusy(inv.id);
+    setErr("");
     try {
       const r = await authApi.get(`/invoices/${inv.id}/pdf`, { responseType: "blob" });
-      const url = URL.createObjectURL(r.data);
-      window.open(url, "_blank");
+      const url = URL.createObjectURL(new Blob([r.data], { type: "application/pdf" }));
+      // A real <a download> click: window.open() after an await is treated as an
+      // unrequested popup and silently blocked (which is why nothing happened).
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${inv.series}-${inv.number}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 60000);
     } catch {
-      /* ignore — the list stays usable */
+      setErr("Could not download the document. Please try again.");
+    } finally {
+      setBusy("");
     }
   };
 
@@ -46,12 +59,15 @@ export const InvoicesCard = () => {
               </span>
               <span className="flex items-center gap-2 shrink-0">
                 <span className="font-mono-num text-sm text-white">€{Number(inv.total).toFixed(2)}</span>
-                <Download className="w-4 h-4 opacity-70" />
+                {busy === inv.id
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : <Download className="w-4 h-4 opacity-70" />}
               </span>
             </button>
           ))}
         </div>
       )}
+      {err && <p className="mt-3 text-xs text-red-400" data-testid="invoice-download-error">{err}</p>}
     </div>
   );
 };
