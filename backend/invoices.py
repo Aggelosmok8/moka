@@ -595,11 +595,19 @@ def make_invoices_router(db, current_user):
         rows = [_hydrate(r) async for r in await db.invoices.find({}, {"_id": 0})]
         bad = [r for r in rows if r.get("mydata_status") != "sent"]
         bad.sort(key=lambda r: r.get("issued_at") or "", reverse=True)
+        # Opening this list also RETRIES each document, so one click gets the ΜΑΡΚ
+        # and re-sends the corrected email to the customer.
+        if mydata_configured():
+            for r in bad:
+                if r.get("mydata_status") == "error" and int(r.get("mydata_attempts") or 0) < 6:
+                    res = await _retry_mydata(r)
+                    r.update({"mark": res.get("mark", ""), "mydata_status": res.get("status", "error"),
+                              "mydata_error": res.get("error", "")})
         return {"base": _mydata_url(""),
                 "configured": mydata_configured(),
                 "invoices": [{k: r.get(k) for k in
                               ("id", "number", "series", "doc_type", "issued_at", "total",
-                               "mydata_status", "mydata_error", "emailed", "email_error")} for r in bad]}
+                               "mark", "mydata_status", "mydata_error", "emailed", "email_error")} for r in bad]}
 
     @router.post("/admin/email-test")
     async def email_test(body: dict | None = None, user=Depends(current_user)):

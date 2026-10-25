@@ -7,7 +7,7 @@ import { Stethoscope, Loader2 } from "lucide-react";
 const CHECKS = [
   { id: "prices", label: "Stripe prices", run: () => authApi.get("/billing/admin/price-check") },
   { id: "mydata", label: "myDATA connection", run: () => authApi.get("/invoices/admin/mydata-check") },
-  { id: "failed", label: "Documents not accepted", run: () => authApi.get("/invoices/admin/failed") },
+  { id: "failed", label: "Retry documents / get ΜΑΡΚ", run: () => authApi.get("/invoices/admin/failed") },
   { id: "email", label: "Send test email", run: () => authApi.post("/invoices/admin/email-test", {}) },
 ];
 
