@@ -1277,3 +1277,14 @@ backend returns 404 for `/api/billing/admin/price-check` and `/api/invoices/admi
 `/auth/me` has no `is_admin`. **Both Render and Vercel are running pre-fix code — everything from
 2026-10-22 onwards (Pro status, Annual checkout, portfolio sync, myDATA path, email) only takes effect
 after Save to Github + redeploy.**
+
+## 2026-10-25 (b) Deploy landed; one click left to get the ΜΑΡΚ
+Production is now on the new code (`/api/billing/admin/price-check` returns 401 not 404, new Vercel
+bundle `index-DNijwlbr.js`). Invoice 20261024-0001 is still `error / mark=''` with `mydata_attempts=0`
+because the self-healing retry only fires when THAT customer opens their own invoice list.
+Fix: `GET /api/invoices/admin/failed` now retries every failed document too (same max-6 rule) and
+re-emails it on success — exposed as Account → Diagnostics → "Retry documents / get ΜΑΡΚ".
+Still outstanding, both OUTSIDE the code: `MYDATA_BASE` is the AADE sandbox (real ΜΑΡΚ needs
+`https://mydatapi.aade.gr` + production credentials), and the Resend domain is still unverified, so the
+customer email can only go out after `lion-stats.com` (or `mail.lion-stats.com`) is verified. The PDF is
+downloadable from Account → Invoices meanwhile.
