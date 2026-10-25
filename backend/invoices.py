@@ -23,7 +23,7 @@ import os
 import uuid
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, quote
 
 import httpx
 
@@ -583,8 +583,13 @@ def make_invoices_router(db, current_user):
         if row.get("user_id") != user.user_id:
             raise HTTPException(status_code=403, detail="Not your invoice")
         inv = _hydrate(row)
+        # HTTP headers are latin-1: the Greek series letter (Α) raised
+        # UnicodeEncodeError -> HTTP 500, which is why the download button did nothing.
+        pretty = f'{inv["series"]}-{inv["number"]}.pdf'
+        ascii_name = f'invoice-{inv["number"]}.pdf'.encode("ascii", "ignore").decode() or "invoice.pdf"
         return Response(render_pdf(inv), media_type="application/pdf", headers={
-            "Content-Disposition": f'inline; filename="{inv["series"]}-{inv["number"]}.pdf"'})
+            "Content-Disposition":
+                f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(pretty)}"})
 
     @router.get("/admin/failed")
     async def failed_invoices(user=Depends(current_user)):
