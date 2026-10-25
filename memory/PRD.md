@@ -1254,3 +1254,26 @@ Code hardening shipped with it:
   runs Stripe price-check / myDATA check / failed documents / test email straight from the browser —
   this is how production env problems get diagnosed without Render log access.
 Verified on preview: diagnostics panel renders and returns the real Resend error; invoice tests 8 passed.
+
+## 2026-10-25 Why the ΜΑΡΚ is missing + proof that production runs pre-fix code
+Investigated invoice `20261024-0001` (user_4830068c1c74 / thaniakouzi@gmail.com, €10.99, doc 11.2):
+`mydata_status=error`, `mydata_error=HTTP 404 Resource not found`, `mark=''`. Same 404 as 2026-10-24 →
+it IS the sandbox path bug, already fixed in code. Proof of the path rule (probed live, no credentials):
+  mydataapidev.aade.gr/SendInvoices        -> 401 (endpoint exists)
+  mydataapidev.aade.gr/myDATA/SendInvoices -> 404  <-- what production was calling
+  mydatapi.aade.gr/myDATA/SendInvoices     -> 401 (endpoint exists)
+  mydatapi.aade.gr/SendInvoices            -> 404
+The 404 also proves MYDATA_USER_ID/SUBSCRIPTION_KEY ARE set in production (the config guard was passed)
+and that MYDATA_BASE points at the AADE **sandbox** — for real fiscal documents it must become
+`https://mydatapi.aade.gr` with production credentials.
+Added self-healing: `GET /api/invoices` retries any `mydata_status=error` document (max 6 attempts,
+`mydata_attempts` column) and re-emails it once it gets a ΜΑΡΚ — no admin action needed.
+
+**Cross-device portfolio: the fix is correct but was never deployed.** The user's 3 tickets ARE in the
+cloud (`user_portfolios`, saved 2026-10-24 12:11, incl. matchId/home/away/pick), so the server side is
+fine. The live bundle `https://www.lion-stats.com/assets/index-DI_6fMCf.js` contains NONE of the
+2026-10-22 sync code (`slip_updated_at`, `admin-diagnostics-card` -> 0 matches), and the production
+backend returns 404 for `/api/billing/admin/price-check` and `/api/invoices/admin/email-test` while
+`/auth/me` has no `is_admin`. **Both Render and Vercel are running pre-fix code — everything from
+2026-10-22 onwards (Pro status, Annual checkout, portfolio sync, myDATA path, email) only takes effect
+after Save to Github + redeploy.**

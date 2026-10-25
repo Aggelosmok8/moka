@@ -538,10 +538,34 @@ def make_invoices_router(db, current_user):
                     out[k] = {}
         return out
 
+    async def _retry_mydata(row: dict) -> dict:
+        """One extra attempt for a document that failed transmission. The number is
+        already allocated, so this never creates a gap or a duplicate."""
+        inv = _hydrate(row)
+        attempts = int(row.get("mydata_attempts") or 0)
+        res = await send_to_mydata(inv)
+        await db.invoices.update_one({"id": inv["id"]}, {"$set": {
+            "mark": res.get("mark", ""), "uid": res.get("uid", ""), "qr": res.get("qr", ""),
+            "mydata_status": res.get("status", "pending"), "mydata_error": res.get("error", ""),
+            "mydata_attempts": attempts + 1}})
+        if res.get("status") == "sent":
+            inv.update(res)
+            inv["mydata_status"] = "sent"
+            await _deliver(db, inv)   # the first email had no ΜΑΡΚ on it
+        return res
+
     @router.get("")
     async def my_invoices(user=Depends(current_user)):
         rows = [_hydrate(r) async for r in await db.invoices.find({"user_id": user.user_id}, {"_id": 0})]
         rows.sort(key=lambda r: r.get("issued_at") or "", reverse=True)
+        # Self-healing: a document that failed to reach myDATA (sandbox path, AADE
+        # outage, bad credentials at the time) is retried when its owner looks at
+        # the list, so it gets its ΜΑΡΚ without anyone touching the admin tools.
+        for r in rows:
+            if (r.get("mydata_status") == "error" and mydata_configured()
+                    and int(r.get("mydata_attempts") or 0) < 6):
+                res = await _retry_mydata(r)
+                r.update({"mark": res.get("mark", ""), "mydata_status": res.get("status", "error")})
         def _out(r):
             o = {k: r.get(k) for k in ("id", "number", "series", "doc_type", "issued_at",
                                        "currency", "mark", "mydata_status")}
