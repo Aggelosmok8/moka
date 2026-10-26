@@ -5,19 +5,23 @@ import { authApi, useAuth } from "../contexts/AuthContext";
 import { Sparkles, Check, Lock, RefreshCw, Crown, LogIn } from "lucide-react";
 
 const PRO_FEATURES = [
-  "All leagues unlocked (incl. Pro-only competitions)",
-  "Value Bets — positive expected-value odds, ranked",
-  "Full bookmaker comparison (vs. top 3 for free)",
-  "Unlimited AI tactical analyses + regenerate",
-  "Extended stats (xG, xGA, BTTS, corners…)",
-  "Real-time updates + goal alerts (no delay)",
+  "Every league AND the big competitions — Premier League, Champions / Europa / Conference League",
+  "Full match analysis + every Specific Bets category (goals, correct score, cards, corners, fouls, offsides, saves, shots, players…)",
+  "Best odds proposal — every bookmaker price per outcome, best one marked",
+  "LION Tickets — ready-built tickets at the best available odds",
+  "Full tickets history, stats and performance graph (no 10-ticket cap)",
+  "Full player statistics, team statistics and unlimited team compare",
+  "News, watchlist and real-time updates",
 ];
 
 const FREE_FEATURES = [
-  "Top football leagues + NBA / EuroLeague",
-  "1 AI analysis per match / day",
-  "Top 3 bookmaker odds compare",
-  "Core team stats + charts",
+  "All leagues except the big competitions (Premier League, Champions / Europa / Conference League — fixture and date only)",
+  "Full match analysis for every available match",
+  "One Specific Bets category: Both Teams To Score",
+  "All player statistics, team statistics and team compare",
+  "Up to 10 tickets kept in history, stats and graph",
+  "Watchlist — save matches for later",
+  "Football news",
 ];
 
 export default function PricingPage() {
@@ -154,9 +158,9 @@ export default function PricingPage() {
               <span className="font-display font-black text-5xl text-white">€{once ? once.amount.toFixed(2) : "10.99"}</span>
               <span className="text-zinc-500">/ once</span>
             </div>
-            <div className="text-xs text-zinc-500 mb-5 mt-1">Pay once, 30 days of Pro. <b className="text-zinc-300">No auto-renewal.</b></div>
+            <div className="text-xs text-zinc-500 mb-5 mt-1">Identical access to every Pro plan. <b className="text-zinc-300">No card stored, no auto-renewal.</b></div>
             <ul className="space-y-2.5 mb-6">
-              {["Everything in Pro for 30 days", "No card stored, no renewal", "Perfect for trying a big weekend", "Buy again whenever you want"].map((f) => (
+              {["Everything in Pro — identical access to the subscriptions", "Pay once, 30 days, no card stored", "Nothing renews: it simply ends", "Buy again whenever you want"].map((f) => (
                 <li key={f} className="flex items-start gap-2 text-sm text-white">
                   <Check className="w-4 h-4 text-[#FFD60A] mt-0.5 shrink-0" /> {f}
                 </li>
@@ -172,7 +176,7 @@ export default function PricingPage() {
               <span className="font-display font-black text-5xl text-white">€{monthly ? monthly.amount.toFixed(2) : "10.99"}</span>
               <span className="text-zinc-500">/ month</span>
             </div>
-            <div className="text-xs text-zinc-500 mb-5 mt-1">Renews automatically. Cancel any time.</div>
+            <div className="text-xs text-zinc-500 mb-5 mt-1">Identical access to every Pro plan. <b className="text-zinc-300">Renews automatically</b> from your saved card — cancel any time.</div>
             <ul className="space-y-2.5 mb-6">
               {PRO_FEATURES.map((f) => (
                 <li key={f} className="flex items-start gap-2 text-sm text-white">
@@ -196,9 +200,9 @@ export default function PricingPage() {
               <span className="font-display font-black text-5xl text-white">€{yearly ? yearly.amount.toFixed(2) : "79.99"}</span>
               <span className="text-zinc-500">/ year</span>
             </div>
-            <div className="text-xs text-zinc-500 mb-5 mt-1">≈ €{yearly ? (yearly.amount / 12).toFixed(2) : "6.67"}/month, billed yearly</div>
+            <div className="text-xs text-zinc-500 mb-5 mt-1">≈ €{yearly ? (yearly.amount / 12).toFixed(2) : "6.67"}/month, billed yearly. Identical access, <b className="text-zinc-300">renews automatically</b>.</div>
             <ul className="space-y-2.5 mb-6">
-              {["Everything in Monthly", "2 months effectively free", "Priority data refresh", "Lock in the lowest price"].map((f) => (
+              {PRO_FEATURES.map((f) => (
                 <li key={f} className="flex items-start gap-2 text-sm text-white">
                   <Check className="w-4 h-4 text-[#39FF14] mt-0.5 shrink-0" /> {f}
                 </li>

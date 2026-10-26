@@ -21,7 +21,14 @@ NOTE_SUFFIX = "Not quoted by any Greek-licensed bookmaker yet"
 
 @pytest.fixture(scope="session")
 def api():
-    return requests.Session()
+    s = requests.Session()
+    # Specific Bets / LION Tickets are Pro-gated: run the QA account's trial.
+    import sys as _sys
+    import pathlib as _pl
+    _sys.path.insert(0, str(_pl.Path(__file__).parent))
+    from qa_auth import pro_headers
+    s.headers.update(pro_headers())
+    return s
 
 
 # ---------- value-matches ----------

@@ -1330,3 +1330,35 @@ product is still named "Moka", the receipt would print it. Now `_sub_description
 the billing interval instead ("LION.STATS Pro — Ετήσια/Μηνιαία συνδρομή" + the billing period dates), and
 `_brand()` rewrites any stray "moka" to LION.STATS on every document as a last line of defence.
 Checked: year/month/unknown-interval and legacy "Moka Pro" strings all render as LION.STATS. 8 tests pass.
+
+## 2026-10-26 (b) FREE vs PRO access, spelled out and enforced
+New `backend/entitlements.py` is the single source of truth (no rule duplicated per endpoint).
+
+FREE account gets:
+- Every league EXCEPT Premier League + Champions/Europa/Conference League (and UEFA Super Cup /
+  Club World Cup): those arrive as a teaser — league, teams, kick-off, upgrade CTA, nothing else.
+  Enforced server-side in `/api/value-matches` (`lock_entry`), rendered by `ProLeagueTeaser`.
+- Full match analysis on every available match, EXCEPT the "Best odds · all outcomes" strip
+  (replaced by an upgrade card, `data-testid="odds-locked"`).
+- Specific Bets: Both Teams To Score only (`limit_specific_bets`, `limited: true`) + an upgrade card
+  listing what Pro opens.
+- Match cards show NO 1X2/odds boxes — straight to "See Match Analysis" / "See Specific Bets".
+  Add to slip still works, but the dialog shows no price or bookmaker: the user types the odds they
+  actually played (confirm button disabled until then). Same options as Pro (1X2 + double chance).
+- All player statistics, team statistics, team compare (existing 1 AI analysis/fixture/day cap kept),
+  news and the watchlist.
+- Portfolio: the 10 newest tickets/bets feed history, stats and the graph (`FREE_LIMIT` 5 -> 10),
+  then an upgrade note. The old "free sees only 3 matches" cap in MatchesPage is GONE.
+LION Tickets are Pro: gated in `/api/lion-tickets` (returns `locked: true`) and on the page.
+
+PRO (all three plans get IDENTICAL access — only renewal differs, as the user required):
+every league incl. the big competitions, full analysis + every Specific Bets category, best-odds
+proposal, LION Tickets, full tickets history/stats/graph, full player + team statistics, unlimited
+compare, news, watchlist. Pricing page now spells this out per plan (one-off = no card stored,
+monthly/annual = renews automatically).
+
+Verified: free board returns 9 locked Premier League teasers (Pro: 0); free specific-bets returns only
+`btts` (Pro: 14 panels + players); free LION Tickets locked (Pro: 37 tickets); browser as free account
+shows 132 cards, 9 teasers, zero odds boxes, upgrade cards on specific bets and analysis.
+Test suite: tests that exercise Pro-gated endpoints now use `qa_auth.pro_headers()`. Remaining failures
+are the pre-existing odds-coverage ones (stale fixtures + Elabet at its cycle ceiling), not gating.

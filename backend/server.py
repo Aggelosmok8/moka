@@ -492,9 +492,10 @@ async def match_odds(match_id: str, user=Depends(current_user_optional)):
 
 
 @api_router.get("/specific-bets/{match_id}")
-async def specific_bets(match_id: str):
+async def specific_bets(match_id: str, user=Depends(current_user_optional)):
     """Specific Bets payload — separate deterministic engine, cached 30 min."""
     import apifootball as _af
+    import entitlements as ent
     import rapid_books as _rb
     import specific_bets as sb
 
@@ -503,7 +504,7 @@ async def specific_bets(match_id: str):
     ck = f"sb_out_{match_id}_{await _rb.odds_version()}"
     hit = _af._c_get(ck)
     if hit is not None:
-        return hit
+        return hit if ent.is_pro(user) else ent.limit_specific_bets(hit)
     m = None
     try:
         m = await fsl_get_match_detail(match_id)
@@ -582,7 +583,8 @@ async def specific_bets(match_id: str):
     }
     # A transient upstream failure must not be cached for half an hour.
     _af._c_set(ck, out, ttl=1800 if out.get("available") else 60)
-    return out
+    # Cache the FULL payload, then hand a free account only its one category.
+    return out if ent.is_pro(user) else ent.limit_specific_bets(out)
 
 
 @api_router.post("/admin/refresh")

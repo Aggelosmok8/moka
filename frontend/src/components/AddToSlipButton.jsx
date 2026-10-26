@@ -4,9 +4,13 @@ import { Layers, Check } from "lucide-react";
 import { toast } from "sonner";
 import { usePortfolio } from "../contexts/PortfolioContext";
 import { isDoubleChance, pickChoices, bestOddsByOutcome } from "../lib/picks";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function AddToSlipButton({ entry, className = "", size = "sm" }) {
   const { addToSlip, removeFromSlip, slipHas, playedMatch } = usePortfolio();
+  // A free account must type the price it actually played: showing the best
+  // available odds here would hand over the Pro edge for free.
+  const isPro = !!useAuth().user?.is_pro;
   const navigate = useNavigate();
   const [choosing, setChoosing] = useState(false);
   const [sel, setSel] = useState(null);
@@ -26,8 +30,11 @@ export default function AddToSlipButton({ entry, className = "", size = "sm" }) 
   const choices = dc
     ? pickChoices(match, value)
     : [{ pick: value.pick, pickName: value.pickName, label: value.pickName, code: "", outcome: value.pick }];
-  const priceFor = (c) => bestOddsByOutcome(match)[c.outcome]?.odds || (c.outcome === value.pick ? value.bestOdds : null);
-  const bookFor = (c) => bestOddsByOutcome(match)[c.outcome]?.bookmaker || value.bookmaker;
+  const priceFor = (c) => (isPro
+    ? bestOddsByOutcome(match)[c.outcome]?.odds || (c.outcome === value.pick ? value.bestOdds : null)
+    : null);
+  const bookFor = (c) => (isPro
+    ? bestOddsByOutcome(match)[c.outcome]?.bookmaker || value.bookmaker : "");
   const current = sel || choices[0];
   const shown = priceFor(current);
   const finalOdds = Number(oddsInput) > 1 ? Number(oddsInput) : shown;
@@ -37,7 +44,7 @@ export default function AddToSlipButton({ entry, className = "", size = "sm" }) 
     addToSlip({
       matchId: id, home: match.home?.name, away: match.away?.name, league: match.leagueName,
       pick: choice?.pick || value.pick, pickName: choice?.pickName || value.pickName,
-      odds: finalOdds || value.bestOdds, bookmaker: bookFor(choice) || value.bookmaker,
+      odds: finalOdds || (isPro ? value.bestOdds : 0), bookmaker: bookFor(choice) || value.bookmaker,
       kickoff: match.commence_time || match.kickoff || null,
     });
     setChoosing(false);
@@ -92,7 +99,9 @@ export default function AddToSlipButton({ entry, className = "", size = "sm" }) 
             data-testid="pick-market-dialog"
           >
             <div className="text-[10px] uppercase tracking-wider text-zinc-500">
-              {value.possibleOutcome ? `LION predicts ${value.possibleOutcome}` : "LION pick"}
+              {isPro
+                ? (value.possibleOutcome ? `LION predicts ${value.possibleOutcome}` : "LION pick")
+                : "Log the bet you placed"}
             </div>
             <div className="font-display font-black uppercase text-white mt-1 mb-3">
               {choices.length > 1 ? "Which one did you play?" : "Did you play this?"}
@@ -113,15 +122,15 @@ export default function AddToSlipButton({ entry, className = "", size = "sm" }) 
             })}
 
             <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mt-3">
-              Odds you played — edit if you got a different price
+              {isPro ? "Odds you played — edit if you got a different price" : "Odds you played"}
             </label>
             <input type="number" min="1" step="0.01" value={oddsInput} placeholder={shown ? Number(shown).toFixed(2) : "1.00"}
               onChange={(e) => setOddsInput(e.target.value)} data-testid="slip-odds-edit"
               className="mt-1 w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white font-mono-num focus:outline-none focus:border-[#39FF14]" />
 
-            <button onClick={add} data-testid="slip-confirm-add"
-              className="mt-3 w-full py-2.5 rounded-lg bg-[#39FF14] text-black font-black uppercase tracking-wider text-sm hover:brightness-110 transition">
-              Add to slip @ {Number(finalOdds || 0).toFixed(2)}
+            <button onClick={add} disabled={!finalOdds} data-testid="slip-confirm-add"
+              className="mt-3 w-full py-2.5 rounded-lg bg-[#39FF14] text-black font-black uppercase tracking-wider text-sm hover:brightness-110 transition disabled:opacity-40 disabled:cursor-not-allowed">
+              {finalOdds ? `Add to slip @ ${Number(finalOdds).toFixed(2)}` : "Enter the odds you played"}
             </button>
             <button onClick={() => setChoosing(false)} data-testid="slip-cancel" className="w-full text-xs text-zinc-500 hover:text-white mt-2">Cancel</button>
           </div>

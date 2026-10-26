@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from ..data.mock_matches import MATCH_INDEX, MOCK_MATCHES
 from ..services.value_engine import (
@@ -78,11 +78,22 @@ async def match_results(ids: str = "", detail: str = ""):
 
 
 @router.get("/lion-tickets")
-async def lion_tickets():
+async def lion_tickets(request: Request):
     """Ready-made same-match combos (LION Tickets). Pure computation over the
-    cached value feed + cached bookmaker snapshots — no new upstream calls."""
+    cached value feed + cached bookmaker snapshots — no new upstream calls.
+
+    Pro only: every pick carries its best bookmaker price."""
+    import entitlements as ent
     import lion_tickets
     import rapid_books
+    user = None
+    try:
+        from server import current_user_optional
+        user = await current_user_optional(request)
+    except Exception:
+        user = None
+    if not ent.is_pro(user):
+        return {"count": 0, "tickets": [], "pricesAt": 0, "locked": True}
     tickets = await lion_tickets.build_tickets()
     return {"count": len(tickets), "tickets": tickets,
             "pricesAt": await rapid_books.snapshot_at()}

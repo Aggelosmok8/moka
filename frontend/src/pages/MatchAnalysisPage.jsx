@@ -10,6 +10,8 @@ import { fetchMatchById, fetchMatchAi } from "../lib/catalogApi";
 import { fetchLeagueDetail, fetchTeamRecent } from "../lib/api";
 import { adaptValue, whyMokaReasons } from "../lib/valueEngine";
 import { useLang } from "../contexts/LanguageContext";
+import { useAuth } from "../contexts/AuthContext";
+import { UpgradeButton } from "../components/Gating";
 
 const GREEN = "#39FF14";
 const YELLOW = "#FFD60A";
@@ -225,6 +227,7 @@ function HistoryTable({ name, info, recent, testId }) {
 
 export default function MatchAnalysisPage() {
   const { id } = useParams();
+  const isPro = !!useAuth().user?.is_pro;
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -467,8 +470,19 @@ export default function MatchAnalysisPage() {
         </Card>
       </div>
 
-      {/* BEST ODDS STRIP */}
-      {!isLive && (
+      {/* BEST ODDS STRIP — Pro only: the best price is the Pro edge */}
+      {!isLive && !isPro && (
+        <Card testId="odds-locked" className="mb-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h3 className="font-display font-black uppercase tracking-tight text-sm text-white">Best odds · all outcomes</h3>
+              <p className="text-xs text-zinc-400 mt-1">See every bookmaker price per outcome and LION's best-value pick.</p>
+            </div>
+            <UpgradeButton size="sm" testId="odds-upgrade-cta" />
+          </div>
+        </Card>
+      )}
+      {!isLive && isPro && (
         <Card testId="available-odds" className="mb-4">
           <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
             <h3 className="font-display font-black uppercase tracking-tight text-sm text-white">Best odds · all outcomes</h3>

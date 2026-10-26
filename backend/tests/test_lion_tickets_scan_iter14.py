@@ -13,7 +13,7 @@ import pytest
 import requests
 
 BASE_URL = os.environ.get("VITE_BACKEND_URL", "https://teams-hub-1.preview.emergentagent.com").rstrip("/")
-from qa_auth import headers as qa_headers  # noqa: E402
+from qa_auth import pro_headers as qa_headers  # noqa: E402
 
 MIN_PROB = 58
 MIN_ODDS = 1.12

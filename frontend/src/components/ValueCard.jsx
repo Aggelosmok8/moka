@@ -11,6 +11,7 @@ import InfoTip from "./InfoTip";
 import { useLiveScores } from "../contexts/LiveScoresContext";
 import { useLang } from "../contexts/LanguageContext";
 import { usePortfolio } from "../contexts/PortfolioContext";
+import { useAuth } from "../contexts/AuthContext";
 
 function fmtKickoff(iso) {
   if (!iso) return null;
@@ -169,20 +170,45 @@ export function LockedValueCard() {
   );
 }
 
+export function ProLeagueTeaser({ match }) {
+  return (
+    <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-4" data-testid={`pro-league-card-${match.id}`}>
+      <span className="text-[10px] font-bold uppercase tracking-wider text-white truncate block">{match.leagueName}</span>
+      <div className="font-display font-bold text-white text-lg leading-tight mt-1.5">
+        {match.home?.name} <span className="text-zinc-600 text-sm">vs</span> {match.away?.name}
+      </div>
+      <div className="text-xs text-zinc-400 mt-1" data-testid={`pro-league-when-${match.id}`}>
+        {[match.date, match.time].filter(Boolean).join(" · ") || match.kickoff || ""}
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-white/5 pt-3">
+        <span className="inline-flex items-center gap-1.5 text-xs text-zinc-300 font-semibold">
+          <Lock className="w-3.5 h-3.5" /> Upgrade to Pro for this competition
+        </span>
+        <UpgradeButton size="sm" label="Upgrade" testId={`pro-league-upgrade-${match.id}`} />
+      </div>
+    </div>
+  );
+}
+
 export default function ValueCard({ entry }) {
   const { match, value } = entry;
+  const { user } = useAuth();
+  const isPro = !!user?.is_pro;
   const live = useLiveScores().get(match.id);
   const { lang } = useLang();
   const [adv, setAdv] = useState(false);
   const navigate = useNavigate();
   const inSlip = usePortfolio().slipHas(match.id, match.home?.name, match.away?.name);
-  const probs = value.probabilities || {};
-  const isLive = value.liveOnly || match.status === "live";
+  const probs = (value || {}).probabilities || {};
+  const isLive = (value || {}).liveOnly || match.status === "live";
   const toggle = (e) => {
     e.preventDefault();
     e.stopPropagation();
     setAdv((v) => !v);
   };
+
+  // Pro-only competition: the API sends the teaser only (teams + kick-off).
+  if (entry.locked || !value) return <ProLeagueTeaser match={match} />;
 
   return (
     <Link
@@ -238,7 +264,9 @@ export default function ValueCard({ entry }) {
         </div>
       ) : (
         <>
-          <OddsBoxes match={match} value={value} />
+          {/* A free account gets no price hints: the best odds are the Pro edge.
+              It goes straight to the analysis / specific bets shortcuts. */}
+          {isPro && <OddsBoxes match={match} value={value} />}
           <p className="text-xs text-zinc-400 mt-2 leading-snug">{shortExplanation(match, value)}</p>
         </>
       )}
