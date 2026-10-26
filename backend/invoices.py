@@ -25,6 +25,8 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from urllib.parse import urlsplit, quote
 
+import re
+
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -210,6 +212,30 @@ def _doc_type(counterparty: dict) -> str:
         else _env("MYDATA_TYPE_RETAIL", "11.2")
 
 
+def _sub_description(line: dict) -> str:
+    """Never trust Stripe's product name for the printed line: the dashboard product
+    may still be called "Moka". Derive it from the billing interval instead."""
+    interval = (((line.get("price") or {}).get("recurring") or {}).get("interval")
+                or (line.get("plan") or {}).get("interval") or "")
+    if interval == "year":
+        desc = "LION.STATS Pro — Ετήσια συνδρομή"
+    elif interval == "month":
+        desc = "LION.STATS Pro — Μηνιαία συνδρομή"
+    else:
+        desc = _brand(line.get("description") or "") or "LION.STATS Pro — συνδρομή"
+    period = line.get("period") or {}
+    if period.get("start") and period.get("end"):
+        def fmt(t):
+            return datetime.fromtimestamp(t, timezone.utc).strftime("%d/%m/%Y")
+        desc = f"{desc} ({fmt(period['start'])} - {fmt(period['end'])})"
+    return desc
+
+
+def _brand(text: str) -> str:
+    """Last line of defence so the old brand can never reach a printed document."""
+    return re.sub(r"(?i)\bmoka\b", "LION.STATS", text or "")
+
+
 async def _create(db, *, user_id, total, description, stripe_ref, counterparty,
                   payment, doc_type=None, currency="EUR") -> dict:
     series = _env("INVOICE_SERIES", "A")
@@ -227,7 +253,7 @@ async def _create(db, *, user_id, total, description, stripe_ref, counterparty,
         "currency": (currency or "EUR").upper(),
         "net": net, "vat": vat, "total": total, "vat_rate": _vat_rate(),
         "counterparty": counterparty or {},
-        "lines": [{"description": description, "qty": 1, "unit": net, "total": net}],
+        "lines": [{"description": _brand(description), "qty": 1, "unit": net, "total": net}],
         "payment": payment or {},
         "stripe_ref": stripe_ref or "",
         "mark": "", "uid": "", "qr": "",
@@ -286,7 +312,7 @@ async def issue_invoice_for_session(db, session, tx) -> dict | None:
     meta = s.get("metadata") or {}
     inv = await _create(
         db, user_id=meta.get("user_id") or (tx or {}).get("user_id"),
-        total=total, description="Moka Pro — 30-day access",
+        total=total, description="LION.STATS Pro — 30ήμερη πρόσβαση",
         stripe_ref=ref, counterparty=_counterparty_from(s),
         payment={"method": "Card", "ref": s.get("payment_intent") or ""},
         currency=(s.get("currency") or "eur"))
@@ -313,11 +339,7 @@ async def issue_invoice_for_stripe_invoice(db, invoice: dict) -> dict | None:
     user = await db.users.find_one({"stripe_subscription_id": sub}, {"_id": 0, "user_id": 1}) \
         if sub else None
     line = ((invoice.get("lines") or {}).get("data") or [{}])[0]
-    period = line.get("period") or {}
-    desc = line.get("description") or "Moka Pro subscription"
-    if period.get("start") and period.get("end"):
-        fmt = lambda t: datetime.fromtimestamp(t, timezone.utc).strftime("%d/%m/%Y")  # noqa: E731
-        desc = f"{desc} ({fmt(period['start'])} - {fmt(period['end'])})"
+    desc = _sub_description(line)
     inv = await _create(
         db, user_id=(user or {}).get("user_id"), total=total, description=desc,
         stripe_ref=ref, counterparty=_counterparty_from(invoice),
@@ -410,21 +432,30 @@ def render_pdf(inv: dict) -> bytes:
         c.line(x1, y, x2, y)
 
     y = H - 22 * mm
-    for logo in ("/app/frontend/public/lion-crest.png", "/app/frontend/public/lion-logo.png"):
-        if os.path.exists(logo):
-            try:
-                c.drawImage(logo, 20 * mm, y - 6 * mm, width=18 * mm, height=18 * mm,
-                            mask="auto", preserveAspectRatio=True)
-                break
-            except Exception:
-                pass
+    # The crest lives inside the backend package: the frontend folder does not
+    # exist on the API host, which is why no logo was printed at all.
+    try:
+        from reportlab.lib.utils import ImageReader
+        from PIL import Image
+        src = Image.open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                      "assets", "lion-crest.png")).convert("RGBA")
+        alpha = src.getchannel("A")
+        bw = src.convert("RGB").convert("L").convert("RGB")   # photocopy look
+        bw.putalpha(alpha)
+        c.drawImage(ImageReader(bw), 20 * mm, y - 6 * mm, width=18 * mm, height=18 * mm,
+                    mask="auto", preserveAspectRatio=True)
+    except Exception:
+        pass
     c.setFillColorRGB(0, 0, 0)
     c.setFont(_FONT_B, 20)
     c.drawString(42 * mm, y + 5 * mm, "LION.STATS")
-    c.setFont(_FONT, 8.5)
-    c.drawString(42 * mm, y, f"{i['name']} {i['legal_form']}".strip())
-    c.drawString(42 * mm, y - 4 * mm, f"{i['address']}, {i['postal']} {i['city']}")
-    c.drawString(42 * mm, y - 8 * mm, f"ΑΦΜ: {i['vat']}  ·  ΔΟΥ: {i['tax_office']}"
+    c.setFillColorRGB(0.45, 0.45, 0.45)
+    c.setFont(_FONT, 7)
+    c.drawString(42 * mm, y, _env("ISSUER_OWNER_NAME", "Άγγελος Μοκάκος"))
+    c.setFillColorRGB(0, 0, 0)
+    c.setFont(_FONT, 9.5)
+    c.drawString(42 * mm, y - 4.5 * mm, f"{i['address']}, {i['postal']} {i['city']}")
+    c.drawString(42 * mm, y - 9 * mm, f"ΑΦΜ: {i['vat']}  ·  ΔΟΥ: {i['tax_office']}"
                                      + (f"  ·  ΓΕΜΗ: {i['gemi']}" if i["gemi"] else ""))
 
     label = {"11.2": "ΑΠΟΔΕΙΞΗ ΠΑΡΟΧΗΣ ΥΠΗΡΕΣΙΩΝ", "2.1": "ΤΙΜΟΛΟΓΙΟ ΠΑΡΟΧΗΣ ΥΠΗΡΕΣΙΩΝ",
@@ -475,15 +506,23 @@ def render_pdf(inv: dict) -> bytes:
 
     y -= 4 * mm
     line(y)
+    exempt = not float(inv.get("vat_rate") or 0)
+    if exempt:
+        c.setFont(_FONT, 7.5)
+        c.setFillColorRGB(0.35, 0.35, 0.35)
+        c.drawString(22 * mm, y - 5 * mm,
+                     "* Χωρίς ΦΠΑ - άρθρο 44 του Κώδικα ΦΠΑ (πρώην άρθρο 39).")
+        c.setFillColorRGB(0, 0, 0)
     y -= 8 * mm
     cur = "€" if inv.get("currency", "EUR") == "EUR" else inv.get("currency")
     rate = float(inv.get("vat_rate") or 0)
-    vat_label = f"ΦΠΑ {rate:.0f}%" if rate else "ΦΠΑ 0% (απαλλαγή)"
+    vat_label = f"ΦΠΑ {rate:.0f}%" if rate else "ΦΠΑ 0% (απαλλαγή) *"
     for lbl, val in (("Καθαρή αξία", inv["net"]), (vat_label, inv["vat"])):
         c.setFont(_FONT, 9)
         c.drawRightString(W - 45 * mm, y, lbl)
         c.drawRightString(W - 22 * mm, y, f"{cur}{val:.2f}")
         y -= 6 * mm
+    y -= 4 * mm   # keep the green box clear of the VAT line
     c.setFont(_FONT_B, 13)
     c.setFillColorRGB(*green)
     c.rect(W - 80 * mm, y - 3 * mm, 60 * mm, 10 * mm, fill=1, stroke=0)

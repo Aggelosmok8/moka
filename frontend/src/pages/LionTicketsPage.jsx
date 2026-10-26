@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { Ticket, ExternalLink, Layers, Loader2, Clock, TrendingUp, Check } from "lucide-react";
+import { Ticket, ExternalLink, Layers, Loader2, Clock, TrendingUp, Check, Lock } from "lucide-react";
 import Header from "../components/Header";
+import { UpgradeButton } from "../components/Gating";
+import { useAuth } from "../contexts/AuthContext";
 import { api } from "../lib/api";
 import { bookmakerUrl } from "../lib/bookmakers";
 import { PriceStamp } from "../components/PriceStamp";
@@ -116,12 +118,14 @@ const TicketCard = ({ t, onAdd, inSlip, played }) => {
 };
 
 export default function LionTicketsPage() {
+  const isPro = !!useAuth().user?.is_pro;
   const [tickets, setTickets] = useState([]);
   const [pricesAt, setPricesAt] = useState(0);
   const [loading, setLoading] = useState(true);
   const { addToSlip, slipHasPick, playedPick } = usePortfolio();
 
   useEffect(() => {
+    if (!isPro) { setLoading(false); return; }
     let active = true;
     api.get("/lion-tickets", { timeout: 120000 })
       .then((r) => {
@@ -173,7 +177,17 @@ export default function LionTicketsPage() {
           </div>
         </div>
 
-        {loading ? (
+        {!isPro ? (
+          <div className="rounded-2xl border border-[#39FF14]/30 bg-[#39FF14]/[0.06] p-8 text-center" data-testid="lion-tickets-locked">
+            <Lock className="w-7 h-7 text-[#39FF14] mx-auto mb-3" />
+            <div className="text-white font-bold text-lg">LION Tickets are Pro</div>
+            <p className="text-sm text-zinc-400 mt-1 mb-4 max-w-lg mx-auto">
+              Ready-built tickets at the best available odds per pick — the prices are the Pro edge.
+              Upgrade to open today's tickets.
+            </p>
+            <UpgradeButton testId="lion-tickets-upgrade-cta" />
+          </div>
+        ) : loading ? (
           <div className="flex items-center gap-2 text-zinc-400 text-sm py-20 justify-center">
             <Loader2 className="w-4 h-4 animate-spin" /> Building today's tickets…
           </div>

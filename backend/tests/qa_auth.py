@@ -42,3 +42,13 @@ def token() -> str:
 
 def headers() -> dict:
     return {"Authorization": f"Bearer {token()}"}
+
+
+def pro_headers() -> dict:
+    """Same account, on its 7-day trial — Pro-gated endpoints need real access."""
+    h = headers()
+    try:
+        requests.post(f"{BASE_URL}/api/auth/trial/start", headers=h, timeout=30)
+    except Exception:
+        pass
+    return h

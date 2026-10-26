@@ -567,13 +567,21 @@ export function PortfolioProvider({ children }) {
       const slipTs = (() => { try { return localStorage.getItem(SLIP_TS_KEY); } catch { return null; } })();
       const payload = { bets, tickets, slip, slip_updated_at: slipTs, deleted };
       deletedRef.current = { bets: [], tickets: [] };
-      putPortfolioRemote(payload).catch(() => {
+      const requeue = () => {
         // keep the deletions queued for the next attempt
         deletedRef.current = {
           bets: [...new Set([...deletedRef.current.bets, ...deleted.bets])],
           tickets: [...new Set([...deletedRef.current.tickets, ...deleted.tickets])],
         };
-      });
+      };
+      // One retry: a dropped upload used to vanish silently, leaving the other
+      // device without the ticket.
+      putPortfolioRemote(payload)
+        .catch(() => new Promise((r) => setTimeout(r, 4000)).then(() => putPortfolioRemote(payload)))
+        .catch((err) => {
+          requeue();
+          console.error("portfolio sync failed", err?.response?.status || err);
+        });
     }, 800);
     return () => clearTimeout(t);
   }, [bets, tickets, slip, user]);

@@ -4,7 +4,7 @@ import { Lock, Search, X, CalendarDays } from "lucide-react";
 import Header from "../components/Header";
 import { fetchValueMatches, fetchMatchById } from "../lib/catalogApi";
 import { adaptValueMatches, adaptValue } from "../lib/valueEngine";
-import ValueCard, { LockedValueCard } from "../components/ValueCard";
+import ValueCard from "../components/ValueCard";
 import { UpgradeButton } from "../components/Gating";
 import { useEntitlements } from "../hooks/useEntitlements";
 import { useLiveScores } from "../contexts/LiveScoresContext";
@@ -126,7 +126,9 @@ export default function MatchesPage() {
 
   const list = useMemo(() => {
     if (!cfg.levels) return entries;
-    return entries.filter((e) => cfg.levels.includes(e.value?.valueLevel));
+    // Pro-only competitions arrive as a teaser with no value score — they are
+    // still listed so a free account can see the fixture and its date.
+    return entries.filter((e) => e.locked || cfg.levels.includes(e.value?.valueLevel));
   }, [entries, cfg]);
 
   // Every competition is always selectable (catalog), even if it has no match
@@ -169,8 +171,10 @@ export default function MatchesPage() {
   const liveIds = useMemo(() => new Set(liveFiltered.map((m) => m.id)), [liveFiltered]);
   const upcoming = useMemo(() => filtered.filter((e) => !liveIds.has(e.match.id)), [filtered, liveIds]);
 
-  const visible = isPro ? upcoming : upcoming.slice(0, 3);
-  const lockedCount = isPro ? 0 : Math.max(0, Math.min(3, upcoming.length - visible.length));
+  // Free accounts see every match: the Pro-only competitions are already served
+  // as teasers by the API, so there is nothing left to cap here.
+  const visible = upcoming;
+  const hasTeasers = !isPro && upcoming.some((e) => e.locked);
   const busy = loading || entLoading;
 
   return (
@@ -261,11 +265,12 @@ export default function MatchesPage() {
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="matches-grid">
               {visible.map((e) => <ValueCard key={e.match.id} entry={e} />)}
-              {Array.from({ length: lockedCount }).map((_, i) => <LockedValueCard key={`lock-${i}`} />)}
             </div>
-            {!isPro && upcoming.length > visible.length && (
+            {hasTeasers && (
               <div className="mt-6 flex flex-col items-center gap-2 text-center" data-testid="matches-upgrade">
-                <div className="flex items-center gap-1.5 text-zinc-300 text-sm font-semibold"><Lock className="w-4 h-4" /> Upgrade to Pro to unlock every opportunity</div>
+                <div className="flex items-center gap-1.5 text-zinc-300 text-sm font-semibold">
+                  <Lock className="w-4 h-4" /> Premier League and the European competitions are Pro
+                </div>
                 <UpgradeButton />
               </div>
             )}

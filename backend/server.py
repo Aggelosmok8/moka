@@ -192,6 +192,28 @@ async def league_detail(slug: str):
     }
 
 
+@api_router.get("/admin/backup")
+async def admin_backup(user=Depends(current_user)):
+    """Admin-only full data export (users, portfolios, invoices).
+
+    A downloadable JSON snapshot you can keep off-site, independent of the
+    database provider. Password hashes and reset tokens are NOT exported."""
+    from auth import is_admin
+    if not is_admin(user):
+        raise HTTPException(status_code=403, detail="Admins only")
+    out = {"taken_at": datetime.now(timezone.utc).isoformat(), "collections": {}}
+    for name in ("users", "user_portfolios", "invoices"):
+        rows = [r async for r in await getattr(db, name).find({}, {"_id": 0})]
+        for r in rows:
+            r.pop("password_hash", None)
+            r.pop("reset_token", None)
+        out["collections"][name] = rows
+        out[f"{name}_count"] = len(rows)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M")
+    return JSONResponse(out, headers={
+        "Content-Disposition": f'attachment; filename="lionstats-backup-{stamp}.json"'})
+
+
 @api_router.get("/me/portfolio")
 async def get_portfolio(user=Depends(current_user)):
     doc = await db.user_portfolios.find_one({"user_id": user.user_id})
@@ -492,9 +514,10 @@ async def match_odds(match_id: str, user=Depends(current_user_optional)):
 
 
 @api_router.get("/specific-bets/{match_id}")
-async def specific_bets(match_id: str):
+async def specific_bets(match_id: str, user=Depends(current_user_optional)):
     """Specific Bets payload — separate deterministic engine, cached 30 min."""
     import apifootball as _af
+    import entitlements as ent
     import rapid_books as _rb
     import specific_bets as sb
 
@@ -503,7 +526,7 @@ async def specific_bets(match_id: str):
     ck = f"sb_out_{match_id}_{await _rb.odds_version()}"
     hit = _af._c_get(ck)
     if hit is not None:
-        return hit
+        return hit if ent.is_pro(user) else ent.limit_specific_bets(hit)
     m = None
     try:
         m = await fsl_get_match_detail(match_id)
@@ -582,7 +605,8 @@ async def specific_bets(match_id: str):
     }
     # A transient upstream failure must not be cached for half an hour.
     _af._c_set(ck, out, ttl=1800 if out.get("available") else 60)
-    return out
+    # Cache the FULL payload, then hand a free account only its one category.
+    return out if ent.is_pro(user) else ent.limit_specific_bets(out)
 
 
 @api_router.post("/admin/refresh")
@@ -829,6 +853,11 @@ _SQLI_RE = re.compile(
     r"|\bupdate\s+.+\bset\b|--|/\*|\*/|\bor\s+1\s*=\s*1\b|'\s*or\s*'1'\s*=\s*'1)"
 )
 _MAX_BODY = 256 * 1024  # 256KB — generous for our JSON payloads; blocks oversized
+# The portfolio sync is the one legitimately big body: a heavy user's tickets
+# (80+ with all their legs) are ~300KB, and the 256KB cap was silently rejecting
+# every upload with 413 — which is why their devices stopped syncing.
+_BIG_BODY_PATHS = ("/api/me/portfolio",)
+_MAX_BIG_BODY = 4 * 1024 * 1024
 
 
 def _client_ip(request) -> str:
@@ -860,7 +889,8 @@ async def rate_limit_middleware(request, call_next):
 @app.middleware("http")
 async def sanitize_middleware(request, call_next):
     cl = request.headers.get("content-length")
-    if cl and cl.isdigit() and int(cl) > _MAX_BODY:
+    limit = _MAX_BIG_BODY if request.url.path in _BIG_BODY_PATHS else _MAX_BODY
+    if cl and cl.isdigit() and int(cl) > limit:
         return JSONResponse(status_code=413, content={"detail": "Payload too large"})
     qs = request.url.query or ""
     if qs and _SQLI_RE.search(unquote(qs)):

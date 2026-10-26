@@ -40,6 +40,16 @@ def _norm(n):
 
 @pytest.fixture(scope="module")
 def hdr():
+    # Specific Bets and LION Tickets are Pro-gated: the QA account runs its trial.
+    import sys as _sys
+    import pathlib as _pl
+    _sys.path.insert(0, str(_pl.Path(__file__).parent))
+    from qa_auth import pro_headers
+    return pro_headers()
+
+
+@pytest.fixture(scope="module")
+def _unused_hdr():
     r = requests.post(f"{BASE}/api/auth/login",
                       json={"email": EMAIL, "password": PASS}, timeout=20)
     r.raise_for_status()

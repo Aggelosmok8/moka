@@ -1308,3 +1308,86 @@ Fixed with an ASCII filename plus RFC 5987 `filename*=UTF-8''…` (the browser s
 `window.open()` after an await (treated as a blocked popup — nothing happened, no error either), now a
 real `<a download>` click; and the catch block swallowed every failure, now a spinner + visible
 "Could not download the document" message. Verified end to end in a browser: the PDF (351 KB) downloads.
+
+## 2026-10-26 Receipt layout polish (approved draft)
+- Header: dropped "LION.STATS ΑΤΟΜΙΚΗ"; the owner name "Άγγελος Μοκάκος" prints small/grey (7pt,
+  `ISSUER_OWNER_NAME` overrides it), while address/ΑΦΜ/ΔΟΥ moved up to 9.5pt so they read first.
+- The lion crest now prints top-left in black & white ("photocopy"): it is shipped in
+  `backend/assets/lion-crest.png` because the old path pointed at the frontend folder, which does not
+  exist on the API host — that is why no logo appeared at all.
+- Line description is now "LION.STATS Pro — 30ήμερη πρόσβαση" / "LION.STATS Pro" (was "Moka Pro"),
+  in both `billing.PACKAGES` and the invoice defaults.
+- Green ΤΕΛΙΚΟ ΠΟΣΟ box pushed 4mm lower so it no longer covers the ΦΠΑ line.
+- Added, under the product separator: "* Χωρίς ΦΠΑ - άρθρο 44 του Κώδικα ΦΠΑ (πρώην άρθρο 39)." with a
+  matching asterisk on "ΦΠΑ 0% (απαλλαγή) *" (only when the rate is 0).
+Rendered and visually verified. Street number comes from `ISSUER_ADDRESS` in Render (set it to
+"Στυμφαλίας 0") — no deploy needed for that one. 8 invoice tests pass.
+
+## 2026-10-26 (b) "Moka" can no longer reach a printed receipt
+Real risk found: for SUBSCRIPTIONS (monthly and the €79.99 annual) the printed line used
+`invoice.lines.data[0].description`, i.e. the **product name from the Stripe dashboard** — if that
+product is still named "Moka", the receipt would print it. Now `_sub_description()` derives the text from
+the billing interval instead ("LION.STATS Pro — Ετήσια/Μηνιαία συνδρομή" + the billing period dates), and
+`_brand()` rewrites any stray "moka" to LION.STATS on every document as a last line of defence.
+Checked: year/month/unknown-interval and legacy "Moka Pro" strings all render as LION.STATS. 8 tests pass.
+
+## 2026-10-26 (b) FREE vs PRO access, spelled out and enforced
+New `backend/entitlements.py` is the single source of truth (no rule duplicated per endpoint).
+
+FREE account gets:
+- Every league EXCEPT Premier League + Champions/Europa/Conference League (and UEFA Super Cup /
+  Club World Cup): those arrive as a teaser — league, teams, kick-off, upgrade CTA, nothing else.
+  Enforced server-side in `/api/value-matches` (`lock_entry`), rendered by `ProLeagueTeaser`.
+- Full match analysis on every available match, EXCEPT the "Best odds · all outcomes" strip
+  (replaced by an upgrade card, `data-testid="odds-locked"`).
+- Specific Bets: Both Teams To Score only (`limit_specific_bets`, `limited: true`) + an upgrade card
+  listing what Pro opens.
+- Match cards show NO 1X2/odds boxes — straight to "See Match Analysis" / "See Specific Bets".
+  Add to slip still works, but the dialog shows no price or bookmaker: the user types the odds they
+  actually played (confirm button disabled until then). Same options as Pro (1X2 + double chance).
+- All player statistics, team statistics, team compare (existing 1 AI analysis/fixture/day cap kept),
+  news and the watchlist.
+- Portfolio: the 10 newest tickets/bets feed history, stats and the graph (`FREE_LIMIT` 5 -> 10),
+  then an upgrade note. The old "free sees only 3 matches" cap in MatchesPage is GONE.
+LION Tickets are Pro: gated in `/api/lion-tickets` (returns `locked: true`) and on the page.
+
+PRO (all three plans get IDENTICAL access — only renewal differs, as the user required):
+every league incl. the big competitions, full analysis + every Specific Bets category, best-odds
+proposal, LION Tickets, full tickets history/stats/graph, full player + team statistics, unlimited
+compare, news, watchlist. Pricing page now spells this out per plan (one-off = no card stored,
+monthly/annual = renews automatically).
+
+Verified: free board returns 9 locked Premier League teasers (Pro: 0); free specific-bets returns only
+`btts` (Pro: 14 panels + players); free LION Tickets locked (Pro: 37 tickets); browser as free account
+shows 132 cards, 9 teasers, zero odds boxes, upgrade cards on specific bets and analysis.
+Test suite: tests that exercise Pro-gated endpoints now use `qa_auth.pro_headers()`. Remaining failures
+are the pre-existing odds-coverage ones (stale fixtures + Elabet at its cycle ceiling), not gating.
+
+## 2026-10-26 (c) About us page
+New `/about` (`pages/AboutPage.jsx`) + a 4th hero button on the Home page ("About us", plus a text link
+for signed-out visitors). Bilingual EN/EL with its own corner toggle (defaults to the app language).
+Content: opens with "we are not a bookmaker / no scam, no sure tips"; explains news + team/player stats +
+compare + statistics-based match analysis; the best price per possible outcome across Greek-licensed
+books (placed by the user at that bookmaker); how Specific Bets work; the portfolio as a
+play-under-control tool (add picks with the real odds, create your own tickets, Refresh results, win
+rate / P&L / graph); watchlist; what Free vs Pro can see; a Play Responsibly block (21+, KETHEA phone);
+an explicit "statistical analysis and predictions, nothing guaranteed, odds change" disclaimer; and
+sign-up buttons for the 7 Greek-licensed bookmakers we read prices from (links come from
+`lib/bookmakers.js`, so nothing unlicensed can ever be linked). Verified in both languages.
+
+## 2026-10-26 (d) ROOT CAUSE of the cross-device ticket bug: HTTP 413
+The sync code was correct; the uploads were being REJECTED. `sanitize_middleware` capped every request
+body at 256KB, and a heavy portfolio (the owner's 80 tickets with all their legs) serialises to ~283KB,
+so `PUT /api/me/portfolio` returned **413 "Payload too large"** on every save. Proof: the owner's cloud
+row had not changed since 2026-10-21 while their devices kept playing; replaying their exact payload
+against production returned 413 instantly. Fix: `/api/me/portfolio` now allows up to 4MB
+(`_BIG_BODY_PATHS`), everything else stays at 256KB. Verified: the same 283KB payload now returns 200
+and reads back all 80 tickets. The client also retries a failed upload once and logs the status instead
+of failing silently.
+
+Also in this round:
+- Watchlist self-cleans: an entry whose fixture is finished (status FT/AET/PEN or kick-off older than
+  3.5h) is dropped on load and every 10 minutes — no API calls.
+- New admin data backup: `GET /api/admin/backup` returns a JSON snapshot of users (without password
+  hashes or reset tokens), portfolios and invoices, wired to Account -> Diagnostics ->
+  "Download data backup" (verified: 553KB file, 38 users / 7 portfolios / 1 invoice).

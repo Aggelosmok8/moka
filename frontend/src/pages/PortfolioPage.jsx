@@ -115,7 +115,7 @@ function BetRow({ b, settle, remove }) {
   );
 }
 
-const FREE_LIMIT = 5;
+const FREE_LIMIT = 10;   // free accounts keep their 10 latest
 
 const fmtWhen = (iso) => {
   if (!iso) return "—";
@@ -344,7 +344,11 @@ function TicketsView({ isPro }) {
   // so different card heights can't leave empty holes in the grid.
   const sorted = [...tickets].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
   const active = sorted.filter((t) => computeTicket(t).status === "pending");
-  const older = sorted.filter((t) => computeTicket(t).status !== "pending");
+  const allOlder = sorted.filter((t) => computeTicket(t).status !== "pending");
+  // Free accounts keep their 10 newest tickets — the same ones that feed the
+  // stats and the performance graph.
+  const older = isPro ? allOlder : allOlder.slice(0, FREE_LIMIT);
+  const hiddenTickets = allOlder.length - older.length;
   const COLS = "columns-1 md:columns-2 lg:columns-3 gap-3 [&>*]:mb-3 [&>*]:break-inside-avoid";
 
   return (
@@ -389,6 +393,16 @@ function TicketsView({ isPro }) {
               {showHistory && (
                 <div className={`${COLS} mt-3`} data-testid="tickets-history-grid">
                   {older.map((t) => <TicketCard key={t.id} t={t} settleLeg={settleLeg} removeTicket={removeTicket} />)}
+                </div>
+              )}
+              {hiddenTickets > 0 && (
+                <div className="mt-3 flex flex-wrap items-center justify-center gap-3 bg-[#161b22] border border-[#30363d] rounded-xl p-4 text-center"
+                  data-testid="tickets-free-limit">
+                  <Lock className="w-4 h-4 text-zinc-400" />
+                  <span className="text-sm text-zinc-300">
+                    {hiddenTickets} older {hiddenTickets === 1 ? "ticket" : "tickets"} hidden — <b className="text-white">Pro</b> keeps your full tickets history.
+                  </span>
+                  <UpgradeButton size="sm" testId="tickets-upgrade-cta" />
                 </div>
               )}
             </div>

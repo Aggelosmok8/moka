@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft, Sparkles, ShieldAlert, ChevronDown, Users, Loader2, Flag, Target,
   Hand, AlertTriangle, SquareStack, Clock, Hash, Shuffle, Scale, Repeat, Goal, Move, ExternalLink,
-  Crosshair,
+  Crosshair, Lock,
 } from "lucide-react";
 import Header from "../components/Header";
 import { PriceStamp } from "../components/PriceStamp";
@@ -11,6 +11,7 @@ import { bookmakerUrl } from "../lib/bookmakers";
 import { usePortfolio } from "../contexts/PortfolioContext";
 import { api } from "../lib/api";
 import { toast } from "sonner";
+import { UpgradeButton } from "../components/Gating";
 
 const ICONS = {
   goals: Goal, btts: Repeat, team_goals: Target, double_chance: Shuffle, handicap: Scale,
@@ -304,6 +305,19 @@ export default function SpecificBetsPage() {
                 <Panel key={p.key} panel={p} teams={teams} onToggle={toggle} isPicked={isPicked} playedOf={playedOf} />
               ))}
             </div>
+
+            {data.limited && (
+              <div className="mt-4 rounded-2xl border border-[#39FF14]/30 bg-[#39FF14]/[0.06] p-5 text-center"
+                data-testid="sb-upgrade-card">
+                <Lock className="w-6 h-6 text-[#39FF14] mx-auto mb-2" />
+                <div className="text-white font-bold">Upgrade to see more specific bets</div>
+                <p className="text-sm text-zinc-400 mt-1 mb-3">
+                  Goals over/under, correct score, cards, corners, fouls, offsides, saves, shots, team goals,
+                  double chance, handicap, first half and player markets — all with LION's probability and the best price.
+                </p>
+                <UpgradeButton size="sm" testId="sb-upgrade-cta" />
+              </div>
+            )}
 
             {!!(data.players || []).length && (
               <div className="mt-4 columns-1 lg:columns-2 gap-4 [&>*]:mb-4">

@@ -97,9 +97,10 @@ def test_auth_me(auth):
     r = auth.get(f"{BASE_URL}/api/auth/me")
     assert r.status_code == 200, r.text[:300]
     u = r.json()
-    # A freshly registered account: free plan, no trial, and never leaks _id.
-    assert u["subscription_status"] in (None, "", "free")
-    assert u["is_pro"] is False
+    # The QA account is shared across modules and may already be running its
+    # 7-day trial (Pro-gated endpoints need it), so accept trial as well.
+    assert u["subscription_status"] in (None, "", "free", "trial")
+    assert u["is_pro"] is (u["subscription_status"] == "trial")
     assert u["email"] and "@" in u["email"]
     assert "_id" not in u
 

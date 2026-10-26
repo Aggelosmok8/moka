@@ -5,7 +5,9 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
+
+import entitlements as ent
 
 from ..services.value_engine import rank_value_matches
 
@@ -65,8 +67,20 @@ async def _attach_dc_prices(ranked: list) -> None:
         logger.warning("value-matches dc prices: %s", ex)
 
 
+async def _request_user(request: Request):
+    """Resolved lazily: server.py imports this module, so a top-level import of the
+    auth dependency would be circular."""
+    try:
+        from server import current_user_optional
+        return await current_user_optional(request)
+    except Exception:
+        return None
+
+
 @router.get("/value-matches")
-async def value_matches(level: Optional[str] = None, limit: Optional[int] = None):
+async def value_matches(request: Request, level: Optional[str] = None,
+                        limit: Optional[int] = None):
+    user = await _request_user(request)
     # Real data only. build_live_matches() serves the last known-good cache (even
     # if stale) on provider errors; only a hard failure with NO cache reaches here.
     try:
@@ -82,7 +96,12 @@ async def value_matches(level: Optional[str] = None, limit: Optional[int] = None
     if limit:
         ranked = ranked[: max(0, limit)]
     await _attach_dc_prices(ranked)
-    out = {"count": len(ranked), "matches": ranked, "source": "live"}
+    # Pro-only competitions stay visible as a teaser (teams + kick-off) but carry
+    # no odds or pick for a free account.
+    pro = ent.is_pro(user)
+    ranked = [e if not ent.league_locked((e.get("match") or {}).get("leagueName", ""), pro)
+              else ent.lock_entry(e) for e in ranked]
+    out = {"count": len(ranked), "matches": ranked, "source": "live", "is_pro": pro}
     if not ranked:
         # Say WHY the page is empty instead of looking broken.
         import apifootball as af

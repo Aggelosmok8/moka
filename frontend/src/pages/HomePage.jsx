@@ -75,6 +75,10 @@ export default function HomePage() {
                 <p className="text-xs text-zinc-500 mt-3" data-testid="home-signin-note">
                   Free account or 7-day Pro trial — no card required, cancel anytime.
                 </p>
+                <Link to="/about" data-testid="hero-about-guest"
+                  className="inline-flex items-center gap-2 mt-4 text-sm font-bold text-zinc-300 hover:text-[#39FF14] transition-colors">
+                  <ShieldCheck className="w-4 h-4 text-[#39FF14]" /> About us — we are not a bookmaker
+                </Link>
               </>
             ) : (
               <div className="flex flex-wrap items-center justify-center gap-3 mt-7">
@@ -96,6 +100,10 @@ export default function HomePage() {
                 <Link to="/portfolio" data-testid="hero-portfolio"
                   className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full border border-white/20 text-white font-bold uppercase tracking-wider text-sm hover:bg-white/5 transition">
                   <Wallet className="w-4 h-4 text-[#39FF14]" /> My portfolio
+                </Link>
+                <Link to="/about" data-testid="hero-about"
+                  className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full border border-white/20 text-white font-bold uppercase tracking-wider text-sm hover:bg-white/5 transition">
+                  <ShieldCheck className="w-4 h-4 text-[#39FF14]" /> About us
                 </Link>
               </div>
             )}
