@@ -498,7 +498,7 @@ def render_pdf(inv: dict) -> bytes:
     y -= 9 * mm
     c.setFont(_FONT, 9)
     for ln in inv.get("lines") or []:
-        c.drawString(22 * mm, y, str(ln.get("description"))[:62])
+        c.drawString(22 * mm, y, _brand(str(ln.get("description")))[:62])
         c.drawRightString(W - 62 * mm, y, str(ln.get("qty", 1)))
         c.drawRightString(W - 40 * mm, y, f"{float(ln.get('unit', 0)):.2f}")
         c.drawRightString(W - 22 * mm, y, f"{float(ln.get('total', 0)):.2f}")
@@ -575,6 +575,9 @@ def make_invoices_router(db, current_user):
                     out[k] = _json.loads(v or "{}")
                 except ValueError:
                     out[k] = {}
+        if isinstance(out.get("lines"), list):
+            out["lines"] = [{**ln, "description": _brand(ln.get("description") or "")}
+                            for ln in out["lines"] if isinstance(ln, dict)]
         return out
 
     async def _retry_mydata(row: dict) -> dict:
