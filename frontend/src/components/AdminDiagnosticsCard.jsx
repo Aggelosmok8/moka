@@ -9,6 +9,7 @@ const CHECKS = [
   { id: "mydata", label: "myDATA connection", run: () => authApi.get("/invoices/admin/mydata-check") },
   { id: "failed", label: "Retry documents / get ΜΑΡΚ", run: () => authApi.get("/invoices/admin/failed") },
   { id: "email", label: "Send test email", run: () => authApi.post("/invoices/admin/email-test", {}) },
+  { id: "backup", label: "Download data backup", run: () => authApi.get("/admin/backup"), download: "backup" },
 ];
 
 export default function AdminDiagnosticsCard() {
@@ -20,7 +21,22 @@ export default function AdminDiagnosticsCard() {
     setOut(null);
     try {
       const r = await c.run();
-      setOut({ title: c.label, data: r.data });
+      if (c.download) {
+        const url = URL.createObjectURL(new Blob([JSON.stringify(r.data)], { type: "application/json" }));
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `lionstats-backup-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "")}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        setOut({ title: c.label, data: {
+          saved: a.download,
+          users: r.data.users_count, portfolios: r.data.user_portfolios_count, invoices: r.data.invoices_count,
+        } });
+      } else {
+        setOut({ title: c.label, data: r.data });
+      }
     } catch (e) {
       setOut({ title: c.label, data: e?.response?.data || { error: String(e) } });
     } finally {

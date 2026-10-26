@@ -46,6 +46,28 @@ export function ChartProvider({ children }) {
   const clear = useCallback(() => save([]), []);
   const has = useCallback((id) => items.some((e) => e.match.id === id), [items]);
 
+  // A watchlist is for matches you still want to watch: once a fixture is over
+  // it drops out by itself (no API call — the kick-off time is enough).
+  useEffect(() => {
+    const isOver = (e) => {
+      const st = String(e?.match?.status || "").toLowerCase();
+      if (["finished", "ft", "aet", "pen", "ended"].includes(st)) return true;
+      const ko = e?.match?.kickoff || e?.match?.commence_time;
+      if (!ko) return false;
+      const t = new Date(ko).getTime();
+      return Number.isFinite(t) && Date.now() - t > 3.5 * 60 * 60 * 1000;
+    };
+    const prune = () => setItems((prev) => {
+      const next = prev.filter((e) => !isOver(e));
+      if (next.length === prev.length) return prev;
+      try { localStorage.setItem(KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+    prune();
+    const iv = setInterval(prune, 10 * 60 * 1000);
+    return () => clearInterval(iv);
+  }, []);
+
   // --- Backend sync readiness ---------------------------------------------
   // Guests use localStorage (above). When a logged-in user is present, this is
   // the single extension point to persist the watchlist server-side. The backend

@@ -1374,3 +1374,20 @@ rate / P&L / graph); watchlist; what Free vs Pro can see; a Play Responsibly blo
 an explicit "statistical analysis and predictions, nothing guaranteed, odds change" disclaimer; and
 sign-up buttons for the 7 Greek-licensed bookmakers we read prices from (links come from
 `lib/bookmakers.js`, so nothing unlicensed can ever be linked). Verified in both languages.
+
+## 2026-10-26 (d) ROOT CAUSE of the cross-device ticket bug: HTTP 413
+The sync code was correct; the uploads were being REJECTED. `sanitize_middleware` capped every request
+body at 256KB, and a heavy portfolio (the owner's 80 tickets with all their legs) serialises to ~283KB,
+so `PUT /api/me/portfolio` returned **413 "Payload too large"** on every save. Proof: the owner's cloud
+row had not changed since 2026-10-21 while their devices kept playing; replaying their exact payload
+against production returned 413 instantly. Fix: `/api/me/portfolio` now allows up to 4MB
+(`_BIG_BODY_PATHS`), everything else stays at 256KB. Verified: the same 283KB payload now returns 200
+and reads back all 80 tickets. The client also retries a failed upload once and logs the status instead
+of failing silently.
+
+Also in this round:
+- Watchlist self-cleans: an entry whose fixture is finished (status FT/AET/PEN or kick-off older than
+  3.5h) is dropped on load and every 10 minutes — no API calls.
+- New admin data backup: `GET /api/admin/backup` returns a JSON snapshot of users (without password
+  hashes or reset tokens), portfolios and invoices, wired to Account -> Diagnostics ->
+  "Download data backup" (verified: 553KB file, 38 users / 7 portfolios / 1 invoice).
