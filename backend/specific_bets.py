@@ -718,7 +718,18 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
         o = r.get("odds")
         if o is not None:
             return float(o) < 1.10
-        return (r.get("lion") or 0) >= 96
+        # No bookmaker quotes it AND it is a near-certainty: that is a selection
+        # nobody can play, shown only because the model says 9x%. It costs us
+        # credibility, so it goes.
+        return (r.get("lion") or 0) >= 90
+
+    def _retop(p):
+        """The highlighted selection must be playable: never headline an unpriced
+        row when the panel has a priced one."""
+        rows = p.get("rows") or []
+        priced = [r for r in rows if r.get("odds") is not None]
+        if priced and (p.get("top") or {}).get("odds") is None:
+            p["top"] = _best(priced)
 
     for _p in list(panels):
         kept = [r for r in _p["rows"] if not _pointless(r)]
@@ -729,6 +740,7 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
             _p["rows"] = kept
             if _p.get("top") not in kept:
                 _p["top"] = _best(kept)
+        _retop(_p)
     core = [r for r in core if not _pointless(r)]
     game = [r for r in game if not _pointless(r)]
     for blk in list(players):

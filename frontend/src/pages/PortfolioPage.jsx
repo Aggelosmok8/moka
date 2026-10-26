@@ -269,8 +269,9 @@ function BetSlip({ slip, removeFromSlip, updateSlipLegOdds, clearSlip, placeTick
   );
 }
 
-function TicketCard({ t, settleLeg, removeTicket }) {
+function TicketCard({ t, settleLeg, removeTicket, placeDraftTicket }) {
   const info = computeTicket(t);
+  const [draftStake, setDraftStake] = useState("");
   // Progress badge: WON / TOTAL selections (never all-or-nothing).
   const badgeCls = info.status === "pending"
     ? "bg-[#FFD60A]/15 text-[#FFD60A] border border-[#FFD60A]/40"
@@ -283,6 +284,7 @@ function TicketCard({ t, settleLeg, removeTicket }) {
           {t.manual ? <span className="text-[#58a6ff]">My Ticket</span>
             : (t.legs || []).some((l) => l.kind === "ticket") ? <span className="text-[#39FF14]">LION Ticket</span>
             : "Ticket"} · {info.total} {info.total === 1 ? "selection" : "selections"}
+          {t.draft && <span className="text-[#FFD60A]">· not placed yet</span>}
         </div>
         <span className={`inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${badgeCls}`} data-testid={`ticket-progress-${t.id}`}>
           <Check className="w-3 h-3" /> {info.progress}
@@ -319,16 +321,39 @@ function TicketCard({ t, settleLeg, removeTicket }) {
         })}
       </div>
 
-      <div className="grid grid-cols-3 gap-2 text-center border-t border-white/5 pt-3">
-        <div><div className="text-[10px] text-zinc-500 uppercase">Total stake</div><div className="text-sm font-bold text-white font-mono-num">€{info.totalStake.toFixed(2)}</div></div>
-        <div><div className="text-[10px] text-zinc-500 uppercase">{info.status === "pending" ? "Potential" : "Returned"}</div><div className="text-sm font-bold text-white font-mono-num">€{(info.status === "pending" ? info.potentialReturn : info.totalReturn).toFixed(2)}</div></div>
-        <div>
-          <div className="text-[10px] text-zinc-500 uppercase">Profit</div>
-          <div className={`text-sm font-bold font-mono-num ${info.profit == null ? "text-zinc-300" : info.profit >= 0 ? "text-[#39FF14]" : "text-[#FF3B30]"}`}>
-            {info.profit == null ? "—" : `${info.profit >= 0 ? "+" : "-"}€${Math.abs(info.profit).toFixed(2)}`}
+      {t.draft ? (
+        <div className="border-t border-[#FFD60A]/20 pt-3" data-testid={`ticket-draft-${t.id}`}>
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
+            Stake for this ticket (€)
+          </label>
+          <div className="flex items-center gap-2">
+            <input type="number" min="0" step="0.5" value={draftStake} placeholder="0.00"
+              onChange={(e) => setDraftStake(e.target.value)}
+              data-testid={`ticket-draft-stake-${t.id}`}
+              className="w-24 bg-[#0d1117] border border-[#30363d] rounded-lg px-2 py-1.5 text-sm text-white font-mono-num focus:border-[#39FF14] outline-none" />
+            <button onClick={() => placeDraftTicket(t.id, draftStake)}
+              disabled={!(Number(draftStake) > 0)}
+              data-testid={`ticket-place-${t.id}`}
+              className="flex-1 py-2 rounded-lg bg-[#39FF14] text-black font-black uppercase tracking-wider text-xs hover:brightness-110 transition disabled:opacity-40 disabled:cursor-not-allowed">
+              Place ticket
+            </button>
+          </div>
+          <p className="text-[10px] text-zinc-500 mt-2">
+            Each ticket is placed on its own — adding another LION Ticket never merges with this one.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-2 text-center border-t border-white/5 pt-3">
+          <div><div className="text-[10px] text-zinc-500 uppercase">Total stake</div><div className="text-sm font-bold text-white font-mono-num">€{info.totalStake.toFixed(2)}</div></div>
+          <div><div className="text-[10px] text-zinc-500 uppercase">{info.status === "pending" ? "Potential" : "Returned"}</div><div className="text-sm font-bold text-white font-mono-num">€{(info.status === "pending" ? info.potentialReturn : info.totalReturn).toFixed(2)}</div></div>
+          <div>
+            <div className="text-[10px] text-zinc-500 uppercase">Profit</div>
+            <div className={`text-sm font-bold font-mono-num ${info.profit == null ? "text-zinc-300" : info.profit >= 0 ? "text-[#39FF14]" : "text-[#FF3B30]"}`}>
+              {info.profit == null ? "—" : `${info.profit >= 0 ? "+" : "-"}€${Math.abs(info.profit).toFixed(2)}`}
+            </div>
           </div>
         </div>
-      </div>
+      )}
       <button onClick={() => removeTicket(t.id)} data-testid={`ticket-remove-${t.id}`} className="mt-3 w-full py-1.5 rounded-md text-xs font-bold text-zinc-500 hover:text-[#FF3B30] border border-white/10">
         <Trash2 className="inline w-3.5 h-3.5 mr-1" /> Remove ticket
       </button>
@@ -337,7 +362,7 @@ function TicketCard({ t, settleLeg, removeTicket }) {
 }
 
 function TicketsView({ isPro }) {
-  const { slip, removeFromSlip, updateSlipLegOdds, clearSlip, placeTicket, tickets, settleLeg, removeTicket } = usePortfolio();
+  const { slip, removeFromSlip, updateSlipLegOdds, clearSlip, placeTicket, tickets, settleLeg, removeTicket, placeDraftTicket } = usePortfolio();
   const [showHistory, setShowHistory] = useState(false);
   // Anything still PENDING stays on top, in its own active section — only fully
   // settled tickets drop into HISTORY (#4). CSS columns keep the cards packed
@@ -379,7 +404,7 @@ function TicketsView({ isPro }) {
                 <span className="text-xs text-zinc-500">· {active.length} still pending</span>
               </div>
               <div className={COLS} data-testid="tickets-grid">
-                {active.map((t) => <TicketCard key={t.id} t={t} settleLeg={settleLeg} removeTicket={removeTicket} />)}
+                {active.map((t) => <TicketCard key={t.id} t={t} settleLeg={settleLeg} removeTicket={removeTicket} placeDraftTicket={placeDraftTicket} />)}
               </div>
             </>
           )}
@@ -392,7 +417,7 @@ function TicketsView({ isPro }) {
               </button>
               {showHistory && (
                 <div className={`${COLS} mt-3`} data-testid="tickets-history-grid">
-                  {older.map((t) => <TicketCard key={t.id} t={t} settleLeg={settleLeg} removeTicket={removeTicket} />)}
+                  {older.map((t) => <TicketCard key={t.id} t={t} settleLeg={settleLeg} removeTicket={removeTicket} placeDraftTicket={placeDraftTicket} />)}
                 </div>
               )}
               {hiddenTickets > 0 && (
