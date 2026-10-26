@@ -74,7 +74,9 @@ def test_group_uniqueness_per_ticket(tickets):
     bad = []
     for t in tickets:
         groups = [l["group"] for l in t["legs"]]
-        if len(set(groups)) != len(groups):
+        # One group per ticket applies to single-match tickets; an accumulator
+        # takes one leg per MATCH, so the same group can legitimately repeat.
+        if t.get("kind") != "cross" and len(set(groups)) != len(groups):
             bad.append((t["id"], groups))
         for g in groups:
             if g not in ALLOWED_GROUPS:

@@ -286,9 +286,11 @@ export function PortfolioProvider({ children }) {
   }, [slip]);
 
   // Match-level twin of playedPick, for the main 1X2 "add to slip" button.
+  // A leg that came from a LION Ticket (kind "ticket") is a separate play and
+  // must NOT mark the match itself as played — you can still back it on its own.
   const playedMatch = useCallback((matchId, home, away) => {
     const key = home || away ? matchKey(home, away) : "";
-    const hit = (l) => l.kind !== "specific"
+    const hit = (l) => l.kind !== "specific" && l.kind !== "ticket"
       && ((matchId && l.matchId === matchId) || (key && matchKey(l.home, l.away) === key));
     const found = bets.find(hit) || tickets.flatMap((t) => t.legs || []).find(hit);
     return found ? (found.status || "pending") : null;
@@ -343,6 +345,41 @@ export function PortfolioProvider({ children }) {
 
   // A ticket the user built by hand (teams/markets we may not even cover).
   // No matchId -> auto-settlement skips it and the user marks won/lost.
+  // A LION ticket goes in as its OWN ticket, never merged with the slip or with
+  // another LION ticket: each one waits for its own stake and its own Place.
+  const addDraftTicket = useCallback((legs, meta = {}) => {
+    const ticket = {
+      id: uid(),
+      draft: true,
+      source: meta.source || "lion",
+      stake: 0,
+      createdAt: new Date().toISOString(),
+      legs: (legs || []).map((l) => ({
+        id: uid(), status: "pending",
+        matchId: l.matchId || null, home: l.home || "", away: l.away || "",
+        league: l.league || "", pick: l.pick || "", pickName: l.pickName || "",
+        odds: Number(l.odds) || 0, bookmaker: l.bookmaker || "",
+        kickoff: l.kickoff || null, kind: l.kind || "ticket",
+      })),
+    };
+    setTickets((prev) => {
+      const next = [ticket, ...prev];
+      try { localStorage.setItem(TICKETS_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+    return ticket.id;
+  }, []);
+
+  const placeDraftTicket = useCallback((id, stake) => {
+    setTickets((prev) => {
+      const next = prev.map((t) => (t.id === id
+        ? { ...t, draft: false, stake: Number(stake) || 0, createdAt: new Date().toISOString() }
+        : t));
+      try { localStorage.setItem(TICKETS_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+
   const addManualTicket = useCallback((legs, stake) => {
     const ticket = {
       id: uid(),
@@ -371,7 +408,8 @@ export function PortfolioProvider({ children }) {
   const autoSettle = useCallback(async () => {
     const pending = [
       ...bets.filter((b) => b.status === "pending" && b.matchId),
-      ...tickets.flatMap((t) => t.legs.filter((l) => l.status === "pending" && l.matchId)),
+      // A draft ticket has not been placed yet — it must not auto-settle.
+      ...tickets.filter((t) => !t.draft).flatMap((t) => t.legs.filter((l) => l.status === "pending" && l.matchId)),
     ];
     const ids = [...pending.map((x) => x.matchId), ...slip.filter((l) => l.matchId).map((l) => l.matchId)];
     const unique = [...new Set(ids)];
@@ -592,6 +630,7 @@ export function PortfolioProvider({ children }) {
       slip, addToSlip, removeFromSlip, updateSlipLegOdds, clearSlip, slipHas, slipHasPick,
       playedPick, playedMatch, slipCount: slip.length,
       tickets, placeTicket, settleLeg, removeTicket, clearTickets, autoSettle, addManualTicket,
+      addDraftTicket, placeDraftTicket,
       syncNow: () => pullRemote(user?.user_id || user?.email, 2),
       newlySettled, clearNewlySettled,
     }}>

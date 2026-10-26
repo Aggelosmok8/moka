@@ -118,7 +118,8 @@ def test_parlay_bookmaker_prices_every_leg_or_is_null(tickets):
 # ---------- ordering preserved ----------
 
 def test_sorted_by_kickoff_day(tickets):
-    days = [t["match"]["kickoff"][:10] for t in tickets]
+    # Cross-match accumulators are deliberately pinned to the top of the list.
+    days = [t["match"]["kickoff"][:10] for t in tickets if t.get("kind") != "cross"]
     assert days == sorted(days), f"not sorted by kickoff day: {days}"
 
 

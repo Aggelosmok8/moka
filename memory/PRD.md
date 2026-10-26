@@ -1391,3 +1391,22 @@ Also in this round:
 - New admin data backup: `GET /api/admin/backup` returns a JSON snapshot of users (without password
   hashes or reset tokens), portfolios and invoices, wired to Account -> Diagnostics ->
   "Download data backup" (verified: 553KB file, 38 users / 7 portfolios / 1 invoice).
+
+## 2026-10-26 (e) LION accumulators, separate tickets, played-state and credibility filter
+1. **Cross-match accumulators** (`lion_tickets._cross_tickets`, `CROSS_LEGS = 4`): the single most
+   likely pick from each of four DIFFERENT fixtures, pinned above the per-match tickets with
+   `kind: "cross"`. Legs carry `matchLabel`, the parlay price is only shown when one bookmaker prices
+   all four (otherwise null — no fake cross-book product). Verified live: 3 accumulators, e.g.
+   Lazio +1.5 / Cambuur to score / Werder to score / Jeddeloh +1.5 → 22.87 at Bet365, 68% all-win.
+2. **Each LION ticket is now its OWN ticket**, never merged with the slip or another LION ticket:
+   `addDraftTicket()` creates a draft in My Tickets and `placeDraftTicket()` places it with its own
+   stake ("Place ticket" button per card, auto-settle skips drafts). Verified: two adds → two separate
+   draft cards each with its own stake + Place.
+3. **A LION-ticket leg no longer marks the match as played** on the main panel (`playedMatch` ignores
+   `kind: "ticket"`), so the 1X2 can still be backed on its own; Specific Bets keep showing the
+   played badge but the row stays clickable (re-play allowed).
+4. **Credibility filter in Specific Bets**: an UNPRICED row is dropped at lion >= 90 (was 96), and a
+   panel can never headline an unpriced selection when a priced one exists (`_retop`) — no more
+   invented near-certain lines nobody can actually bet.
+Tests updated for the new ticket kind (group repetition and the top-pinned order only apply to
+single-match tickets): 21 passed.

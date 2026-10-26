@@ -23,6 +23,7 @@ MIN_ODDS = 1.12        # anything shorter adds no return
 MIN_EDGE = 1.0         # only legs our model prices better than the book
 MIN_LEGS = 2
 MAX_LEGS = 6           # more than this and "all of them win" gets unrealistic
+CROSS_LEGS = 4         # legs in a cross-match accumulator — kept deliberately short
 MAX_MATCHES = 40
 CACHE_TTL = 900
 
@@ -182,7 +183,7 @@ def _build_ticket(m: dict, value: dict, prices: dict) -> dict:
         if parlay is None or p > parlay["odds"]:
             parlay = {"bookmaker": book, "odds": round(p, 2)}
     for l in legs:
-        l.pop("books", None)
+        l["books"] = l.get("books") or {}
     return {
         "id": f"lt_{m['id']}",
         "match": {"id": m["id"], "home": m["home"]["name"], "away": m["away"]["name"],
@@ -197,6 +198,60 @@ def _build_ticket(m: dict, value: dict, prices: dict) -> dict:
         "combinedProb": round(prob * 100),
         "anchor": max(legs, key=lambda x: x["prob"]),
     }
+
+
+def _cross_tickets(tickets: list, want: int = 3) -> list:
+    """Accumulators ACROSS matches: the most likely pick from each of several
+    different fixtures, four legs a ticket (e.g. AEK-Olympiacos 1 + United GG +
+    Panathinaikos under 4.5 corners + ...). Short on purpose: four near-certain
+    legs is a believable ticket, ten is a lottery."""
+    pool = []
+    for t in tickets:
+        legs = [dict(l) for l in (t.get("legs") or []) if l.get("prob")]
+        if not legs:
+            continue
+        best = max(legs, key=lambda x: (x["prob"], x["edge"]))
+        best["matchId"] = t["match"]["id"]
+        best["home"] = t["match"]["home"]
+        best["away"] = t["match"]["away"]
+        best["league"] = t["match"]["league"]
+        best["kickoff"] = t["match"]["kickoff"]
+        best["matchLabel"] = f'{t["match"]["home"]} - {t["match"]["away"]}'
+        pool.append(best)
+    # Most probable first: the point of this ticket is "very likely, big combined
+    # price", not "longest odds".
+    pool.sort(key=lambda x: (x["prob"], x["edge"]), reverse=True)
+    out = []
+    for n in range(want):
+        chunk = pool[n * CROSS_LEGS:(n + 1) * CROSS_LEGS]
+        if len(chunk) < CROSS_LEGS:
+            break
+        prob = 1.0
+        for l in chunk:
+            prob *= l["prob"] / 100.0
+        parlay = None
+        books = set.intersection(*[set((l.get("books") or {}).keys()) for l in chunk])
+        for book in books:
+            p = 1.0
+            for l in chunk:
+                p *= round(float(l["books"][book]), 2)
+            if parlay is None or p > parlay["odds"]:
+                parlay = {"bookmaker": book, "odds": round(p, 2)}
+        out.append({
+            "id": f"ltx_{n}_" + "_".join(l["matchId"].split("_")[-1] for l in chunk),
+            "kind": "cross",
+            "match": {"id": None, "home": f"{len(chunk)} matches", "away": "",
+                      "league": "Accumulator", "kickoff": min(l["kickoff"] or "" for l in chunk)},
+            "matches": [{"id": l["matchId"], "label": l["matchLabel"], "league": l["league"]} for l in chunk],
+            "legs": chunk,
+            "legCount": len(chunk),
+            "singlesReturn": round(sum(l["odds"] for l in chunk), 2),
+            "singlesMultiple": round(sum(l["odds"] for l in chunk) / len(chunk), 2),
+            "parlay": parlay,   # same-bookmaker combo across the matches, or None
+            "combinedProb": round(prob * 100),
+            "anchor": max(chunk, key=lambda x: x["prob"]),
+        })
+    return out
 
 
 async def build_tickets() -> list:
@@ -245,5 +300,10 @@ async def build_tickets() -> list:
             out.append(t)
     # Nearest kick-off first; between two the same day, the richer ticket wins.
     out.sort(key=lambda t: ((t["match"]["kickoff"] or "")[:10], -t["legCount"], -t["singlesReturn"]))
+    # Cross-match accumulators go on top, then the per-match tickets.
+    out = _cross_tickets(out) + out
+    for t in out:
+        for l in t["legs"]:
+            l.pop("books", None)
     live_values._cache_set(ck, out, CACHE_TTL)
     return out
