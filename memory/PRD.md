@@ -1322,3 +1322,11 @@ real `<a download>` click; and the catch block swallowed every failure, now a sp
   matching asterisk on "ΦΠΑ 0% (απαλλαγή) *" (only when the rate is 0).
 Rendered and visually verified. Street number comes from `ISSUER_ADDRESS` in Render (set it to
 "Στυμφαλίας 0") — no deploy needed for that one. 8 invoice tests pass.
+
+## 2026-10-26 (b) "Moka" can no longer reach a printed receipt
+Real risk found: for SUBSCRIPTIONS (monthly and the €79.99 annual) the printed line used
+`invoice.lines.data[0].description`, i.e. the **product name from the Stripe dashboard** — if that
+product is still named "Moka", the receipt would print it. Now `_sub_description()` derives the text from
+the billing interval instead ("LION.STATS Pro — Ετήσια/Μηνιαία συνδρομή" + the billing period dates), and
+`_brand()` rewrites any stray "moka" to LION.STATS on every document as a last line of defence.
+Checked: year/month/unknown-interval and legacy "Moka Pro" strings all render as LION.STATS. 8 tests pass.

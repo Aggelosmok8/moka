@@ -25,6 +25,8 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from urllib.parse import urlsplit, quote
 
+import re
+
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -210,6 +212,30 @@ def _doc_type(counterparty: dict) -> str:
         else _env("MYDATA_TYPE_RETAIL", "11.2")
 
 
+def _sub_description(line: dict) -> str:
+    """Never trust Stripe's product name for the printed line: the dashboard product
+    may still be called "Moka". Derive it from the billing interval instead."""
+    interval = (((line.get("price") or {}).get("recurring") or {}).get("interval")
+                or (line.get("plan") or {}).get("interval") or "")
+    if interval == "year":
+        desc = "LION.STATS Pro — Ετήσια συνδρομή"
+    elif interval == "month":
+        desc = "LION.STATS Pro — Μηνιαία συνδρομή"
+    else:
+        desc = _brand(line.get("description") or "") or "LION.STATS Pro — συνδρομή"
+    period = line.get("period") or {}
+    if period.get("start") and period.get("end"):
+        def fmt(t):
+            return datetime.fromtimestamp(t, timezone.utc).strftime("%d/%m/%Y")
+        desc = f"{desc} ({fmt(period['start'])} - {fmt(period['end'])})"
+    return desc
+
+
+def _brand(text: str) -> str:
+    """Last line of defence so the old brand can never reach a printed document."""
+    return re.sub(r"(?i)\bmoka\b", "LION.STATS", text or "")
+
+
 async def _create(db, *, user_id, total, description, stripe_ref, counterparty,
                   payment, doc_type=None, currency="EUR") -> dict:
     series = _env("INVOICE_SERIES", "A")
@@ -227,7 +253,7 @@ async def _create(db, *, user_id, total, description, stripe_ref, counterparty,
         "currency": (currency or "EUR").upper(),
         "net": net, "vat": vat, "total": total, "vat_rate": _vat_rate(),
         "counterparty": counterparty or {},
-        "lines": [{"description": description, "qty": 1, "unit": net, "total": net}],
+        "lines": [{"description": _brand(description), "qty": 1, "unit": net, "total": net}],
         "payment": payment or {},
         "stripe_ref": stripe_ref or "",
         "mark": "", "uid": "", "qr": "",
@@ -313,11 +339,7 @@ async def issue_invoice_for_stripe_invoice(db, invoice: dict) -> dict | None:
     user = await db.users.find_one({"stripe_subscription_id": sub}, {"_id": 0, "user_id": 1}) \
         if sub else None
     line = ((invoice.get("lines") or {}).get("data") or [{}])[0]
-    period = line.get("period") or {}
-    desc = line.get("description") or "LION.STATS Pro — συνδρομή"
-    if period.get("start") and period.get("end"):
-        fmt = lambda t: datetime.fromtimestamp(t, timezone.utc).strftime("%d/%m/%Y")  # noqa: E731
-        desc = f"{desc} ({fmt(period['start'])} - {fmt(period['end'])})"
+    desc = _sub_description(line)
     inv = await _create(
         db, user_id=(user or {}).get("user_id"), total=total, description=desc,
         stripe_ref=ref, counterparty=_counterparty_from(invoice),
