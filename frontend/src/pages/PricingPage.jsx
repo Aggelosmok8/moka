@@ -160,13 +160,16 @@ export default function PricingPage() {
             </div>
             <div className="text-xs text-zinc-500 mb-5 mt-1">Identical access to every Pro plan. <b className="text-zinc-300">No card stored, no auto-renewal.</b></div>
             <ul className="space-y-2.5 mb-6">
-              {["Everything in Pro — identical access to the subscriptions", "Pay once, 30 days, no card stored", "Nothing renews: it simply ends", "Buy again whenever you want"].map((f) => (
+              {PRO_FEATURES.map((f) => (
                 <li key={f} className="flex items-start gap-2 text-sm text-white">
                   <Check className="w-4 h-4 text-[#FFD60A] mt-0.5 shrink-0" /> {f}
                 </li>
               ))}
             </ul>
             <PaidButton pkgId="pro_monthly_once" label="Buy 30 days" />
+            <p className="text-[11px] text-zinc-500 mt-3 text-center">
+              Only difference: it does not renew — after 30 days you simply buy again.
+            </p>
           </div>
 
           {/* Monthly */}
@@ -185,6 +188,9 @@ export default function PricingPage() {
               ))}
             </ul>
             <PaidButton pkgId="pro_monthly" label="Choose Monthly" />
+            <p className="text-[11px] text-zinc-500 mt-3 text-center">
+              Only difference: your card is charged automatically every month.
+            </p>
           </div>
 
           {/* Annual — Best Value */}
