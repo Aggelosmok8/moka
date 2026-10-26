@@ -1362,3 +1362,15 @@ Verified: free board returns 9 locked Premier League teasers (Pro: 0); free spec
 shows 132 cards, 9 teasers, zero odds boxes, upgrade cards on specific bets and analysis.
 Test suite: tests that exercise Pro-gated endpoints now use `qa_auth.pro_headers()`. Remaining failures
 are the pre-existing odds-coverage ones (stale fixtures + Elabet at its cycle ceiling), not gating.
+
+## 2026-10-26 (c) About us page
+New `/about` (`pages/AboutPage.jsx`) + a 4th hero button on the Home page ("About us", plus a text link
+for signed-out visitors). Bilingual EN/EL with its own corner toggle (defaults to the app language).
+Content: opens with "we are not a bookmaker / no scam, no sure tips"; explains news + team/player stats +
+compare + statistics-based match analysis; the best price per possible outcome across Greek-licensed
+books (placed by the user at that bookmaker); how Specific Bets work; the portfolio as a
+play-under-control tool (add picks with the real odds, create your own tickets, Refresh results, win
+rate / P&L / graph); watchlist; what Free vs Pro can see; a Play Responsibly block (21+, KETHEA phone);
+an explicit "statistical analysis and predictions, nothing guaranteed, odds change" disclaimer; and
+sign-up buttons for the 7 Greek-licensed bookmakers we read prices from (links come from
+`lib/bookmakers.js`, so nothing unlicensed can ever be linked). Verified in both languages.

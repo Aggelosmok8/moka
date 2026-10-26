@@ -11,6 +11,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import HomePage from "./pages/HomePage";
 import TeamPage from "./pages/TeamPage";
 import PricingPage from "./pages/PricingPage";
+import AboutPage from "./pages/AboutPage";
 import PricingSuccessPage from "./pages/PricingSuccessPage";
 import AuthCallback from "./pages/AuthCallback";
 import ValueMatchesPage from "./pages/ValueMatchesPage";
@@ -84,6 +85,7 @@ function AppRouter() {
       {/* legacy path kept for old links/bookmarks */}
       <Route path="/match/:id" element={<Gated element={<MatchAnalysisPage />} />} />
       <Route path="/pricing" element={<PricingPage />} />
+      <Route path="/about" element={<AboutPage />} />
       <Route path="/pricing/success" element={<PricingSuccessPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
