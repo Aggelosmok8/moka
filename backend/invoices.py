@@ -286,7 +286,7 @@ async def issue_invoice_for_session(db, session, tx) -> dict | None:
     meta = s.get("metadata") or {}
     inv = await _create(
         db, user_id=meta.get("user_id") or (tx or {}).get("user_id"),
-        total=total, description="Moka Pro — 30-day access",
+        total=total, description="LION.STATS Pro — 30ήμερη πρόσβαση",
         stripe_ref=ref, counterparty=_counterparty_from(s),
         payment={"method": "Card", "ref": s.get("payment_intent") or ""},
         currency=(s.get("currency") or "eur"))
@@ -314,7 +314,7 @@ async def issue_invoice_for_stripe_invoice(db, invoice: dict) -> dict | None:
         if sub else None
     line = ((invoice.get("lines") or {}).get("data") or [{}])[0]
     period = line.get("period") or {}
-    desc = line.get("description") or "Moka Pro subscription"
+    desc = line.get("description") or "LION.STATS Pro — συνδρομή"
     if period.get("start") and period.get("end"):
         fmt = lambda t: datetime.fromtimestamp(t, timezone.utc).strftime("%d/%m/%Y")  # noqa: E731
         desc = f"{desc} ({fmt(period['start'])} - {fmt(period['end'])})"
@@ -410,21 +410,30 @@ def render_pdf(inv: dict) -> bytes:
         c.line(x1, y, x2, y)
 
     y = H - 22 * mm
-    for logo in ("/app/frontend/public/lion-crest.png", "/app/frontend/public/lion-logo.png"):
-        if os.path.exists(logo):
-            try:
-                c.drawImage(logo, 20 * mm, y - 6 * mm, width=18 * mm, height=18 * mm,
-                            mask="auto", preserveAspectRatio=True)
-                break
-            except Exception:
-                pass
+    # The crest lives inside the backend package: the frontend folder does not
+    # exist on the API host, which is why no logo was printed at all.
+    try:
+        from reportlab.lib.utils import ImageReader
+        from PIL import Image
+        src = Image.open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                      "assets", "lion-crest.png")).convert("RGBA")
+        alpha = src.getchannel("A")
+        bw = src.convert("RGB").convert("L").convert("RGB")   # photocopy look
+        bw.putalpha(alpha)
+        c.drawImage(ImageReader(bw), 20 * mm, y - 6 * mm, width=18 * mm, height=18 * mm,
+                    mask="auto", preserveAspectRatio=True)
+    except Exception:
+        pass
     c.setFillColorRGB(0, 0, 0)
     c.setFont(_FONT_B, 20)
     c.drawString(42 * mm, y + 5 * mm, "LION.STATS")
-    c.setFont(_FONT, 8.5)
-    c.drawString(42 * mm, y, f"{i['name']} {i['legal_form']}".strip())
-    c.drawString(42 * mm, y - 4 * mm, f"{i['address']}, {i['postal']} {i['city']}")
-    c.drawString(42 * mm, y - 8 * mm, f"ΑΦΜ: {i['vat']}  ·  ΔΟΥ: {i['tax_office']}"
+    c.setFillColorRGB(0.45, 0.45, 0.45)
+    c.setFont(_FONT, 7)
+    c.drawString(42 * mm, y, _env("ISSUER_OWNER_NAME", "Άγγελος Μοκάκος"))
+    c.setFillColorRGB(0, 0, 0)
+    c.setFont(_FONT, 9.5)
+    c.drawString(42 * mm, y - 4.5 * mm, f"{i['address']}, {i['postal']} {i['city']}")
+    c.drawString(42 * mm, y - 9 * mm, f"ΑΦΜ: {i['vat']}  ·  ΔΟΥ: {i['tax_office']}"
                                      + (f"  ·  ΓΕΜΗ: {i['gemi']}" if i["gemi"] else ""))
 
     label = {"11.2": "ΑΠΟΔΕΙΞΗ ΠΑΡΟΧΗΣ ΥΠΗΡΕΣΙΩΝ", "2.1": "ΤΙΜΟΛΟΓΙΟ ΠΑΡΟΧΗΣ ΥΠΗΡΕΣΙΩΝ",
@@ -475,15 +484,23 @@ def render_pdf(inv: dict) -> bytes:
 
     y -= 4 * mm
     line(y)
+    exempt = not float(inv.get("vat_rate") or 0)
+    if exempt:
+        c.setFont(_FONT, 7.5)
+        c.setFillColorRGB(0.35, 0.35, 0.35)
+        c.drawString(22 * mm, y - 5 * mm,
+                     "* Χωρίς ΦΠΑ - άρθρο 44 του Κώδικα ΦΠΑ (πρώην άρθρο 39).")
+        c.setFillColorRGB(0, 0, 0)
     y -= 8 * mm
     cur = "€" if inv.get("currency", "EUR") == "EUR" else inv.get("currency")
     rate = float(inv.get("vat_rate") or 0)
-    vat_label = f"ΦΠΑ {rate:.0f}%" if rate else "ΦΠΑ 0% (απαλλαγή)"
+    vat_label = f"ΦΠΑ {rate:.0f}%" if rate else "ΦΠΑ 0% (απαλλαγή) *"
     for lbl, val in (("Καθαρή αξία", inv["net"]), (vat_label, inv["vat"])):
         c.setFont(_FONT, 9)
         c.drawRightString(W - 45 * mm, y, lbl)
         c.drawRightString(W - 22 * mm, y, f"{cur}{val:.2f}")
         y -= 6 * mm
+    y -= 4 * mm   # keep the green box clear of the VAT line
     c.setFont(_FONT_B, 13)
     c.setFillColorRGB(*green)
     c.rect(W - 80 * mm, y - 3 * mm, 60 * mm, 10 * mm, fill=1, stroke=0)

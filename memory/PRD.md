@@ -1308,3 +1308,17 @@ Fixed with an ASCII filename plus RFC 5987 `filename*=UTF-8''…` (the browser s
 `window.open()` after an await (treated as a blocked popup — nothing happened, no error either), now a
 real `<a download>` click; and the catch block swallowed every failure, now a spinner + visible
 "Could not download the document" message. Verified end to end in a browser: the PDF (351 KB) downloads.
+
+## 2026-10-26 Receipt layout polish (approved draft)
+- Header: dropped "LION.STATS ΑΤΟΜΙΚΗ"; the owner name "Άγγελος Μοκάκος" prints small/grey (7pt,
+  `ISSUER_OWNER_NAME` overrides it), while address/ΑΦΜ/ΔΟΥ moved up to 9.5pt so they read first.
+- The lion crest now prints top-left in black & white ("photocopy"): it is shipped in
+  `backend/assets/lion-crest.png` because the old path pointed at the frontend folder, which does not
+  exist on the API host — that is why no logo appeared at all.
+- Line description is now "LION.STATS Pro — 30ήμερη πρόσβαση" / "LION.STATS Pro" (was "Moka Pro"),
+  in both `billing.PACKAGES` and the invoice defaults.
+- Green ΤΕΛΙΚΟ ΠΟΣΟ box pushed 4mm lower so it no longer covers the ΦΠΑ line.
+- Added, under the product separator: "* Χωρίς ΦΠΑ - άρθρο 44 του Κώδικα ΦΠΑ (πρώην άρθρο 39)." with a
+  matching asterisk on "ΦΠΑ 0% (απαλλαγή) *" (only when the rate is 0).
+Rendered and visually verified. Street number comes from `ISSUER_ADDRESS` in Render (set it to
+"Στυμφαλίας 0") — no deploy needed for that one. 8 invoice tests pass.
