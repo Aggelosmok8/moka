@@ -99,13 +99,16 @@ export function computeTicket(t) {
   const total = counted.length;
   const decided = won.length + lost.length;
 
-  const totalStake = stakePer * total;
-  const totalReturn = won.reduce((s, l) => s + stakePer * (Number(l.odds) || 0), 0);
-  const settledStake = decided * stakePer;
+  // Each selection can carry its OWN stake (€5 here, €10 there). The ticket
+  // stake is only the fallback for legs that were never given one.
+  const legStake = (l) => (Number(l.stake) > 0 ? Number(l.stake) : stakePer);
+  const totalStake = counted.reduce((s, l) => s + legStake(l), 0);
+  const totalReturn = won.reduce((s, l) => s + legStake(l) * (Number(l.odds) || 0), 0);
+  const settledStake = [...won, ...lost].reduce((s, l) => s + legStake(l), 0);
   // Realized P/L on the selections that have already settled.
   const profit = decided === 0 ? null : totalReturn - settledStake;
   // Potential return if all current selections win (for the still-active view).
-  const potentialReturn = counted.reduce((s, l) => s + stakePer * (Number(l.odds) || 0), 0);
+  const potentialReturn = counted.reduce((s, l) => s + legStake(l) * (Number(l.odds) || 0), 0);
 
   const status = pending.length > 0 ? "pending" : total === 0 ? "void" : "settled";
   return {
@@ -222,6 +225,7 @@ export function PortfolioProvider({ children }) {
       const next = [...prev, {
         matchId: leg.matchId, home: leg.home, away: leg.away, league: leg.league,
         pick: leg.pick, pickName: leg.pickName, odds: Number(leg.odds) || 0, bookmaker: leg.bookmaker || "",
+        stake: Number(leg.stake) > 0 ? Number(leg.stake) : 0,   // per-selection money (0 = use ticket stake)
         kind: leg.kind || "match",
         locked: !!leg.locked,          // LION Ticket legs keep the price as played
         // Match start time — Portfolio dates performance by KICKOFF, not settle time (#8).
@@ -252,6 +256,17 @@ export function PortfolioProvider({ children }) {
     setSlip((prev) => {
       const next = prev.map((l) => (l.matchId === matchId && (!pick || (l.pick || "") === pick)
         ? { ...l, odds: Number(odds) || 0 } : l));
+      try { localStorage.setItem(SLIP_KEY, JSON.stringify(next)); } catch {}
+      touchSlip();
+      return next;
+    });
+  }, []);
+
+  // Each selection can be played with its own amount (#2).
+  const updateSlipLegStake = useCallback((matchId, stake, pick) => {
+    setSlip((prev) => {
+      const next = prev.map((l) => (l.matchId === matchId && (!pick || (l.pick || "") === pick)
+        ? { ...l, stake: Number(stake) || 0 } : l));
       try { localStorage.setItem(SLIP_KEY, JSON.stringify(next)); } catch {}
       touchSlip();
       return next;
@@ -630,7 +645,7 @@ export function PortfolioProvider({ children }) {
       slip, addToSlip, removeFromSlip, updateSlipLegOdds, clearSlip, slipHas, slipHasPick,
       playedPick, playedMatch, slipCount: slip.length,
       tickets, placeTicket, settleLeg, removeTicket, clearTickets, autoSettle, addManualTicket,
-      addDraftTicket, placeDraftTicket,
+      addDraftTicket, placeDraftTicket, updateSlipLegStake,
       syncNow: () => pullRemote(user?.user_id || user?.email, 2),
       newlySettled, clearNewlySettled,
     }}>

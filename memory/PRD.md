@@ -1410,3 +1410,25 @@ Also in this round:
    invented near-certain lines nobody can actually bet.
 Tests updated for the new ticket kind (group repetition and the top-pinned order only apply to
 single-match tickets): 21 passed.
+
+## 2026-10-28 — Brand in emails + per-selection stake
+
+1. **"Moka" in trial emails (FIXED)**: `email_service.py` `_template()` had three hardcoded
+   subjects ("2 days left in your Moka Pro trial", "Last day of your Moka Pro trial",
+   "Your Moka trial has ended") that never used `_BRAND`. Now all use `_BRAND` = LION.STATS, and
+   `_send()` runs `_debrand()` on subject + html as a final guard. Verified: all 4 lifecycle
+   subjects render LION.STATS.
+   Related earlier fix: invoice PDFs now re-brand at RENDER time (`_hydrate` + the PDF line loop),
+   because old invoice rows store the description text as issued ("Moka Pro - 30-day access").
+
+2. **Per-selection stake (NEW)**: a ticket used to have ONE stake for every leg. Now each leg can
+   carry its own `stake` (EUR 5 here, EUR 10 there); the ticket stake is only the fallback for legs
+   left empty.
+   - `PortfolioContext.computeTicket` -> `legStake(l)` used for totalStake / totalReturn /
+     settledStake / potentialReturn.
+   - `addToSlip` stores `stake`; new `updateSlipLegStake(matchId, stake, pick)` exported.
+   - `AddToSlipButton`: the dialog now asks Odds + Stake side by side (`slip-stake-edit`).
+   - `PortfolioPage` BetSlip: per-leg stake input (`slip-stake-<legId>`), the global field became
+     "Default stake - used only where you left the amount empty", totals sum per leg.
+   - Ticket legs print their own amount; CSV/stats (`ticketResults`) use the per-leg stake.
+   Verified in preview as Pro: EUR 5 + EUR 10 legs -> total EUR 15.00, potential EUR 35.35.
