@@ -5,6 +5,7 @@ user's session is created or their /auth/me is fetched, sent at most once each
 (tracked in users.emails_sent JSON). Gracefully no-ops if RESEND_API_KEY is unset.
 """
 import os
+import re
 import json
 import asyncio
 import logging
@@ -59,21 +60,27 @@ def _template(kind: str, name: str) -> tuple[str, str]:
                 _wrap("Your Pro trial just started 🚀",
                       f"Hey {name}, you now have <b>full Pro access</b> for 7 days — every league, value bets, full odds comparison and unlimited AI analysis. Dive in!", url))
     if kind == "reminder":
-        return ("2 days left in your Moka Pro trial",
+        return (f"2 days left in your {_BRAND} Pro trial",
                 _wrap("2 days left ⏳",
                       f"Hey {name}, your Pro trial ends in 2 days. Go annual for €79/year and save €25+ versus monthly.", url))
     if kind == "urgency":
-        return ("Last day of your Moka Pro trial",
+        return (f"Last day of your {_BRAND} Pro trial",
                 _wrap("Today is your last day ⚡",
                       f"Hey {name}, your Pro trial expires today. Upgrade now to keep every league, value bets and odds.", url))
     if kind == "expired":
-        return ("Your Moka trial has ended — upgrade to keep Pro",
+        return (f"Your {_BRAND} trial has ended — upgrade to keep Pro",
                 _wrap("Your trial has ended",
                       f"Hey {name}, your free trial is over and your account moved to Free. Re-activate Pro any time — annual is just €79/year.", url))
     return ("", "")
 
 
+def _debrand(text: str) -> str:
+    """Last line of defence: the old brand can never reach an inbox."""
+    return re.sub(r"(?i)\bmoka\b", _BRAND, text or "")
+
+
 async def _send(to_email: str, subject: str, html: str) -> bool:
+    subject, html = _debrand(subject), _debrand(html)
     if not _api_key():
         logger.info("[email skipped — no RESEND_API_KEY] to=%s subject=%s", to_email, subject)
         return False

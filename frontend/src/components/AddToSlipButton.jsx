@@ -15,6 +15,7 @@ export default function AddToSlipButton({ entry, className = "", size = "sm" }) 
   const [choosing, setChoosing] = useState(false);
   const [sel, setSel] = useState(null);
   const [oddsInput, setOddsInput] = useState("");
+  const [stakeInput, setStakeInput] = useState("");
   const match = entry?.match || {};
   const value = entry?.value || {};
   const id = match.id;
@@ -45,10 +46,12 @@ export default function AddToSlipButton({ entry, className = "", size = "sm" }) 
       matchId: id, home: match.home?.name, away: match.away?.name, league: match.leagueName,
       pick: choice?.pick || value.pick, pickName: choice?.pickName || value.pickName,
       odds: finalOdds || (isPro ? value.bestOdds : 0), bookmaker: bookFor(choice) || value.bookmaker,
+      stake: Number(stakeInput) > 0 ? Number(stakeInput) : 0,
       kickoff: match.commence_time || match.kickoff || null,
     });
     setChoosing(false);
-    toast.success(`Added to bet slip — ${choice?.pickName || value.pickName} @ ${Number(finalOdds || 0).toFixed(2)}`, {
+    const amt = Number(stakeInput) > 0 ? ` · €${Number(stakeInput).toFixed(2)}` : "";
+    toast.success(`Added to bet slip — ${choice?.pickName || value.pickName} @ ${Number(finalOdds || 0).toFixed(2)}${amt}`, {
       duration: 4000,
       action: { label: "Go to slip", onClick: () => navigate("/portfolio?tab=tickets") },
     });
@@ -70,6 +73,7 @@ export default function AddToSlipButton({ entry, className = "", size = "sm" }) 
     }
     setSel(null);
     setOddsInput("");
+    setStakeInput("");
     setChoosing(true);
   };
 
@@ -121,12 +125,25 @@ export default function AddToSlipButton({ entry, className = "", size = "sm" }) 
               );
             })}
 
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mt-3">
-              {isPro ? "Odds you played — edit if you got a different price" : "Odds you played"}
-            </label>
-            <input type="number" min="1" step="0.01" value={oddsInput} placeholder={shown ? Number(shown).toFixed(2) : "1.00"}
-              onChange={(e) => setOddsInput(e.target.value)} data-testid="slip-odds-edit"
-              className="mt-1 w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white font-mono-num focus:outline-none focus:border-[#39FF14]" />
+            <div className="grid grid-cols-2 gap-2 mt-3">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                  {isPro ? "Odds you played" : "Odds you played"}
+                </label>
+                <input type="number" min="1" step="0.01" value={oddsInput} placeholder={shown ? Number(shown).toFixed(2) : "1.00"}
+                  onChange={(e) => setOddsInput(e.target.value)} data-testid="slip-odds-edit"
+                  className="mt-1 w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white font-mono-num focus:outline-none focus:border-[#39FF14]" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400">Stake (€)</label>
+                <input type="number" min="0" step="0.5" value={stakeInput} placeholder="e.g. 5"
+                  onChange={(e) => setStakeInput(e.target.value)} data-testid="slip-stake-edit"
+                  className="mt-1 w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white font-mono-num focus:outline-none focus:border-[#39FF14]" />
+              </div>
+            </div>
+            <p className="text-[10px] text-zinc-500 mt-1.5">
+              Each selection keeps its own amount — leave empty to set it later in the slip.
+            </p>
 
             <button onClick={add} disabled={!finalOdds} data-testid="slip-confirm-add"
               className="mt-3 w-full py-2.5 rounded-lg bg-[#39FF14] text-black font-black uppercase tracking-wider text-sm hover:brightness-110 transition disabled:opacity-40 disabled:cursor-not-allowed">

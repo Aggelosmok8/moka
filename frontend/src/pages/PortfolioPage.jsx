@@ -197,11 +197,13 @@ function MatchHistory({ records, isPro }) {
 }
 
 // --- Accumulator slip builder ---
-function BetSlip({ slip, removeFromSlip, updateSlipLegOdds, clearSlip, placeTicket }) {
+function BetSlip({ slip, removeFromSlip, updateSlipLegOdds, updateSlipLegStake, clearSlip, placeTicket }) {
   const [stake, setStake] = useState("10");
   const per = Number(stake || 0);
-  const totalStake = per * slip.length;
-  const potential = slip.reduce((s, l) => s + per * (Number(l.odds) || 0), 0).toFixed(2);
+  const legStake = (l) => (Number(l.stake) > 0 ? Number(l.stake) : per);
+  const totalStake = slip.reduce((s, l) => s + legStake(l), 0);
+  const potential = slip.reduce((s, l) => s + legStake(l) * (Number(l.odds) || 0), 0).toFixed(2);
+  const customCount = slip.filter((l) => Number(l.stake) > 0).length;
 
   const place = () => {
     const amt = Number(stake);
@@ -242,6 +244,16 @@ function BetSlip({ slip, removeFromSlip, updateSlipLegOdds, clearSlip, placeTick
                   className={`w-16 bg-[#161b22] border border-[#30363d] rounded px-2 py-1 font-mono-num text-sm text-right focus:outline-none ${l.locked ? "text-[#FFD60A] cursor-default" : "text-white focus:border-[#39FF14]"}`}
                 />
               </div>
+              <div className="flex flex-col items-end">
+                <label className="text-[9px] text-zinc-500 uppercase leading-none mb-0.5">Stake €</label>
+                <input
+                  type="number" min="0" step="0.5" value={Number(l.stake) > 0 ? l.stake : ""}
+                  onChange={(e) => updateSlipLegStake(l.matchId, e.target.value, l.pick)}
+                  placeholder={per ? per.toFixed(2) : "0"}
+                  data-testid={`slip-stake-${legId}`}
+                  className="w-16 bg-[#161b22] border border-[#30363d] rounded px-2 py-1 font-mono-num text-sm text-right text-white focus:outline-none focus:border-[#39FF14]"
+                />
+              </div>
               <button onClick={() => removeFromSlip(l.matchId, l.home, l.away, l.pick)} data-testid={`slip-remove-${legId}`} className="text-zinc-500 hover:text-[#FF3B30]"><X className="w-4 h-4" /></button>
             </div>
           </div>
@@ -249,12 +261,12 @@ function BetSlip({ slip, removeFromSlip, updateSlipLegOdds, clearSlip, placeTick
         })}
       </div>
       <div>
-        <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">Stake per selection (€)</label>
+        <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">Default stake (€) — used only where you left the amount empty</label>
         <input type="number" min="0" step="1" value={stake} onChange={(e) => setStake(e.target.value)} data-testid="slip-stake-input"
           className="mt-1 w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white font-mono-num focus:outline-none focus:border-[#39FF14]" />
       </div>
       <div className="flex items-center justify-between mt-3 text-sm">
-        <span className="text-zinc-400">Total stake ({slip.length} × €{per.toFixed(2)})</span>
+        <span className="text-zinc-400">Total stake{customCount ? ` (${customCount} with own amount)` : ""}</span>
         <span className="font-mono-num font-bold text-white">€{totalStake.toFixed(2)}</span>
       </div>
       <div className="flex items-center justify-between mt-1 text-sm">
@@ -303,6 +315,9 @@ function TicketCard({ t, settleLeg, removeTicket, placeDraftTicket }) {
                   <div className="text-[11px] text-[#39FF14] font-bold break-words">
                     {l.manual && <span className="mr-1.5 align-middle text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#58a6ff]/15 text-[#58a6ff] border border-[#58a6ff]/30">Manual</span>}
                     {l.pickName} · <span className="text-white font-mono-num">{l.odds}</span>
+                    {(Number(l.stake) > 0 || Number(t.stake) > 0)
+                      ? <>{" · "}<span className="text-zinc-400 font-mono-num">€{(Number(l.stake) > 0 ? Number(l.stake) : Number(t.stake)).toFixed(2)}</span></>
+                      : null}
                   </div>
                 </div>
                 <span className={`shrink-0 inline-flex items-center gap-1 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full ${lst.cls}`}><lst.icon className="w-2.5 h-2.5" /> {lst.label}</span>
@@ -362,7 +377,7 @@ function TicketCard({ t, settleLeg, removeTicket, placeDraftTicket }) {
 }
 
 function TicketsView({ isPro }) {
-  const { slip, removeFromSlip, updateSlipLegOdds, clearSlip, placeTicket, tickets, settleLeg, removeTicket, placeDraftTicket } = usePortfolio();
+  const { slip, removeFromSlip, updateSlipLegOdds, updateSlipLegStake, clearSlip, placeTicket, tickets, settleLeg, removeTicket, placeDraftTicket } = usePortfolio();
   const [showHistory, setShowHistory] = useState(false);
   // Anything still PENDING stays on top, in its own active section — only fully
   // settled tickets drop into HISTORY (#4). CSS columns keep the cards packed
@@ -379,7 +394,7 @@ function TicketsView({ isPro }) {
   return (
     <div data-testid="portfolio-tickets-view">
       {slip.length > 0 && (
-        <BetSlip slip={slip} removeFromSlip={removeFromSlip} updateSlipLegOdds={updateSlipLegOdds} clearSlip={clearSlip} placeTicket={placeTicket} />
+        <BetSlip slip={slip} removeFromSlip={removeFromSlip} updateSlipLegOdds={updateSlipLegOdds} updateSlipLegStake={updateSlipLegStake} clearSlip={clearSlip} placeTicket={placeTicket} />
       )}
 
       {tickets.length === 0 && slip.length === 0 ? (
@@ -496,7 +511,7 @@ export default function PortfolioPage() {
           id: `${t.id}:${l.id}`,
           home: l.home, away: l.away, league: l.league,
           pick: l.pick, pickName: l.pickName,
-          odds: Number(l.odds) || 0, stake: stakePer, status: l.status,
+          odds: Number(l.odds) || 0, stake: Number(l.stake) > 0 ? Number(l.stake) : stakePer, status: l.status,
           kickoff: l.kickoff || l.commence_time || null,
           settledAt: when, createdAt: when,
         });
