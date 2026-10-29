@@ -435,20 +435,28 @@ export function PortfolioProvider({ children }) {
     let results = {};
     try { results = await fetchResults(unique, detail); } catch { return { settled: 0 }; }
     let settled = 0;
+    let awaiting = 0;
     const settleLegOrBet = (item) => {
       if (item.status !== "pending") return item;
       const r = results[item.matchId];
-      const resolved = r && r.finished ? settleStatus(item.pick, r) : null;
+      if (!r || !r.finished) return item;
+      const resolved = settleStatus(item.pick, r);
+      const finalScore = `${r.home}-${r.away}`;
       if (resolved) {
         settled++;
         return {
           ...item,
           status: resolved,
-          finalScore: `${r.home}-${r.away}`,
+          finalScore,
           settledAt: new Date().toISOString(),
         };
       }
-      return item;
+      // Match is over but this market cannot be settled from the data we have
+      // (missing stat totals / goal order / an unknown market). Never leave it
+      // looking like an unplayed match: show the final score and ask for the
+      // result instead of rotting as "pending" for ever.
+      awaiting++;
+      return { ...item, finalScore, finished: true };
     };
 
     setBets((prev) => {
@@ -468,21 +476,29 @@ export function PortfolioProvider({ children }) {
         return v;
       });
     }
-    return { settled };
+    return { settled, awaiting };
   }, [bets, tickets, slip]);
 
   // Run auto-settlement once app-wide (any page) so finished matches settle and
   // the Portfolio nav shows a "new result" badge even if the user isn't on it.
+  // It also re-runs every 10 minutes and whenever the tab is brought back to
+  // the front, so a match that ends while the app is open never stays pending.
+  // Zero extra provider cost: finished results are cached server-side for 7 days.
+  const autoSettleRef = useRef(autoSettle);
+  autoSettleRef.current = autoSettle;
   const autoRunRef = useRef(false);
   useEffect(() => {
     if (autoRunRef.current) return;
     autoRunRef.current = true;
-    const hasPending = bets.some((b) => b.status === "pending") ||
-      tickets.some((t) => t.legs.some((l) => l.status === "pending")) ||
-      slip.length > 0;
-    if (!hasPending) return;
-    const t = setTimeout(() => { autoSettle(); }, 1500);
-    return () => clearTimeout(t);
+    const run = () => autoSettleRef.current();
+    const t = setTimeout(run, 1500);
+    const iv = setInterval(run, 10 * 60 * 1000);
+    const onVisible = () => { if (document.visibilityState === "visible") run(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearTimeout(t); clearInterval(iv);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pendingCount = useMemo(() => bets.filter((b) => b.status === "pending").length, [bets]);

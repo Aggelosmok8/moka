@@ -1432,3 +1432,26 @@ single-match tickets): 21 passed.
      "Default stake - used only where you left the amount empty", totals sum per leg.
    - Ticket legs print their own amount; CSV/stats (`ticketResults`) use the per-leg stake.
    Verified in preview as Pro: EUR 5 + EUR 10 legs -> total EUR 15.00, potential EUR 35.35.
+
+## 2026-10-29 — Finished matches stuck pending + admin got trial emails
+
+1. **Finished matches stayed "pending" for ever (FIXED)**: `autoSettle` only wrote a status when
+   `settleStatus(pick, r)` could resolve the market. When the fixture was FINISHED but the market
+   could not be derived (missing stat totals / goal order, or a market code the settler does not
+   know), the leg was returned untouched and silently stayed pending.
+   - `PortfolioContext.autoSettle` now stamps those legs/bets with `finalScore` + `finished: true`
+     and returns `{settled, awaiting}`.
+   - `PortfolioPage`: pending-but-finished legs show "Finished 2-0 — tap the result" (
+     `leg-finished-<id>` / `bet-finished-<id>`), and Refresh results toasts the awaiting count.
+   - Auto-settlement also RE-RUNS every 10 min and on `visibilitychange` (was once per app load),
+     so a match ending while the tab is open settles by itself. No extra provider cost: finished
+     fixture results are cached server-side for 7 days (pending ones 2 min).
+   - Verified live on fixture live_af_1557444 (Liverpool 2-0 Brighton): `home` -> WON automatically,
+     `corners_over_8` -> LOST from the real stats, unknown market -> pending + "Finished 2-0".
+   - NOTE: `/api/results` can only resolve ids shaped `live_af_<fixtureId>`; manual tickets have no
+     matchId by design and are always settled by the user.
+
+2. **Admin received trial emails (FIXED)**: `evaluate_lifecycle` skipped paying users but not
+   admins, who are Pro by `ADMIN_EMAILS` allowlist while still carrying a `trial_start_date`.
+   It now returns early for any email in ADMIN_EMAILS. Verified: admin -> 0 emails, ordinary
+   trial user -> still sent.
