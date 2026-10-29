@@ -113,6 +113,10 @@ async def evaluate_lifecycle(db, user_doc: dict) -> None:
     # Paying users (subscription OR one-off access) never get trial nudges.
     if not user_doc or user_doc.get("subscription_status") in ("active", "one_off"):
         return
+    # Admins hold Pro by allowlist, not by a trial — they must never be pitched.
+    admins = [e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()]
+    if (user_doc.get("email") or "").strip().lower() in admins:
+        return
     start_iso = user_doc.get("trial_start_date")
     if not start_iso:
         return

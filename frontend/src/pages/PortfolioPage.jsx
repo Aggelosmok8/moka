@@ -86,6 +86,11 @@ function BetRow({ b, settle, remove }) {
           <st.icon className="w-3 h-3" /> {st.label}
         </span>
       </div>
+      {b.status === "pending" && b.finished && (
+        <div className="text-[10px] font-bold text-[#FFD60A] -mt-1 mb-1" data-testid={`bet-finished-${b.id}`}>
+          Finished {b.finalScore} — mark the result
+        </div>
+      )}
 
       <div className="grid grid-cols-4 gap-2 text-center my-3">
         <div><div className="text-[10px] text-zinc-500 uppercase">Pick</div><div className="text-sm font-bold text-[#39FF14] truncate">{b.pickName}</div></div>
@@ -322,6 +327,11 @@ function TicketCard({ t, settleLeg, removeTicket, placeDraftTicket }) {
                 </div>
                 <span className={`shrink-0 inline-flex items-center gap-1 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full ${lst.cls}`}><lst.icon className="w-2.5 h-2.5" /> {lst.label}</span>
               </div>
+              {l.status === "pending" && l.finished && (
+                <div className="mt-1 text-[10px] font-bold text-[#FFD60A]" data-testid={`leg-finished-${l.id}`}>
+                  Finished {l.finalScore} — tap the result
+                </div>
+              )}
               {finished ? (
                 <div className="mt-2 flex items-center gap-1 text-[10px] text-zinc-500"><Lock className="w-3 h-3" /> Settled — locked</div>
               ) : (
@@ -474,8 +484,11 @@ export default function PortfolioPage() {
     try {
       // Pull whatever was played on another device FIRST, then settle.
       await syncNow();
-      const { settled } = await autoSettle();
+      const { settled, awaiting } = await autoSettle();
       toast.success(settled ? `${settled} pick${settled > 1 ? "s" : ""} settled from final results` : "No finished matches to settle yet");
+      if (awaiting) {
+        toast(`${awaiting} finished match${awaiting > 1 ? "es" : ""} need your result — the final score is shown on each one`, { duration: 6000 });
+      }
     } finally {
       setSettling(false);
     }
