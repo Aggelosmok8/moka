@@ -15,6 +15,13 @@ const uid = () => {
   try { return crypto.randomUUID(); } catch { return `b_${Date.now()}_${Math.round(Math.random() * 1e6)}`; }
 };
 
+// A match that kicked off more than 4 hours ago is over, whatever the feed says.
+const isLongOver = (kickoff) => {
+  if (!kickoff) return false;
+  const t = new Date(kickoff).getTime();
+  return Number.isFinite(t) && Date.now() - t > 4 * 3600 * 1000;
+};
+
 function load() {
   try {
     const v = JSON.parse(localStorage.getItem(KEY));
@@ -420,8 +427,7 @@ export function PortfolioProvider({ children }) {
   // Finds every pending single bet + pending accumulator leg, fetches final
   // results in ONE batched (cached) backend call, and marks won/lost by
   // comparing the pick side (home/draw/away) to the real outcome.
-  const autoSettle = useCallback(async () => {
-    const pending = [
+  const autoSettle = useCallback(async () => {    const pending = [
       ...bets.filter((b) => b.status === "pending" && b.matchId),
       // A draft ticket has not been placed yet — it must not auto-settle.
       ...tickets.filter((t) => !t.draft).flatMap((t) => t.legs.filter((l) => l.status === "pending" && l.matchId)),
@@ -439,7 +445,22 @@ export function PortfolioProvider({ children }) {
     const settleLegOrBet = (item) => {
       if (item.status !== "pending") return item;
       const r = results[item.matchId];
-      if (!r || !r.finished) return item;
+      // Postponed / cancelled / abandoned / awarded: no score will ever exist, so
+      // void it instead of leaving it pending for ever.
+      if (r && r.void) {
+        settled++;
+        return { ...item, status: "void", settledAt: new Date().toISOString() };
+      }
+      if (!r || !r.finished) {
+        // The provider has no finished result for a match that kicked off long
+        // ago (unknown id, feed gap, competition we cannot resolve). Still over —
+        // ask for the result rather than pretending the match has not started.
+        if (isLongOver(item.kickoff)) {
+          awaiting++;
+          return { ...item, finished: true };
+        }
+        return item;
+      }
       const resolved = settleStatus(item.pick, r);
       const finalScore = `${r.home}-${r.away}`;
       if (resolved) {

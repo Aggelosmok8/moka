@@ -5,8 +5,20 @@ import { authApi } from "../contexts/AuthContext";
 import { setToken } from "../lib/api";
 
 // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
-const startGoogle = (intent) => {
+const startGoogle = async (intent) => {
   try { localStorage.setItem("lion_signup_intent", intent || "free"); } catch { /* ignore */ }
+  // Our own LION.STATS Google project when it is configured; the previous
+  // managed flow stays as the rollback path.
+  try {
+    const cfg = await authApi.get("/auth/google/config");
+    if (cfg?.data?.enabled) {
+      const redirectUri = window.location.origin + "/auth/google";
+      const { data } = await authApi.get("/auth/google/start", {
+        params: { redirect_uri: redirectUri, intent: intent || "free" },
+      });
+      if (data?.url) { window.location.href = data.url; return; }
+    }
+  } catch { /* fall through to the legacy flow */ }
   const redirectUrl = window.location.origin + "/";
   window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
 };

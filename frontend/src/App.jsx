@@ -14,6 +14,7 @@ import PricingPage from "./pages/PricingPage";
 import AboutPage from "./pages/AboutPage";
 import PricingSuccessPage from "./pages/PricingSuccessPage";
 import AuthCallback from "./pages/AuthCallback";
+import GoogleCallback from "./pages/GoogleCallback";
 import ValueMatchesPage from "./pages/ValueMatchesPage";
 import MatchesPage from "./pages/MatchesPage";
 import LeaguesPage from "./pages/LeaguesPage";
@@ -65,6 +66,7 @@ function AppRouter() {
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/signin" element={<SignInPage />} />
+      <Route path="/auth/google" element={<GoogleCallback />} />
       <Route path="/reset" element={<ResetPasswordPage />} />
       <Route path="/matches" element={<Gated element={<MatchesPage />} />} />
       <Route path="/value" element={<Navigate to="/matches" replace />} />

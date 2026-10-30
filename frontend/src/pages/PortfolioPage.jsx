@@ -88,7 +88,7 @@ function BetRow({ b, settle, remove }) {
       </div>
       {b.status === "pending" && b.finished && (
         <div className="text-[10px] font-bold text-[#FFD60A] -mt-1 mb-1" data-testid={`bet-finished-${b.id}`}>
-          Finished {b.finalScore} — mark the result
+          {b.finalScore ? `Finished ${b.finalScore} — mark the result` : "Match is over — mark the result"}
         </div>
       )}
 
@@ -329,7 +329,7 @@ function TicketCard({ t, settleLeg, removeTicket, placeDraftTicket }) {
               </div>
               {l.status === "pending" && l.finished && (
                 <div className="mt-1 text-[10px] font-bold text-[#FFD60A]" data-testid={`leg-finished-${l.id}`}>
-                  Finished {l.finalScore} — tap the result
+                  {l.finalScore ? `Finished ${l.finalScore} — tap the result` : "Match is over — tap the result"}
                 </div>
               )}
               {finished ? (

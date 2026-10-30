@@ -529,6 +529,9 @@ def _outcome(hs, a):
 
 
 _FINISHED = {"FT", "AET", "PEN"}
+# A fixture that ends in one of these will NEVER produce a score, so a pick on it
+# must be voided instead of sitting "pending" for ever.
+_VOID = {"PST", "CANC", "ABD", "AWD", "WO", "INT", "SUSP", "TBD"}
 
 
 async def fixture_results(ids: list) -> dict:
@@ -564,13 +567,15 @@ async def fixture_results(ids: list) -> dict:
                 ht = ((item.get("score") or {}).get("halftime")) or {}
                 hs, a = goals.get("home"), goals.get("away")
                 finished = status in _FINISHED
-                res = {"finished": finished, "home": hs, "away": a,
+                voided = status in _VOID
+                res = {"finished": finished, "void": voided, "home": hs, "away": a,
                        "ht_home": ht.get("home"), "ht_away": ht.get("away"),
                        "outcome": _outcome(hs, a) if finished else None, "status": status}
                 mid = fid_map.get(fid)
                 if mid:
                     out[mid] = res
-                    _c_set(f"result_{fid}", res, ttl=(7 * 24 * 3600 if finished else 120))
+                    _c_set(f"result_{fid}", res,
+                           ttl=(7 * 24 * 3600 if (finished or voided) else 120))
         except Exception as e:
             logger.warning("apifootball.fixture_results: %s", e)
     return out
