@@ -1455,3 +1455,56 @@ single-match tickets): 21 passed.
    admins, who are Pro by `ADMIN_EMAILS` allowlist while still carrying a `trial_start_date`.
    It now returns early for any email in ADMIN_EMAILS. Verified: admin -> 0 emails, ordinary
    trial user -> still sent.
+
+## 2026-10-30 — Pending that never settles: 2nd root cause + OAuth inspection
+
+Pending fix round 2 (verified in preview):
+- `apifootball._FINISHED` was {FT, AET, PEN} only. A fixture ending PST/CANC/ABD/AWD/WO/INT/SUSP
+  never becomes "finished", so a pick on it stayed pending FOR EVER. `fixture_results` now also
+  returns `void: true` for those statuses (cached 7 days) and `autoSettle` settles them as "void".
+- Safety net: a pending pick whose kickoff is > 4h old and for which the provider returns nothing
+  finished (unknown id shape - only `live_af_<id>` can be resolved, feed gap, unsupported
+  competition) is flagged `finished: true` and the card shows "Match is over - tap the result".
+  Verified: `sb_999999` leg kicked off days ago -> "Match is over - tap the result";
+  live_af_1557444 `away` -> LOST automatically.
+
+### Google OAuth — existing architecture (inspected, nothing changed yet)
+- NOT Supabase Auth. Supabase provides only the Postgres DB (DATABASE_URL via asyncpg).
+  Auth is the app's own: `users` (user_id `user_<hex>`), `user_sessions.session_token` bearer
+  tokens, bcrypt passwords, `password_resets`. Admin = email in ADMIN_EMAILS.
+- Google today = Emergent-managed: `SignInPage.startGoogle()` -> `https://auth.emergentagent.com/?redirect=<origin>/`
+  -> returns `#session_id=...` -> `AuthCallback` POSTs `/api/auth/session` with `X-Session-ID`
+  -> `auth.py:exchange_session` GETs `https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data`
+  -> links by EMAIL to the existing user (no duplicate accounts) -> issues our own session token.
+- So today the app registers NO Google redirect URI of its own; the redirect lands on `<origin>/`.
+- Migration plan (awaiting GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET in the backend env):
+  add `/api/auth/google/start` + `/api/auth/google/callback` (authorization-code, secret
+  server-side only), frontend route `/auth/google` posts the `code`; reuse the SAME
+  email-linking + `_issue_session` code path, so accounts/Stripe/subscriptions are untouched.
+  Rollback: the Emergent flow stays in place and is used whenever GOOGLE_CLIENT_ID is absent.
+  Redirect URIs to register: https://www.lion-stats.com/auth/google , https://lion-stats.com/auth/google ,
+  https://teams-hub-1.preview.emergentagent.com/auth/google
+
+## 2026-10-30 (b) — Google OAuth migrated to the owner's own Google Cloud project
+
+- `auth.py`: extracted `_login_google_identity()` (email linking + trial + `_issue_session`) and it is
+  now shared by BOTH the legacy Emergent flow (`POST /api/auth/session`) and the new own-client flow,
+  so user ids, Stripe data, subscriptions and password login are untouched.
+- New endpoints: `GET /api/auth/google/config` (is our client configured?),
+  `GET /api/auth/google/start?redirect_uri&intent` (builds the Google consent URL),
+  `POST /api/auth/google/callback` (exchanges the code server-side, verifies the id_token `aud`/`iss`
+  and `email_verified`, then issues our session). CSRF: HMAC-signed `state` (15-min TTL) keyed on the
+  client secret; the redirect_uri is read back from the signed state, never from the request.
+- Secrets: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` in the BACKEND env only. Nothing Google-related
+  in the frontend bundle; the client id only leaves the server inside the consent URL.
+- Frontend: new route `/auth/google` -> `GoogleCallback.jsx`; `SignInPage.startGoogle()` asks
+  `/auth/google/config` and uses our client when enabled, otherwise falls back to the old
+  `auth.emergentagent.com` flow (rollback path, still intact).
+- Verified in preview: config -> enabled true, start -> accounts.google.com URL with our client id and
+  `redirect_uri=<origin>/auth/google`, forged state -> 400, bad code -> 401, clicking the button lands
+  on Google. Google currently answers `redirect_uri_mismatch` until the URIs below are registered.
+- USER ACTION (Google Cloud Console, project LION.STATS, the OAuth 2.0 Web client):
+  JS origins: https://www.lion-stats.com , https://lion-stats.com , https://teams-hub-1.preview.emergentagent.com
+  Redirect URIs: https://www.lion-stats.com/auth/google , https://lion-stats.com/auth/google ,
+  https://teams-hub-1.preview.emergentagent.com/auth/google
+  Consent screen: name LION.STATS, homepage https://www.lion-stats.com, LION.STATS logo, support email.

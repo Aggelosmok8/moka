@@ -8,9 +8,12 @@ import os
 import re
 import uuid
 import json
+import hmac
+import base64
 import hashlib
 import secrets
 import logging
+from urllib.parse import urlencode
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
@@ -389,10 +392,27 @@ def make_auth_router(db) -> APIRouter:
             raise HTTPException(status_code=401, detail="Invalid session")
 
         data = r.json()
-        email = (data.get("email") or "").strip().lower()
+        return await _login_google_identity(
+            email=data.get("email") or "",
+            name=data.get("name") or "",
+            picture=data.get("picture"),
+            provider_id=data.get("id") or "",
+            intent=intent,
+            token=data.get("session_token"),
+        )
+
+    async def _login_google_identity(email: str, name: str = "", picture=None,
+                                     provider_id: str = "", intent: str = "free",
+                                     token: Optional[str] = None) -> dict:
+        """The ONE place a Google identity becomes a LION.STATS session.
+
+        Shared by the legacy Emergent flow and our own Google OAuth client, so
+        account linking (by email), trials, Stripe data and user ids behave
+        identically whichever door the user came through.
+        """
+        email = (email or "").strip().lower()
         if not email:
             raise HTTPException(status_code=401, detail="Email missing from auth")
-
         now = datetime.now(timezone.utc).isoformat()
         existing = await _find_user_by_email(email)
         if existing:
@@ -401,23 +421,118 @@ def make_auth_router(db) -> APIRouter:
             await db.users.update_one(
                 {"user_id": user_id},
                 {"$set": {
-                    "name": data.get("name", existing.get("name", "")),
-                    "picture": data.get("picture", existing.get("picture")),
-                    "provider_id": data.get("id") or existing.get("provider_id") or "",
+                    "name": name or existing.get("name", ""),
+                    "picture": picture or existing.get("picture"),
+                    "provider_id": provider_id or existing.get("provider_id") or "",
                     "last_login_at": now,
                 }},
             )
         else:
             doc = await _create_user(
-                email=email,
-                name=data.get("name", ""),
-                picture=data.get("picture"),
-                provider_id=data.get("id") or "",
+                email=email, name=name, picture=picture, provider_id=provider_id,
                 want_trial=(intent == "trial"),
             )
             user_id = doc["user_id"]
+        return await _issue_session(user_id, token)
 
-        return await _issue_session(user_id, data.get("session_token"))
+    # ---------------- our own Google OAuth client (LION.STATS project) -------
+    # REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS,
+    # THIS BREAKS THE AUTH — the redirect_uri always comes from the browser origin.
+    def _google_app() -> tuple[str, str]:
+        return (os.environ.get("GOOGLE_CLIENT_ID", "").strip(),
+                os.environ.get("GOOGLE_CLIENT_SECRET", "").strip())
+
+    def _sign_state(payload: str) -> str:
+        _, secret = _google_app()
+        sig = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()[:32]
+        return f"{base64.urlsafe_b64encode(payload.encode()).decode().rstrip('=')}.{sig}"
+
+    def _read_state(state: str) -> dict:
+        try:
+            raw, sig = state.split(".", 1)
+            payload = base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4)).decode()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid state")
+        if not hmac.compare_digest(_sign_state(payload).split(".", 1)[1], sig):
+            raise HTTPException(status_code=400, detail="Invalid state")
+        data = json.loads(payload)
+        if datetime.now(timezone.utc).timestamp() - float(data.get("ts", 0)) > 900:
+            raise HTTPException(status_code=400, detail="Sign-in link expired — try again")
+        return data
+
+    @router.get("/google/config")
+    async def google_config():
+        """Frontend asks which Google door to use (ours, or the legacy one)."""
+        cid, secret = _google_app()
+        return {"enabled": bool(cid and secret)}
+
+    @router.get("/google/start")
+    async def google_start(redirect_uri: str, intent: str = "free"):
+        cid, secret = _google_app()
+        if not (cid and secret):
+            raise HTTPException(status_code=503, detail="Google sign-in is not configured")
+        state = _sign_state(json.dumps({
+            "intent": "trial" if intent == "trial" else "free",
+            "redirect_uri": redirect_uri,
+            "ts": datetime.now(timezone.utc).timestamp(),
+            "n": secrets.token_urlsafe(8),
+        }, separators=(",", ":")))
+        params = urlencode({
+            "client_id": cid,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "scope": "openid email profile",
+            "state": state,
+            "access_type": "online",
+            "prompt": "select_account",
+            "include_granted_scopes": "true",
+        })
+        return {"url": f"https://accounts.google.com/o/oauth2/v2/auth?{params}"}
+
+    @router.post("/google/callback")
+    async def google_callback(request: Request):
+        """Exchange the one-time code for an id_token — server-side only, the
+        client secret never reaches the browser."""
+        cid, secret = _google_app()
+        if not (cid and secret):
+            raise HTTPException(status_code=503, detail="Google sign-in is not configured")
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        code = (body.get("code") or "").strip()
+        if not code:
+            raise HTTPException(status_code=400, detail="code required")
+        st = _read_state(body.get("state") or "")
+        redirect_uri = st["redirect_uri"]
+
+        async with httpx.AsyncClient(timeout=15) as client:
+            tr = await client.post("https://oauth2.googleapis.com/token", data={
+                "code": code, "client_id": cid, "client_secret": secret,
+                "redirect_uri": redirect_uri, "grant_type": "authorization_code",
+            })
+        if tr.status_code != 200:
+            logger.warning("google token exchange failed %s: %s", tr.status_code, tr.text[:200])
+            raise HTTPException(status_code=401, detail="Google sign-in failed")
+        id_token = (tr.json() or {}).get("id_token") or ""
+        try:
+            seg = id_token.split(".")[1]
+            claims = json.loads(base64.urlsafe_b64decode(seg + "=" * (-len(seg) % 4)))
+        except Exception:
+            raise HTTPException(status_code=401, detail="Google sign-in failed")
+        # The token came straight from Google over TLS; still check who it is for.
+        if claims.get("aud") != cid or claims.get("iss") not in ("accounts.google.com", "https://accounts.google.com"):
+            raise HTTPException(status_code=401, detail="Google sign-in failed")
+        if not claims.get("email_verified", True):
+            raise HTTPException(status_code=401, detail="Your Google email is not verified")
+
+        return await _login_google_identity(
+            email=claims.get("email") or "",
+            name=claims.get("name") or "",
+            picture=claims.get("picture"),
+            provider_id=claims.get("sub") or "",
+            intent=st.get("intent") or "free",
+        )
 
     @router.get("/me", response_model=User)
     async def me(request: Request, user: User = Depends(current_user)):
