@@ -49,6 +49,9 @@ def _budget_ok() -> bool:
 
 
 async def _get(path: str, params: dict) -> dict:
+    from provider_fetch import fetch_allowed
+    if not fetch_allowed():
+        raise RuntimeError("sportmonks: provider fetching is off in this environment")
     if not _budget_ok():
         raise RuntimeError("sportmonks hourly odds budget reached")
     from database import Database

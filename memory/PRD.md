@@ -1525,3 +1525,18 @@ Pending fix round 2 (verified in preview):
   value survives a restart; /api/admin/odds-quota now shows `freePlanLimit` + `planRemaining`.
 - Still open for the user to decide: refresh is every 6h per environment (= ~8 calls/day/provider across
   both), which is why 200/month is tight. Moving to 12h (~4/day) would end the warnings.
+
+## 2026-10-30 (d) — Preview no longer spends the shared odds allowance
+
+- New `backend/provider_fetch.py` -> `fetch_allowed()`, driven by `ODDS_PROVIDER_FETCH`
+  (default "on"). Set to `off` in the PREVIEW backend .env only; production keeps the key absent.
+- Checked BEFORE `quota_cycle.reserve()` (so a blocked environment does not even burn our own
+  counter) in: `rapid_books._provider_index` (the 5 Greek books incl. Allwyn/Pame Stoixima),
+  `superbet_odds.refresh`, `sportmonks_odds._get`.
+- Preview now serves whatever odds are already cached in its own DB; verified: Pro board still
+  returns matches with prices, and the log shows
+  `rapid_books[elabet]: provider fetching is off in this environment — serving cache`.
+- Deliberately NOT switched off for API-Football: it is our own Pro plan (618/7500 per DAY) and it
+  is the source of the match list itself, so preview would otherwise be empty.
+- Open option if the user wants preview to show the EXACT production prices: expose a read-only
+  mirror endpoint on production and have preview pull from it (one free call to our own API).

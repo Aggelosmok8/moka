@@ -20,6 +20,7 @@ from pathlib import Path
 import httpx
 
 import quota_cycle
+from provider_fetch import fetch_allowed
 
 logger = logging.getLogger(__name__)
 
@@ -643,6 +644,9 @@ async def _refresh_index(slug: str) -> dict:
         # cost a real request at the provider.
         logger.info("rapid_books[%s]: in cooldown for %ss, serving stale",
                     slug, int(FAIL_COOLDOWN - since_fail))
+        return stale
+    if not fetch_allowed():
+        logger.info("rapid_books[%s]: provider fetching is off in this environment — serving cache", slug)
         return stale
     res = await quota_cycle.reserve(_db(), slug, _ceiling(slug), MAX_DAILY)
     if not res["allowed"]:
