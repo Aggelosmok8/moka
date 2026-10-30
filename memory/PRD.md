@@ -1508,3 +1508,20 @@ Pending fix round 2 (verified in preview):
   Redirect URIs: https://www.lion-stats.com/auth/google , https://lion-stats.com/auth/google ,
   https://teams-hub-1.preview.emergentagent.com/auth/google
   Consent screen: name LION.STATS, homepage https://www.lion-stats.com, LION.STATS logo, support email.
+
+## 2026-10-30 (c) — Allwyn 85% warning: the real cause (shared RapidAPI key)
+
+- "Allwyn" = the RapidAPI host `allwyn-odds` behind our **Pame Stoixima** prices (rapid_books.PROVIDERS).
+- Live headers from one call: `x-ratelimit-requests-limit: 200`, `x-ratelimit-requests-remaining: 26`
+  -> 174 used (87%), reset in ~8 days. Our own counter said only 47 for that cycle.
+- ROOT CAUSE: one RAPIDAPI_ODDS_KEY is shared by preview AND production; each environment keeps its
+  own quota_cycle row in its own DB, while the provider counts them TOGETHER. So real usage is roughly
+  the sum of both environments and our ceiling could never see it.
+- FIX in `rapid_books.py`: `_note_plan()` reads the RapidAPI rate-limit headers off every successful
+  response (free), persists them in `odds_cache` under `plan_<slug>` (`_save_plan`/`_load_plan`, so a
+  restart does not forget), `_ceiling()` clamps our monthly ceiling to 90% of the real reported limit,
+  and `_plan_blocked()` refuses any further call while <= RAPID_BOOKS_SAFETY_BUFFER (default 15)
+  requests remain — cached odds are served instead. Verified: 26 left -> allowed; 10 left -> blocked;
+  value survives a restart; /api/admin/odds-quota now shows `freePlanLimit` + `planRemaining`.
+- Still open for the user to decide: refresh is every 6h per environment (= ~8 calls/day/provider across
+  both), which is why 200/month is tight. Moving to 12h (~4/day) would end the warnings.

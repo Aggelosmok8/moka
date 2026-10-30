@@ -368,13 +368,81 @@ def _p_elabet(payload, book, idx, pidx):
 
 # Superbet is excluded on purpose: its snapshot is ~476 MB per fetch.
 # Fonbet is excluded: the feed is an opaque versioned packet, not an odds list.
-PROVIDERS = {
-    "stoiximan":    ("Stoiximan", "stoiximan-odds", "site_pregame_stoiximan_soccer.json", _p_stoiximan),
+PROVIDERS = {    "stoiximan":    ("Stoiximan", "stoiximan-odds", "site_pregame_stoiximan_soccer.json", _p_stoiximan),
     "novibet":      ("Novibet", "novibet-odds", "site_pregame_novibet_soccer.json", _p_novibet),
     "bwin":         ("bwin", "bwin-odds1", "site_pregame_bwin_soccer.json", _p_bwin),
     "pamestoixima": ("Pame Stoixima", "allwyn-odds", "site_pregame_opapstore_soccer.json", _p_opap),
     "elabet":       ("Elabet", "elabet-odds", "site_pregame_elabet_soccer.json", _p_elabet),
 }
+
+
+# The REAL monthly allowance comes from RapidAPI's own response headers, which
+# differ per API (Allwyn is not 200/month like the others). We read them off the
+# last successful call — free, no extra request — and clamp our ceiling to it.
+_plan: dict = {}
+
+
+def _note_plan(slug: str, headers) -> None:
+    try:
+        limit = int(headers.get("x-ratelimit-requests-limit") or 0)
+        left = int(headers.get("x-ratelimit-requests-remaining") or -1)
+    except Exception:
+        return
+    if limit > 0:
+        row = {"limit": limit, "remaining": left,
+               "at": datetime.now(timezone.utc).isoformat()}
+        _plan[slug] = row
+        asyncio.ensure_future(_save_plan(slug, row))
+
+
+async def _save_plan(slug: str, row: dict) -> None:
+    try:
+        await _db().update_one({"slug": f"plan_{slug}"},
+                               {"$set": {"data": json.dumps(row)}}, upsert=True)
+    except Exception:
+        pass
+
+
+async def _load_plan(slug: str) -> dict:
+    """Survive a restart: the provider's own counter is shared by every
+    environment, so we must not forget it."""
+    if slug in _plan:
+        return _plan[slug]
+    try:
+        doc = await _db().find_one({"slug": f"plan_{slug}"})
+        row = (doc or {}).get("data") or {}
+        if isinstance(row, str):
+            row = json.loads(row or "{}")
+        if row.get("limit"):
+            _plan[slug] = row
+    except Exception:
+        pass
+    return _plan.get(slug, {})
+
+
+# The RapidAPI key is shared by every environment (preview + production), and the
+# provider counts them together — our per-DB counter only ever sees its own half.
+# So the headers are the single source of truth: stop calling while this many
+# requests are left, and keep serving cache instead.
+PLAN_SAFETY_BUFFER = int(os.environ.get("RAPID_BOOKS_SAFETY_BUFFER", "15"))
+
+
+def _plan_blocked(slug: str) -> bool:
+    left = (_plan.get(slug) or {}).get("remaining")
+    return left is not None and left >= 0 and left <= PLAN_SAFETY_BUFFER
+
+
+def _plan_blocked_after_load(row: dict) -> bool:
+    left = (row or {}).get("remaining")
+    return left is not None and left >= 0 and left <= PLAN_SAFETY_BUFFER
+
+
+def _ceiling(slug: str) -> int:
+    """Our own ceiling, never above the allowance RapidAPI reports for this API
+    (keeps a 10% buffer so a provider email like "85% used" can't become an
+    overage)."""
+    limit = (_plan.get(slug) or {}).get("limit") or 0
+    return min(MAX_MONTHLY, int(limit * 0.9)) if limit else MAX_MONTHLY
 
 
 def active_slugs() -> list:
@@ -454,7 +522,7 @@ async def _write_db(slug: str, idx: dict, pidx: dict, at: float, calls: int = 0)
 
 
 async def _bump_usage(slug: str) -> int:
-    res = await quota_cycle.reserve(_db(), slug, MAX_MONTHLY, MAX_DAILY)
+    res = await quota_cycle.reserve(_db(), slug, _ceiling(slug), MAX_DAILY)
     return res["calls"]
 
 
@@ -464,7 +532,7 @@ async def _usage_now(slug: str) -> dict:
 
 
 async def _quota_left(slug: str) -> int:
-    return MAX_MONTHLY - (await _usage_now(slug))["count"]
+    return _ceiling(slug) - (await _usage_now(slug))["count"]
 
 
 async def _daily_left(slug: str) -> int:
@@ -520,12 +588,15 @@ async def quota_status() -> list:
     """Per-provider call budget — what /api/admin/odds-quota reports."""
     out = []
     for slug in active_slugs():
+        await _load_plan(slug)
         row = await _read_db(slug)
         u = await _usage_now(slug)
         left = await _quota_left(slug)
         out.append({"provider": PROVIDERS[slug][0], "slug": slug,
-                    "callsThisMonth": u["count"], "ceiling": MAX_MONTHLY,
-                    "left": left, "freePlanLimit": 200,
+                    "callsThisMonth": u["count"], "ceiling": _ceiling(slug),
+                    "left": left, "freePlanLimit": (_plan.get(slug) or {}).get("limit", 200),
+                    "planRemaining": (_plan.get(slug) or {}).get("remaining"),
+                    "planSeenAt": (_plan.get(slug) or {}).get("at"),
                     "callsToday": u["dayCount"], "dailyCeiling": MAX_DAILY,
                     "cycleStarted": u["cycle"], "firstCallEver": u["anchor"],
                     "coolingDownFor": max(0, int(FAIL_COOLDOWN - (time.time() - _fail.get(slug, 0)))),
@@ -573,9 +644,13 @@ async def _refresh_index(slug: str) -> dict:
         logger.info("rapid_books[%s]: in cooldown for %ss, serving stale",
                     slug, int(FAIL_COOLDOWN - since_fail))
         return stale
-    res = await quota_cycle.reserve(_db(), slug, MAX_MONTHLY, MAX_DAILY)
+    res = await quota_cycle.reserve(_db(), slug, _ceiling(slug), MAX_DAILY)
     if not res["allowed"]:
         logger.warning("rapid_books[%s]: %s, serving stale", slug, res["reason"])
+        return stale
+    if _plan_blocked(slug) or _plan_blocked_after_load(await _load_plan(slug)):
+        logger.warning("rapid_books[%s]: provider reports only %s requests left this cycle — serving stale",
+                       slug, (_plan.get(slug) or {}).get("remaining"))
         return stale
     calls, day_calls = res["calls"], res["day_calls"]
     try:
@@ -589,6 +664,7 @@ async def _refresh_index(slug: str) -> dict:
             logger.warning("rapid_books[%s]: HTTP %s (call %s/%s this month, %s/%s today)",
                            slug, r.status_code, calls, MAX_MONTHLY, day_calls, MAX_DAILY)
             return stale
+        _note_plan(slug, r.headers)
         idx, pidx = {}, {}
         parser(r.json(), book, idx, pidx)
     except Exception as e:
@@ -612,7 +688,6 @@ async def _refresh_index(slug: str) -> dict:
 
 async def _provider_bundle(slug: str) -> dict:
     return await _provider_index(slug)
-
 
 async def provider_indexes() -> list:
     """One index PER provider. They spell team names differently, so a fuzzy
