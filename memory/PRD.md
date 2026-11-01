@@ -1555,3 +1555,12 @@ Pending fix round 2 (verified in preview):
   cleared from the DB.
 - Production RCA requested from the deployer agent (raw Stripe error in prod logs + whether
   STRIPE_API_KEY / STRIPE_PRICE_* are live or test). Needs deploy either way.
+
+- Deployer debug could NOT run (deploy_job_id does not resolve to a v3 deployment — the live site is
+  not reachable by the platform's deployment tooling), so production logs/secrets were unavailable.
+  Instead added `GET /api/admin/billing-diagnostics` (admin only, never returns a secret value):
+  reports whether STRIPE_API_KEY is present and test/live, whether the webhook secret exists, whether
+  each STRIPE_PRICE_* is set/valid, and the Stripe account id + charges_enabled, plus the raw Stripe
+  error if the key is rejected. Exposed as "Checkout config" in Account -> Diagnostics
+  (`diag-checkout-btn`). Verified in preview: key present/test, account acct_1Tm8iGIyEGadToxJ (GR),
+  charges enabled, no price envs set (so the built-in prices are used).

@@ -616,6 +616,35 @@ async def refresh_cache(scope: str = "all", admin=Depends(require_admin)):
     return {"scope": scope, "source": r["source"], "matches": r["totalCount"]}
 
 
+@api_router.get("/admin/billing-diagnostics")
+async def billing_diagnostics(admin=Depends(require_admin)):
+    """Why checkout fails in an environment — never returns a secret value."""
+    import stripe
+    key = (os.environ.get("STRIPE_API_KEY", "") or "").strip()
+    out = {
+        "stripeKeyPresent": bool(key),
+        "stripeKeyMode": ("live" if key.startswith(("sk_live", "rk_live"))
+                          else "test" if key.startswith(("sk_test", "rk_test"))
+                          else ("unrecognised" if key else "missing")),
+        "webhookSecretPresent": bool((os.environ.get("STRIPE_WEBHOOK_SECRET", "") or "").strip()),
+        "prices": {}, "account": None, "error": None,
+    }
+    for env_name in ("STRIPE_PRICE_MONTHLY_ONCE", "STRIPE_PRICE_MONTHLY", "STRIPE_PRICE_YEARLY"):
+        val = (os.environ.get(env_name, "") or "").strip()
+        out["prices"][env_name] = "not set" if not val else (
+            "set" if val.startswith("price_") else "INVALID (must start with price_)")
+    if key:
+        stripe.api_key = key
+        try:
+            acct = await asyncio.to_thread(stripe.Account.retrieve)
+            out["account"] = {"id": acct.get("id"), "country": acct.get("country"),
+                              "chargesEnabled": acct.get("charges_enabled"),
+                              "detailsSubmitted": acct.get("details_submitted")}
+        except Exception as e:
+            out["error"] = f"{type(e).__name__}: {str(e)[:200]}"
+    return out
+
+
 @api_router.get("/admin/odds-quota")
 async def odds_quota(admin=Depends(require_admin)):
     """How much of each bookmaker feed's free monthly budget is spent."""
