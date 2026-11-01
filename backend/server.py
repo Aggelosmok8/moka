@@ -642,6 +642,22 @@ async def billing_diagnostics(admin=Depends(require_admin)):
                               "detailsSubmitted": acct.get("details_submitted")}
         except Exception as e:
             out["error"] = f"{type(e).__name__}: {str(e)[:200]}"
+    # The provider's own words from the last failed checkout attempt.
+    try:
+        fails = []
+        cur = db.payment_transactions.find({"status": "error"})
+        if asyncio.iscoroutine(cur):
+            cur = await cur
+        async for row in cur:
+            fails.append(row)
+        fails.sort(key=lambda r: r.get("created_at") or "", reverse=True)
+        out["lastCheckoutErrors"] = [
+            {"at": f.get("created_at"), "email": f.get("email"),
+             "package": f.get("package_id"), **(f.get("metadata") or {})}
+            for f in fails[:3]
+        ]
+    except Exception as e:
+        out["lastCheckoutErrors"] = f"unavailable: {type(e).__name__}"
     return out
 
 

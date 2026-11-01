@@ -1564,3 +1564,18 @@ Pending fix round 2 (verified in preview):
   error if the key is rejected. Exposed as "Checkout config" in Account -> Diagnostics
   (`diag-checkout-btn`). Verified in preview: key present/test, account acct_1Tm8iGIyEGadToxJ (GR),
   charges enabled, no price envs set (so the built-in prices are used).
+
+## 2026-11-01 (b) — Checkout hardened so a Stripe rejection can no longer block payment
+
+- `billing.create_checkout` now has a 3-step ladder instead of failing on the first StripeError:
+  1. normal session (stored customer, VAT-id field, invoice creation),
+  2. if the error mentions the customer -> clear `stripe_customer_id` and retry with customer_email,
+  3. MINIMAL session: strips tax_id_collection / billing_address_collection / invoice_creation and
+     keeps only mode + line item + urls + metadata, so the person can simply pay.
+  Every failed attempt is stored (payment_transactions, status="error", details in `metadata`
+  because the table has no `error` column) with the provider's own code/param/message.
+- `GET /api/admin/billing-diagnostics` now also returns `lastCheckoutErrors` (latest 3), surfaced via
+  Account -> Diagnostics -> "Checkout config".
+- Verified in-process by forcing a `feature_not_available / tax_id_collection` rejection: the first
+  attempt failed, the minimal retry succeeded and returned a checkout URL, and the failure was
+  recorded and shown in the diagnostics payload.
