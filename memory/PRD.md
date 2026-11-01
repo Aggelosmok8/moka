@@ -1540,3 +1540,18 @@ Pending fix round 2 (verified in preview):
   is the source of the match list itself, so preview would otherwise be empty.
 - Open option if the user wants preview to show the EXACT production prices: expose a read-only
   mirror endpoint on production and have preview pull from it (one free call to our own API).
+
+## 2026-11-01 — "Could not start checkout" on the live site
+
+- Reproduced the message source: `billing.py POST /api/billing/checkout` -> 502
+  "Could not start checkout. Please try again." whenever `stripe.checkout.Session.create` raises.
+- Preview is HEALTHY: all three packages return a real checkout URL
+  (`pro_monthly_once` mode=payment / `pro_monthly` + `pro_yearly` mode=subscription), so the plan
+  choice (30-day one-off vs auto-renewing) is already in place and working.
+- FIX shipped in code: a `stripe_customer_id` saved under TEST keys does not exist under LIVE keys,
+  which makes Stripe reject the whole session. `create_checkout` now detects a customer-related
+  StripeError, clears the stale `stripe_customer_id` and retries once with `customer_email`.
+  Verified by seeding `cus_BOGUS123` on the QA user: checkout still succeeded and the stale id was
+  cleared from the DB.
+- Production RCA requested from the deployer agent (raw Stripe error in prod logs + whether
+  STRIPE_API_KEY / STRIPE_PRICE_* are live or test). Needs deploy either way.
