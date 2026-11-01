@@ -1508,3 +1508,59 @@ Pending fix round 2 (verified in preview):
   Redirect URIs: https://www.lion-stats.com/auth/google , https://lion-stats.com/auth/google ,
   https://teams-hub-1.preview.emergentagent.com/auth/google
   Consent screen: name LION.STATS, homepage https://www.lion-stats.com, LION.STATS logo, support email.
+
+## 2026-10-30 (c) — Allwyn 85% warning: the real cause (shared RapidAPI key)
+
+- "Allwyn" = the RapidAPI host `allwyn-odds` behind our **Pame Stoixima** prices (rapid_books.PROVIDERS).
+- Live headers from one call: `x-ratelimit-requests-limit: 200`, `x-ratelimit-requests-remaining: 26`
+  -> 174 used (87%), reset in ~8 days. Our own counter said only 47 for that cycle.
+- ROOT CAUSE: one RAPIDAPI_ODDS_KEY is shared by preview AND production; each environment keeps its
+  own quota_cycle row in its own DB, while the provider counts them TOGETHER. So real usage is roughly
+  the sum of both environments and our ceiling could never see it.
+- FIX in `rapid_books.py`: `_note_plan()` reads the RapidAPI rate-limit headers off every successful
+  response (free), persists them in `odds_cache` under `plan_<slug>` (`_save_plan`/`_load_plan`, so a
+  restart does not forget), `_ceiling()` clamps our monthly ceiling to 90% of the real reported limit,
+  and `_plan_blocked()` refuses any further call while <= RAPID_BOOKS_SAFETY_BUFFER (default 15)
+  requests remain — cached odds are served instead. Verified: 26 left -> allowed; 10 left -> blocked;
+  value survives a restart; /api/admin/odds-quota now shows `freePlanLimit` + `planRemaining`.
+- Still open for the user to decide: refresh is every 6h per environment (= ~8 calls/day/provider across
+  both), which is why 200/month is tight. Moving to 12h (~4/day) would end the warnings.
+
+## 2026-10-30 (d) — Preview no longer spends the shared odds allowance
+
+- New `backend/provider_fetch.py` -> `fetch_allowed()`, driven by `ODDS_PROVIDER_FETCH`
+  (default "on"). Set to `off` in the PREVIEW backend .env only; production keeps the key absent.
+- Checked BEFORE `quota_cycle.reserve()` (so a blocked environment does not even burn our own
+  counter) in: `rapid_books._provider_index` (the 5 Greek books incl. Allwyn/Pame Stoixima),
+  `superbet_odds.refresh`, `sportmonks_odds._get`.
+- Preview now serves whatever odds are already cached in its own DB; verified: Pro board still
+  returns matches with prices, and the log shows
+  `rapid_books[elabet]: provider fetching is off in this environment — serving cache`.
+- Deliberately NOT switched off for API-Football: it is our own Pro plan (618/7500 per DAY) and it
+  is the source of the match list itself, so preview would otherwise be empty.
+- Open option if the user wants preview to show the EXACT production prices: expose a read-only
+  mirror endpoint on production and have preview pull from it (one free call to our own API).
+
+## 2026-11-01 — "Could not start checkout" on the live site
+
+- Reproduced the message source: `billing.py POST /api/billing/checkout` -> 502
+  "Could not start checkout. Please try again." whenever `stripe.checkout.Session.create` raises.
+- Preview is HEALTHY: all three packages return a real checkout URL
+  (`pro_monthly_once` mode=payment / `pro_monthly` + `pro_yearly` mode=subscription), so the plan
+  choice (30-day one-off vs auto-renewing) is already in place and working.
+- FIX shipped in code: a `stripe_customer_id` saved under TEST keys does not exist under LIVE keys,
+  which makes Stripe reject the whole session. `create_checkout` now detects a customer-related
+  StripeError, clears the stale `stripe_customer_id` and retries once with `customer_email`.
+  Verified by seeding `cus_BOGUS123` on the QA user: checkout still succeeded and the stale id was
+  cleared from the DB.
+- Production RCA requested from the deployer agent (raw Stripe error in prod logs + whether
+  STRIPE_API_KEY / STRIPE_PRICE_* are live or test). Needs deploy either way.
+
+- Deployer debug could NOT run (deploy_job_id does not resolve to a v3 deployment — the live site is
+  not reachable by the platform's deployment tooling), so production logs/secrets were unavailable.
+  Instead added `GET /api/admin/billing-diagnostics` (admin only, never returns a secret value):
+  reports whether STRIPE_API_KEY is present and test/live, whether the webhook secret exists, whether
+  each STRIPE_PRICE_* is set/valid, and the Stripe account id + charges_enabled, plus the raw Stripe
+  error if the key is rejected. Exposed as "Checkout config" in Account -> Diagnostics
+  (`diag-checkout-btn`). Verified in preview: key present/test, account acct_1Tm8iGIyEGadToxJ (GR),
+  charges enabled, no price envs set (so the built-in prices are used).

@@ -271,10 +271,27 @@ def make_billing_router(db, current_user, current_user_optional) -> APIRouter:
 
         try:
             session = await asyncio.to_thread(stripe.checkout.Session.create, **session_args)
-        except stripe.error.StripeError:
-            # Never leak raw Stripe errors to the client — log full detail server-side.
-            logger.exception("Stripe checkout (subscription) failed for user %s", user.user_id)
-            raise HTTPException(status_code=502, detail="Could not start checkout. Please try again.")
+        except stripe.error.StripeError as e:
+            msg = str(getattr(e, "user_message", "") or e)
+            # A customer id saved while the app ran on TEST keys does not exist on
+            # LIVE keys (and vice versa) — Stripe then rejects the whole session.
+            # Drop the stale id and retry once with the plain email.
+            if customer_id and "customer" in msg.lower():
+                logger.warning("Stripe rejected stored customer %s (%s) — retrying without it",
+                               customer_id, msg)
+                await db.users.update_one({"user_id": user.user_id},
+                                          {"$set": {"stripe_customer_id": None}})
+                session_args.pop("customer", None)
+                session_args["customer_email"] = user.email
+                try:
+                    session = await asyncio.to_thread(stripe.checkout.Session.create, **session_args)
+                except stripe.error.StripeError:
+                    logger.exception("Stripe checkout retry failed for user %s", user.user_id)
+                    raise HTTPException(status_code=502, detail="Could not start checkout. Please try again.")
+            else:
+                # Never leak raw Stripe errors to the client — log full detail server-side.
+                logger.exception("Stripe checkout (%s) failed for user %s", mode, user.user_id)
+                raise HTTPException(status_code=502, detail="Could not start checkout. Please try again.")
 
         await db.payment_transactions.insert_one({
             "session_id": session.id,

@@ -566,7 +566,9 @@ async def fixture_results(ids: list) -> dict:
                 goals = item.get("goals") or {}
                 ht = ((item.get("score") or {}).get("halftime")) or {}
                 hs, a = goals.get("home"), goals.get("away")
-                finished = status in _FINISHED
+                # A fixture flagged finished without a score cannot settle anything;
+                # don't cache that for a week, keep asking until the score lands.
+                finished = status in _FINISHED and hs is not None and a is not None
                 voided = status in _VOID
                 res = {"finished": finished, "void": voided, "home": hs, "away": a,
                        "ht_home": ht.get("home"), "ht_away": ht.get("away"),

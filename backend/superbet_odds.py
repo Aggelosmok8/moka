@@ -262,6 +262,10 @@ async def refresh(force: bool = False) -> bool:
             return False
         # Budget check + count happen BEFORE the download: this feed is ~550MB and
         # a failed stream still costs a call at the provider.
+        from provider_fetch import fetch_allowed
+        if not fetch_allowed():
+            logger.info("superbet: provider fetching is off in this environment — serving cache")
+            return False
         res = await quota_cycle.reserve(await _db(), "superbet", MAX_MONTHLY, MAX_DAILY)
         if not res["allowed"]:
             logger.warning("superbet: %s", res["reason"])

@@ -5,6 +5,7 @@ import { Stethoscope, Loader2 } from "lucide-react";
 // Admin-only. Surfaces the exact provider errors (Stripe prices, myDATA, email)
 // that otherwise only exist in the production logs.
 const CHECKS = [
+  { id: "checkout", label: "Checkout config", run: () => authApi.get("/admin/billing-diagnostics") },
   { id: "prices", label: "Stripe prices", run: () => authApi.get("/billing/admin/price-check") },
   { id: "mydata", label: "myDATA connection", run: () => authApi.get("/invoices/admin/mydata-check") },
   { id: "failed", label: "Retry documents / get ΜΑΡΚ", run: () => authApi.get("/invoices/admin/failed") },
