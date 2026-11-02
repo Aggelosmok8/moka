@@ -19,7 +19,7 @@ numpy>=1.26.0
 python-multipart>=0.0.9
 httpx==0.28.1
 openai==1.99.9
-stripe>=8.0.0
+stripe==14.4.1
 resend>=2.0.0
 SQLAlchemy>=2.0.30
 alembic>=1.13.2
