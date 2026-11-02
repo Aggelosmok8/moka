@@ -658,6 +658,18 @@ async def billing_diagnostics(admin=Depends(require_admin)):
         ]
     except Exception as e:
         out["lastCheckoutErrors"] = f"unavailable: {type(e).__name__}"
+    # myDATA (the invoice QR only exists once AADE returns a MARK).
+    try:
+        from invoices import mydata_configured, _mydata_url
+        base = _mydata_url("")
+        out["mydata"] = {
+            "configured": bool(mydata_configured()),
+            "base": base,
+            "environment": ("production" if "mydata" in base and "dev" not in base.lower()
+                            else "DEV/sandbox — documents here never get a real MARK"),
+        }
+    except Exception as e:
+        out["mydata"] = f"unavailable: {type(e).__name__}"
     return out
 
 
