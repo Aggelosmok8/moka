@@ -332,7 +332,14 @@ def make_billing_router(db, current_user, current_user_optional) -> APIRouter:
                     logger.warning("Stripe checkout succeeded only in minimal mode for user %s", user.user_id)
                 except stripe.error.StripeError as e3:
                     await _record_failure(e3, "retry_minimal")
-                    raise HTTPException(status_code=502, detail="Could not start checkout. Please try again.")
+                    err3 = (getattr(e3, "json_body", None) or {}).get("error") or {}
+                    # Surface Stripe's own code/param (never a secret) so the person
+                    # reporting the problem can tell us what Stripe actually said.
+                    reason = err3.get("code") or err3.get("type") or type(e3).__name__
+                    if err3.get("param"):
+                        reason = f"{reason} / {err3['param']}"
+                    raise HTTPException(status_code=502,
+                                        detail=f"Could not start checkout [{reason}]. Please try again.")
 
         await db.payment_transactions.insert_one({
             "session_id": session.id,
