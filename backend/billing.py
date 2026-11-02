@@ -9,6 +9,7 @@ the `users` document so Pro access can be verified server-side at any time via
 All Stripe SDK calls (sync) are wrapped in `asyncio.to_thread`.
 """
 import os
+import uuid
 import logging
 import asyncio
 from datetime import datetime, timedelta, timezone
@@ -269,29 +270,76 @@ def make_billing_router(db, current_user, current_user_optional) -> APIRouter:
         else:
             session_args["customer_email"] = user.email
 
+        async def _create(args: dict):
+            return await asyncio.to_thread(stripe.checkout.Session.create, **args)
+
+        async def _record_failure(e, stage: str) -> None:
+            """Keep the provider's own words so Diagnostics can show them later."""
+            body_err = (getattr(e, "json_body", None) or {}).get("error") or {}
+            try:
+                await db.payment_transactions.insert_one({
+                    "session_id": f"failed_{uuid.uuid4().hex[:12]}",
+                    "user_id": user.user_id, "email": user.email,
+                    "package_id": body.package_id, "status": "error",
+                    "mode": mode,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "metadata": {
+                        "stage": stage, "type": body_err.get("type") or type(e).__name__,
+                        "code": body_err.get("code") or getattr(e, "code", None),
+                        "param": body_err.get("param"),
+                        "message": (body_err.get("message") or str(e))[:400],
+                        "had_customer": bool(session_args.get("customer")),
+                    },
+                })
+            except Exception:
+                logger.exception("could not record checkout failure")
+
         try:
-            session = await asyncio.to_thread(stripe.checkout.Session.create, **session_args)
+            session = await _create(session_args)
         except stripe.error.StripeError as e:
-            msg = str(getattr(e, "user_message", "") or e)
-            # A customer id saved while the app ran on TEST keys does not exist on
-            # LIVE keys (and vice versa) — Stripe then rejects the whole session.
-            # Drop the stale id and retry once with the plain email.
-            if customer_id and "customer" in msg.lower():
-                logger.warning("Stripe rejected stored customer %s (%s) — retrying without it",
-                               customer_id, msg)
+            msg = str((getattr(e, "json_body", None) or {}).get("error", {}).get("message") or e)
+            logger.error("Stripe checkout (%s) failed for user %s: %s", mode, user.user_id, msg)
+            await _record_failure(e, "first")
+            session = None
+
+            # 1) A stored customer id that this Stripe account does not know
+            #    (created under different keys, or deleted) poisons the session.
+            if session_args.get("customer") and "customer" in msg.lower():
                 await db.users.update_one({"user_id": user.user_id},
                                           {"$set": {"stripe_customer_id": None}})
                 session_args.pop("customer", None)
                 session_args["customer_email"] = user.email
                 try:
-                    session = await asyncio.to_thread(stripe.checkout.Session.create, **session_args)
-                except stripe.error.StripeError:
-                    logger.exception("Stripe checkout retry failed for user %s", user.user_id)
-                    raise HTTPException(status_code=502, detail="Could not start checkout. Please try again.")
-            else:
-                # Never leak raw Stripe errors to the client — log full detail server-side.
-                logger.exception("Stripe checkout (%s) failed for user %s", mode, user.user_id)
-                raise HTTPException(status_code=502, detail="Could not start checkout. Please try again.")
+                    session = await _create(session_args)
+                except stripe.error.StripeError as e2:
+                    await _record_failure(e2, "retry_no_customer")
+                    session = None
+
+            # 2) Last resort: strip every optional feature (VAT id field, invoice
+            #    creation, address collection) and let the person simply pay.
+            if session is None:
+                minimal = {k: v for k, v in session_args.items()
+                           if k not in ("tax_id_collection", "billing_address_collection",
+                                        "invoice_creation", "payment_intent_data",
+                                        "subscription_data", "customer")}
+                minimal["customer_email"] = user.email
+                if mode == "subscription":
+                    minimal["subscription_data"] = {"metadata": meta}
+                else:
+                    minimal["payment_intent_data"] = {"metadata": meta}
+                try:
+                    session = await _create(minimal)
+                    logger.warning("Stripe checkout succeeded only in minimal mode for user %s", user.user_id)
+                except stripe.error.StripeError as e3:
+                    await _record_failure(e3, "retry_minimal")
+                    err3 = (getattr(e3, "json_body", None) or {}).get("error") or {}
+                    # Surface Stripe's own code/param (never a secret) so the person
+                    # reporting the problem can tell us what Stripe actually said.
+                    reason = err3.get("code") or err3.get("type") or type(e3).__name__
+                    if err3.get("param"):
+                        reason = f"{reason} / {err3['param']}"
+                    raise HTTPException(status_code=502,
+                                        detail=f"Could not start checkout [{reason}]. Please try again.")
 
         await db.payment_transactions.insert_one({
             "session_id": session.id,
