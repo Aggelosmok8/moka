@@ -270,6 +270,18 @@ def make_billing_router(db, current_user, current_user_optional) -> APIRouter:
         else:
             session_args["customer_email"] = user.email
 
+        try:
+            return await _run_checkout(user, body, mode, meta, session_args, pkg)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            # Anything unexpected used to surface as a bare 500 with no clue;
+            # name it so the person reporting it can tell us what happened.
+            logger.exception("Checkout crashed for user %s", user.user_id)
+            raise HTTPException(status_code=502,
+                                detail=f"Could not start checkout [{type(exc).__name__}: {str(exc)[:120]}]")
+
+    async def _run_checkout(user, body, mode: str, meta: dict, session_args: dict, pkg: dict):
         async def _create(args: dict):
             return await asyncio.to_thread(stripe.checkout.Session.create, **args)
 

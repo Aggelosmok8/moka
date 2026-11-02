@@ -1579,3 +1579,24 @@ Pending fix round 2 (verified in preview):
 - Verified in-process by forcing a `feature_not_available / tax_id_collection` rejection: the first
   attempt failed, the minimal retry succeeded and returned a checkout URL, and the failure was
   recorded and shown in the diagnostics payload.
+
+## 2026-11-02 — Checkout 500 on production: reproduced from the outside
+
+- Found the real production backend from the deployed bundle: `https://moka-backend-s9fj.onrender.com`
+  (www.lion-stats.com serves only the Vercel frontend; `/api/*` there returns index.html).
+- Reproduced by registering a throwaway user on PROD (`qa.checkout.probe@lionstats.app`) and calling
+  `POST /api/billing/checkout`: **HTTP 500 plain "Internal Server Error" for all three packages**,
+  while `/api/billing/packages`, `/api/billing/me`, invalid-package (400) and validation (422) all
+  behave — so the handler IS reached and crashes with an UNHANDLED exception (not a StripeError,
+  which would be our 502).
+- Ruled out: `stripe.error` removal (present in 16.1.0 too), missing key (that returns a JSON
+  "Stripe not configured"), bad package ids, auth.
+- Actions:
+  1. `requirements.txt`: pinned `stripe==14.4.1` (was `stripe>=8.0.0`), so Render stops installing a
+     different major (16.x) from the one preview is tested against — environment drift was the only
+     material difference between the two.
+  2. `billing.create_checkout` now wraps everything in a catch-all that logs the traceback and returns
+     `502 "Could not start checkout [ExceptionType: message]"`, so the next attempt NAMES the fault
+     instead of a blank 500. (Checkout body moved into `_run_checkout(...)`.)
+- Preview re-verified after the change: all three packages return a checkout URL.
+- NOTE for the next session: if the bracketed name still appears after deploy, that string is the RCA.
