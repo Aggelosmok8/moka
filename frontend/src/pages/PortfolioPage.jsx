@@ -286,9 +286,8 @@ function BetSlip({ slip, removeFromSlip, updateSlipLegOdds, updateSlipLegStake, 
   );
 }
 
-function TicketCard({ t, settleLeg, removeTicket, placeDraftTicket }) {
+function TicketCard({ t, settleLeg, removeTicket, placeDraftTicket, updateTicketLegStake }) {
   const info = computeTicket(t);
-  const [draftStake, setDraftStake] = useState("");
   const legStakeTotal = (t.legs || []).reduce((s, l) => s + (Number(l.stake) || 0), 0);
   // Progress badge: WON / TOTAL selections (never all-or-nothing).
   const badgeCls = info.status === "pending"
@@ -323,17 +322,25 @@ function TicketCard({ t, settleLeg, removeTicket, placeDraftTicket }) {
                     {l.pickName} · <span className="text-white font-mono-num">{l.odds}</span>
                   </div>
                   {(() => {
-                    const st = Number(l.stake) > 0 ? Number(l.stake) : Number(t.stake) || 0;
-                    if (!st) return null;
+                    const own = Number(l.stake) || 0;
+                    const st = own > 0 ? own : Number(t.stake) || 0;
                     return (
-                      <div className="text-[10px] mt-0.5 font-mono-num" data-testid={`leg-stake-${l.id}`}>
-                        <span className="text-zinc-400">Staked </span>
-                        <b className="text-white">€{st.toFixed(2)}</b>
-                        <span className="text-zinc-600"> → </span>
+                      <div className="text-[10px] mt-0.5 font-mono-num flex items-center gap-1.5" data-testid={`leg-stake-${l.id}`}>
+                        <span className="text-zinc-400">Staked</span>
+                        {finished ? (
+                          <b className="text-white">€{st.toFixed(2)}</b>
+                        ) : (
+                          <input type="number" min="0" step="0.5" value={own > 0 ? own : ""}
+                            placeholder={st > 0 ? st.toFixed(2) : "0.00"}
+                            onChange={(e) => updateTicketLegStake(t.id, l.id, e.target.value)}
+                            data-testid={`leg-stake-input-${l.id}`} title="How much you played on this selection"
+                            className="w-16 bg-[#161b22] border border-[#30363d] rounded px-1.5 py-0.5 text-right text-white font-mono-num focus:outline-none focus:border-[#39FF14]" />
+                        )}
+                        <span className="text-zinc-600">→</span>
                         <span className={l.status === "lost" ? "text-[#FF3B30] line-through" : "text-[#39FF14]"}>
                           €{(st * (Number(l.odds) || 0)).toFixed(2)}
                         </span>
-                        {Number(l.stake) > 0 ? null : <span className="text-zinc-600"> (ticket stake)</span>}
+                        {own > 0 || !st ? null : <span className="text-zinc-600">(ticket stake)</span>}
                       </div>
                     );
                   })()}
@@ -361,23 +368,20 @@ function TicketCard({ t, settleLeg, removeTicket, placeDraftTicket }) {
 
       {t.draft ? (
         <div className="border-t border-[#FFD60A]/20 pt-3" data-testid={`ticket-draft-${t.id}`}>
-          <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
-            {legStakeTotal > 0
-              ? `Your stakes: €${legStakeTotal.toFixed(2)} — fill below only for selections left empty`
-              : "Stake for this ticket (€)"}
-          </label>
-          <div className="flex items-center gap-2">
-            <input type="number" min="0" step="0.5" value={draftStake} placeholder="0.00"
-              onChange={(e) => setDraftStake(e.target.value)}
-              data-testid={`ticket-draft-stake-${t.id}`}
-              className="w-24 bg-[#0d1117] border border-[#30363d] rounded-lg px-2 py-1.5 text-sm text-white font-mono-num focus:border-[#39FF14] outline-none" />
-            <button onClick={() => placeDraftTicket(t.id, draftStake)}
-              disabled={!(Number(draftStake) > 0 || legStakeTotal > 0)}
-              data-testid={`ticket-place-${t.id}`}
-              className="flex-1 py-2 rounded-lg bg-[#39FF14] text-black font-black uppercase tracking-wider text-xs hover:brightness-110 transition disabled:opacity-40 disabled:cursor-not-allowed">
-              Place ticket
-            </button>
-          </div>
+          {legStakeTotal > 0 ? (
+            <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 font-mono-num">
+              Your stakes: €{legStakeTotal.toFixed(2)}
+            </div>
+          ) : (
+            <div className="text-[10px] font-bold text-[#FFD60A] mb-2" data-testid={`ticket-no-stakes-${t.id}`}>
+              No amounts set yet — type what you played next to each selection above.
+            </div>
+          )}
+          <button onClick={() => placeDraftTicket(t.id, 0)}
+            data-testid={`ticket-place-${t.id}`}
+            className="w-full py-2 rounded-lg bg-[#39FF14] text-black font-black uppercase tracking-wider text-xs hover:brightness-110 transition">
+            Place ticket
+          </button>
           <p className="text-[10px] text-zinc-500 mt-2">
             Each ticket is placed on its own — adding another LION Ticket never merges with this one.
           </p>
@@ -394,6 +398,11 @@ function TicketCard({ t, settleLeg, removeTicket, placeDraftTicket }) {
           </div>
         </div>
       )}
+      {!t.draft && info.totalStake === 0 && (
+        <div className="mt-2 text-[10px] font-bold text-[#FFD60A]" data-testid={`ticket-no-stakes-${t.id}`}>
+          No amounts set on this ticket — type what you played next to each selection.
+        </div>
+      )}
       <button onClick={() => removeTicket(t.id)} data-testid={`ticket-remove-${t.id}`} className="mt-3 w-full py-1.5 rounded-md text-xs font-bold text-zinc-500 hover:text-[#FF3B30] border border-white/10">
         <Trash2 className="inline w-3.5 h-3.5 mr-1" /> Remove ticket
       </button>
@@ -402,7 +411,7 @@ function TicketCard({ t, settleLeg, removeTicket, placeDraftTicket }) {
 }
 
 function TicketsView({ isPro }) {
-  const { slip, removeFromSlip, updateSlipLegOdds, updateSlipLegStake, clearSlip, placeTicket, tickets, settleLeg, removeTicket, placeDraftTicket } = usePortfolio();
+  const { slip, removeFromSlip, updateSlipLegOdds, updateSlipLegStake, clearSlip, placeTicket, tickets, settleLeg, removeTicket, placeDraftTicket, updateTicketLegStake } = usePortfolio();
   const [showHistory, setShowHistory] = useState(false);
   // Anything still PENDING stays on top, in its own active section — only fully
   // settled tickets drop into HISTORY (#4). CSS columns keep the cards packed
@@ -444,7 +453,7 @@ function TicketsView({ isPro }) {
                 <span className="text-xs text-zinc-500">· {active.length} still pending</span>
               </div>
               <div className={COLS} data-testid="tickets-grid">
-                {active.map((t) => <TicketCard key={t.id} t={t} settleLeg={settleLeg} removeTicket={removeTicket} placeDraftTicket={placeDraftTicket} />)}
+                {active.map((t) => <TicketCard key={t.id} t={t} settleLeg={settleLeg} removeTicket={removeTicket} placeDraftTicket={placeDraftTicket} updateTicketLegStake={updateTicketLegStake} />)}
               </div>
             </>
           )}
@@ -457,7 +466,7 @@ function TicketsView({ isPro }) {
               </button>
               {showHistory && (
                 <div className={`${COLS} mt-3`} data-testid="tickets-history-grid">
-                  {older.map((t) => <TicketCard key={t.id} t={t} settleLeg={settleLeg} removeTicket={removeTicket} placeDraftTicket={placeDraftTicket} />)}
+                  {older.map((t) => <TicketCard key={t.id} t={t} settleLeg={settleLeg} removeTicket={removeTicket} placeDraftTicket={placeDraftTicket} updateTicketLegStake={updateTicketLegStake} />)}
                 </div>
               )}
               {hiddenTickets > 0 && (

@@ -52,12 +52,13 @@ const Leg = ({ leg, anchor, odds, onOdds, stake, onStake, matchLabel }) => {
 };
 
 const TicketCard = ({ t, onAdd, played }) => {
-  const [odds, setOdds] = useState(() => Object.fromEntries(t.legs.map((l) => [l.pick, l.odds.toFixed(2)])));
-  const [stakes, setStakes] = useState(() => Object.fromEntries(t.legs.map((l) => [l.pick, ""])));
-  const priced = t.legs.map((l) => ({
+  const legKey = (l, i) => `${l.matchId || t.match?.id || i}:${l.pick}`;
+  const [odds, setOdds] = useState(() => Object.fromEntries(t.legs.map((l, i) => [legKey(l, i), l.odds.toFixed(2)])));
+  const [stakes, setStakes] = useState(() => Object.fromEntries(t.legs.map((l, i) => [legKey(l, i), ""])));
+  const priced = t.legs.map((l, i) => ({
     ...l,
-    odds: Number(odds[l.pick]) > 1 ? Number(odds[l.pick]) : l.odds,
-    stake: Number(stakes[l.pick]) > 0 ? Number(stakes[l.pick]) : 0,
+    odds: Number(odds[legKey(l, i)]) > 1 ? Number(odds[legKey(l, i)]) : l.odds,
+    stake: Number(stakes[legKey(l, i)]) > 0 ? Number(stakes[legKey(l, i)]) : 0,
   }));
   const singlesReturn = priced.reduce((s, l) => s + l.odds, 0);
   const myStake = priced.reduce((s, l) => s + l.stake, 0);
@@ -99,11 +100,17 @@ const TicketCard = ({ t, onAdd, played }) => {
     )}
 
     <div className="px-4 pb-3 space-y-1.5">
-      {t.legs.map((l) => (
-        <Leg key={l.pick} leg={l} anchor={l.pick === t.anchor?.pick} matchLabel={l.matchLabel}
-          odds={odds[l.pick]} onOdds={(v) => setOdds((o) => ({ ...o, [l.pick]: v }))}
-          stake={stakes[l.pick]} onStake={(v) => setStakes((s) => ({ ...s, [l.pick]: v }))} />
-      ))}
+      {t.legs.map((l, i) => {
+        // Two legs of a cross-match ticket can share the same pick code (two
+        // "+1.5" for example), so the key must include the match, otherwise a
+        // stake typed on one lands on the other as well.
+        const k = `${l.matchId || t.match?.id || i}:${l.pick}`;
+        return (
+          <Leg key={k} leg={l} anchor={l.pick === t.anchor?.pick} matchLabel={l.matchLabel}
+            odds={odds[k]} onOdds={(v) => setOdds((o) => ({ ...o, [k]: v }))}
+            stake={stakes[k]} onStake={(v) => setStakes((s) => ({ ...s, [k]: v }))} />
+        );
+      })}
       <div className="text-[9px] uppercase tracking-wider text-zinc-600 pt-0.5">
         € = your stake · right box = the price you got
       </div>
