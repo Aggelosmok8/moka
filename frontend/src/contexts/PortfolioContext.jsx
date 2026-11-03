@@ -381,6 +381,7 @@ export function PortfolioProvider({ children }) {
         matchId: l.matchId || null, home: l.home || "", away: l.away || "",
         league: l.league || "", pick: l.pick || "", pickName: l.pickName || "",
         odds: Number(l.odds) || 0, bookmaker: l.bookmaker || "",
+        stake: Number(l.stake) > 0 ? Number(l.stake) : 0,
         kickoff: l.kickoff || null, kind: l.kind || "ticket",
       })),
     };

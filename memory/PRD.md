@@ -1614,3 +1614,18 @@ Pending fix round 2 (verified in preview):
   NOT in Render, and/or MYDATA_BASE still points at the sandbox. Recovery without gaps in the books
   already exists: Account -> Diagnostics -> "Retry documents / get MARK" (`/api/invoices/{id}/retransmit`
   keeps the same series number).
+
+## 2026-11-03 — Per-selection stake INSIDE a LION Ticket (ticket stays one ticket)
+
+- `LionTicketsPage`: every leg now has its own € stake box next to the already-editable odds box
+  (`lt-stake-<pick>` / `lt-odds-<pick>`), plus a hint line and a live total
+  "Your stakes: EUR x -> EUR y back if all win" (`lt-mystake-<ticketId>`).
+- The stake travels with the leg: `add()` passes `stake` per leg, `PortfolioContext.addDraftTicket`
+  now keeps `stake` on each leg, and `computeTicket`'s `legStake()` (added 2026-10-28) already uses a
+  per-leg stake with the ticket stake as fallback. The ticket is STILL ONE draft ticket with one
+  Place button - nothing is split.
+- `PortfolioPage` draft card: when legs already carry stakes the label becomes
+  "Your stakes: EUR x - fill below only for selections left empty" and Place is enabled without a
+  global stake.
+- Verified live as Pro: 4 legs filled 5/10/15/20 -> card showed EUR 65.00 -> EUR 213.30, portfolio shows
+  ONE LION ticket with 4 selections each printing its own amount, Place ticket enabled.

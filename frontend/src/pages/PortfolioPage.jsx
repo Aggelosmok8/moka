@@ -289,6 +289,7 @@ function BetSlip({ slip, removeFromSlip, updateSlipLegOdds, updateSlipLegStake, 
 function TicketCard({ t, settleLeg, removeTicket, placeDraftTicket }) {
   const info = computeTicket(t);
   const [draftStake, setDraftStake] = useState("");
+  const legStakeTotal = (t.legs || []).reduce((s, l) => s + (Number(l.stake) || 0), 0);
   // Progress badge: WON / TOTAL selections (never all-or-nothing).
   const badgeCls = info.status === "pending"
     ? "bg-[#FFD60A]/15 text-[#FFD60A] border border-[#FFD60A]/40"
@@ -349,7 +350,9 @@ function TicketCard({ t, settleLeg, removeTicket, placeDraftTicket }) {
       {t.draft ? (
         <div className="border-t border-[#FFD60A]/20 pt-3" data-testid={`ticket-draft-${t.id}`}>
           <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
-            Stake for this ticket (€)
+            {legStakeTotal > 0
+              ? `Your stakes: €${legStakeTotal.toFixed(2)} — fill below only for selections left empty`
+              : "Stake for this ticket (€)"}
           </label>
           <div className="flex items-center gap-2">
             <input type="number" min="0" step="0.5" value={draftStake} placeholder="0.00"
@@ -357,7 +360,7 @@ function TicketCard({ t, settleLeg, removeTicket, placeDraftTicket }) {
               data-testid={`ticket-draft-stake-${t.id}`}
               className="w-24 bg-[#0d1117] border border-[#30363d] rounded-lg px-2 py-1.5 text-sm text-white font-mono-num focus:border-[#39FF14] outline-none" />
             <button onClick={() => placeDraftTicket(t.id, draftStake)}
-              disabled={!(Number(draftStake) > 0)}
+              disabled={!(Number(draftStake) > 0 || legStakeTotal > 0)}
               data-testid={`ticket-place-${t.id}`}
               className="flex-1 py-2 rounded-lg bg-[#39FF14] text-black font-black uppercase tracking-wider text-xs hover:brightness-110 transition disabled:opacity-40 disabled:cursor-not-allowed">
               Place ticket
