@@ -1629,3 +1629,13 @@ Pending fix round 2 (verified in preview):
   global stake.
 - Verified live as Pro: 4 legs filled 5/10/15/20 -> card showed EUR 65.00 -> EUR 213.30, portfolio shows
   ONE LION ticket with 4 selections each printing its own amount, Place ticket enabled.
+
+## 2026-11-03 (b) — The amount is now printed on every selection of a ticket
+
+- `PortfolioPage` leg row prints its own line: "Staked EUR 20.00 -> EUR 88.00" (`leg-stake-<legId>`),
+  i.e. that leg's money x that leg's price; a lost leg shows the return struck through, and a leg that
+  has no money of its own shows the ticket stake marked "(ticket stake)".
+- The ticket footer totals already come from `computeTicket` -> `legStake()`, so TOTAL STAKE /
+  POTENTIAL / PROFIT are the SUM of the individual stakes and prices, not stake x legs.
+- Verified live: legs 20/10/15/20 at 4.40 / 1.18 / 1.70 / 4.40 -> per-leg returns 88.00 / 11.80 /
+  25.50 / 88.00 and ticket TOTAL STAKE EUR 65.00, POTENTIAL EUR 213.30.
