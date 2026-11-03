@@ -20,7 +20,7 @@ const Crest = ({ className = "w-4 h-4" }) => (
   <img src="/lion-logo.png" alt="LION" className={`${className} object-contain`} data-no-translate />
 );
 
-const Leg = ({ leg, anchor, odds, onOdds, matchLabel }) => {
+const Leg = ({ leg, anchor, odds, onOdds, stake, onStake, matchLabel }) => {
   const url = bookmakerUrl(leg.bookmaker);
   const edited = Number(odds) > 1 && Number(odds).toFixed(2) !== leg.odds.toFixed(2);
   return (
@@ -38,6 +38,10 @@ const Leg = ({ leg, anchor, odds, onOdds, matchLabel }) => {
         </div>
       </div>
       <span className="text-[10px] font-black font-mono-num text-[#39FF14] shrink-0">+{leg.edge}</span>
+      {/* Your own money on this selection — the ticket stays one ticket. */}
+      <input type="number" min="0" step="0.5" value={stake} onChange={(e) => onStake(e.target.value)}
+        data-testid={`lt-stake-${leg.pick}`} title="How much you put on this selection" placeholder="€"
+        className="w-14 shrink-0 bg-[#161b22] border border-[#30363d] rounded px-1.5 py-1 text-right text-[13px] font-mono-num text-white focus:outline-none focus:border-[#39FF14]" />
       {/* The price is editable: users often get a slightly different number. */}
       <input type="number" min="1" step="0.01" value={odds} onChange={(e) => onOdds(e.target.value)}
         data-testid={`lt-odds-${leg.pick}`} title="Edit to the price you actually got"
@@ -49,8 +53,15 @@ const Leg = ({ leg, anchor, odds, onOdds, matchLabel }) => {
 
 const TicketCard = ({ t, onAdd, played }) => {
   const [odds, setOdds] = useState(() => Object.fromEntries(t.legs.map((l) => [l.pick, l.odds.toFixed(2)])));
-  const priced = t.legs.map((l) => ({ ...l, odds: Number(odds[l.pick]) > 1 ? Number(odds[l.pick]) : l.odds }));
+  const [stakes, setStakes] = useState(() => Object.fromEntries(t.legs.map((l) => [l.pick, ""])));
+  const priced = t.legs.map((l) => ({
+    ...l,
+    odds: Number(odds[l.pick]) > 1 ? Number(odds[l.pick]) : l.odds,
+    stake: Number(stakes[l.pick]) > 0 ? Number(stakes[l.pick]) : 0,
+  }));
   const singlesReturn = priced.reduce((s, l) => s + l.odds, 0);
+  const myStake = priced.reduce((s, l) => s + l.stake, 0);
+  const myReturn = priced.reduce((s, l) => s + l.stake * l.odds, 0);
   return (
   <div className="bg-[#11161d] border border-white/10 rounded-2xl overflow-hidden hover:border-[#39FF14]/30 transition-colors"
     data-testid={`lion-ticket-${t.id}`}>
@@ -90,8 +101,12 @@ const TicketCard = ({ t, onAdd, played }) => {
     <div className="px-4 pb-3 space-y-1.5">
       {t.legs.map((l) => (
         <Leg key={l.pick} leg={l} anchor={l.pick === t.anchor?.pick} matchLabel={l.matchLabel}
-          odds={odds[l.pick]} onOdds={(v) => setOdds((o) => ({ ...o, [l.pick]: v }))} />
+          odds={odds[l.pick]} onOdds={(v) => setOdds((o) => ({ ...o, [l.pick]: v }))}
+          stake={stakes[l.pick]} onStake={(v) => setStakes((s) => ({ ...s, [l.pick]: v }))} />
       ))}
+      <div className="text-[9px] uppercase tracking-wider text-zinc-600 pt-0.5">
+        € = your stake · right box = the price you got
+      </div>
     </div>
 
     <div className="px-4 py-3 bg-[#0d1117] border-t border-white/5 flex items-center justify-between gap-3">
@@ -106,6 +121,11 @@ const TicketCard = ({ t, onAdd, played }) => {
         <div className="text-[10px] text-zinc-500 mt-1 font-mono-num" data-testid={`lt-maths-${t.id}`}>
           {priced.map((l) => l.odds.toFixed(2)).join(" + ")} · all win ~{t.combinedProb}%
         </div>
+        {myStake > 0 && (
+          <div className="text-[10px] text-white mt-1 font-mono-num" data-testid={`lt-mystake-${t.id}`}>
+            Your stakes: €{myStake.toFixed(2)} → €{myReturn.toFixed(2)} back if all win
+          </div>
+        )}
         {t.parlay && (
           <div className="text-[10px] text-[#FFD60A] mt-1" data-testid={`lt-parlay-${t.id}`}>
             Or as one parlay at {t.parlay.bookmaker}: <b className="font-mono-num">{t.parlay.odds.toFixed(2)}</b>
@@ -159,12 +179,18 @@ export default function LionTicketsPage() {
     addDraftTicket(legs.map((l) => ({
       matchId: l.matchId || t.match?.id, home: l.home || t.match?.home, away: l.away || t.match?.away,
       league: l.league || t.match?.league, pick: l.pick, pickName: l.pickName, odds: l.odds,
+      stake: Number(l.stake) > 0 ? Number(l.stake) : 0,
       bookmaker: l.bookmaker, kind: "ticket", kickoff: l.kickoff || t.match?.kickoff,
     })), { source: "lion" });
     const back = legs.reduce((s, l) => s + l.odds, 0);
-    toast.success(`LION Ticket saved as its own ticket — ${legs.length} selections, ${back.toFixed(2)} back for ${legs.length}.00`, {
-      description: "Open Portfolio → My Tickets, set your stake and press Place ticket.",
-    });
+    const mine = legs.reduce((s, l) => s + (Number(l.stake) || 0), 0);
+    toast.success(
+      mine > 0
+        ? `LION Ticket saved as one ticket — ${legs.length} selections, €${mine.toFixed(2)} staked`
+        : `LION Ticket saved as its own ticket — ${legs.length} selections, ${back.toFixed(2)} back for ${legs.length}.00`,
+      { description: mine > 0
+          ? "Open Portfolio → My Tickets and press Place ticket."
+          : "Open Portfolio → My Tickets, set your stake and press Place ticket." });
   };
 
   return (

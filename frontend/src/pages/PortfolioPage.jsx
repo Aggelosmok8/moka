@@ -289,6 +289,7 @@ function BetSlip({ slip, removeFromSlip, updateSlipLegOdds, updateSlipLegStake, 
 function TicketCard({ t, settleLeg, removeTicket, placeDraftTicket }) {
   const info = computeTicket(t);
   const [draftStake, setDraftStake] = useState("");
+  const legStakeTotal = (t.legs || []).reduce((s, l) => s + (Number(l.stake) || 0), 0);
   // Progress badge: WON / TOTAL selections (never all-or-nothing).
   const badgeCls = info.status === "pending"
     ? "bg-[#FFD60A]/15 text-[#FFD60A] border border-[#FFD60A]/40"
@@ -320,10 +321,22 @@ function TicketCard({ t, settleLeg, removeTicket, placeDraftTicket }) {
                   <div className="text-[11px] text-[#39FF14] font-bold break-words">
                     {l.manual && <span className="mr-1.5 align-middle text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#58a6ff]/15 text-[#58a6ff] border border-[#58a6ff]/30">Manual</span>}
                     {l.pickName} · <span className="text-white font-mono-num">{l.odds}</span>
-                    {(Number(l.stake) > 0 || Number(t.stake) > 0)
-                      ? <>{" · "}<span className="text-zinc-400 font-mono-num">€{(Number(l.stake) > 0 ? Number(l.stake) : Number(t.stake)).toFixed(2)}</span></>
-                      : null}
                   </div>
+                  {(() => {
+                    const st = Number(l.stake) > 0 ? Number(l.stake) : Number(t.stake) || 0;
+                    if (!st) return null;
+                    return (
+                      <div className="text-[10px] mt-0.5 font-mono-num" data-testid={`leg-stake-${l.id}`}>
+                        <span className="text-zinc-400">Staked </span>
+                        <b className="text-white">€{st.toFixed(2)}</b>
+                        <span className="text-zinc-600"> → </span>
+                        <span className={l.status === "lost" ? "text-[#FF3B30] line-through" : "text-[#39FF14]"}>
+                          €{(st * (Number(l.odds) || 0)).toFixed(2)}
+                        </span>
+                        {Number(l.stake) > 0 ? null : <span className="text-zinc-600"> (ticket stake)</span>}
+                      </div>
+                    );
+                  })()}
                 </div>
                 <span className={`shrink-0 inline-flex items-center gap-1 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full ${lst.cls}`}><lst.icon className="w-2.5 h-2.5" /> {lst.label}</span>
               </div>
@@ -349,7 +362,9 @@ function TicketCard({ t, settleLeg, removeTicket, placeDraftTicket }) {
       {t.draft ? (
         <div className="border-t border-[#FFD60A]/20 pt-3" data-testid={`ticket-draft-${t.id}`}>
           <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
-            Stake for this ticket (€)
+            {legStakeTotal > 0
+              ? `Your stakes: €${legStakeTotal.toFixed(2)} — fill below only for selections left empty`
+              : "Stake for this ticket (€)"}
           </label>
           <div className="flex items-center gap-2">
             <input type="number" min="0" step="0.5" value={draftStake} placeholder="0.00"
@@ -357,7 +372,7 @@ function TicketCard({ t, settleLeg, removeTicket, placeDraftTicket }) {
               data-testid={`ticket-draft-stake-${t.id}`}
               className="w-24 bg-[#0d1117] border border-[#30363d] rounded-lg px-2 py-1.5 text-sm text-white font-mono-num focus:border-[#39FF14] outline-none" />
             <button onClick={() => placeDraftTicket(t.id, draftStake)}
-              disabled={!(Number(draftStake) > 0)}
+              disabled={!(Number(draftStake) > 0 || legStakeTotal > 0)}
               data-testid={`ticket-place-${t.id}`}
               className="flex-1 py-2 rounded-lg bg-[#39FF14] text-black font-black uppercase tracking-wider text-xs hover:brightness-110 transition disabled:opacity-40 disabled:cursor-not-allowed">
               Place ticket
