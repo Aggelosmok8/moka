@@ -393,6 +393,18 @@ export function PortfolioProvider({ children }) {
     return ticket.id;
   }, []);
 
+  // Per-selection money inside a ticket (never one amount for the whole ticket).
+  const updateTicketLegStake = useCallback((ticketId, legId, stake) => {
+    setTickets((prev) => {
+      const next = prev.map((t) => (t.id !== ticketId ? t : {
+        ...t,
+        legs: t.legs.map((l) => (l.id === legId ? { ...l, stake: Number(stake) || 0 } : l)),
+      }));
+      try { localStorage.setItem(TICKETS_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+
   const placeDraftTicket = useCallback((id, stake) => {
     setTickets((prev) => {
       const next = prev.map((t) => (t.id === id
@@ -683,7 +695,7 @@ export function PortfolioProvider({ children }) {
       slip, addToSlip, removeFromSlip, updateSlipLegOdds, clearSlip, slipHas, slipHasPick,
       playedPick, playedMatch, slipCount: slip.length,
       tickets, placeTicket, settleLeg, removeTicket, clearTickets, autoSettle, addManualTicket,
-      addDraftTicket, placeDraftTicket, updateSlipLegStake,
+      addDraftTicket, placeDraftTicket, updateSlipLegStake, updateTicketLegStake,
       syncNow: () => pullRemote(user?.user_id || user?.email, 2),
       newlySettled, clearNewlySettled,
     }}>

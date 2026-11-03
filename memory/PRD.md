@@ -1639,3 +1639,19 @@ Pending fix round 2 (verified in preview):
   POTENTIAL / PROFIT are the SUM of the individual stakes and prices, not stake x legs.
 - Verified live: legs 20/10/15/20 at 4.40 / 1.18 / 1.70 / 4.40 -> per-leg returns 88.00 / 11.80 /
   25.50 / 88.00 and ticket TOTAL STAKE EUR 65.00, POTENTIAL EUR 213.30.
+
+## 2026-11-03 (c) — Stake bled into other legs + no-amount tickets
+
+1. BUG FIXED: in `LionTicketsPage.TicketCard` the odds/stake state was keyed by `l.pick`. In a
+   cross-match ticket two legs can carry the SAME pick code (two "+1.5" for instance), so typing an
+   amount on one wrote it on the other too (same for the price box, and React had duplicate keys).
+   Key is now `${matchId}:${pick}`. Verified: typing 5 on leg 1 of a 4-leg ticket leaves
+   `['5','','','']`.
+2. Per-selection money is now editable INSIDE the ticket card: every pending leg shows
+   `Staked [input] -> EUR x` (`leg-stake-input-<legId>`), wired to the new
+   `PortfolioContext.updateTicketLegStake(ticketId, legId, stake)` (persists like settleLeg).
+   Settled legs print the amount as plain text.
+3. The single "Stake for this ticket" field is GONE. A draft can be placed with no amounts at all
+   (button always enabled) and both draft and placed tickets show an amber warning
+   "No amounts set yet - type what you played next to each selection" (`ticket-no-stakes-<id>`),
+   with every leg showing 0.00 until filled. Totals stay the sum of the per-leg stake x its own price.
