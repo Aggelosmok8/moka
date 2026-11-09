@@ -1680,3 +1680,20 @@ Pending fix round 2 (verified in preview):
   pamestoixima 15, bwin 9 were all stuck like that). `_plan_blocked` now ignores any reading older
   than 24h (`_plan_fresh`) and any reading taken before the current cycle start. Verified: the three
   stale ones unblock, the two fresh ones stay allowed, and a fresh "5 left" reading still blocks.
+
+## 2026-11-09 (b) — Why so many matches show only Bet365
+
+- Measured on the live board (102 matches): 65 have ONE book, 17 two, 7 three, 10 four, 3 five.
+  Coverage: Bet365 81, Elabet 35, Superbet 31, Novibet 23, bwin 5, Stoiximan/Pame Stoixima 0.
+- Two causes, both now addressed:
+  1. STALE FEEDS from the deadlock: cached index ages were bwin 184h, Pame Stoixima 135h,
+     Stoiximan 60h vs Elabet/Novibet 3.8h — the three blocked books were serving week-old data that no
+     longer matches today's fixtures, hence "Bet365 only".
+  2. ORDERING BUG: `quota_cycle.reserve()` ran BEFORE the plan check, so every blocked attempt still
+     incremented OUR counter without sending a request (bwin showed 18 "calls" with a 184h-old cache
+     while the provider reported 199/200 untouched). The plan/stale check now runs BEFORE reserve.
+- Probed bwin once directly: HTTP 200, 9.05 MB, `x-ratelimit-requests-remaining: 199/200`, reset in
+  ~27.9 days -> the Greek allowances really have renewed; the blockage was ours, not the provider's.
+  Saved that fresh reading into `plan_bwin` so production unblocks immediately.
+- Residual, expected: the Greek books simply list fewer events than API-Football's board (cached index
+  sizes 162-1135 vs ~1700 fixtures), so lower divisions will keep showing Bet365 only.
