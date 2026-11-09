@@ -671,14 +671,14 @@ async def _refresh_index(slug: str) -> dict:
     if not fetch_allowed():
         logger.info("rapid_books[%s]: provider fetching is off in this environment — serving cache", slug)
         return stale
-    res = await quota_cycle.reserve(_db(), slug, _ceiling(slug), MAX_DAILY)
-    if not res["allowed"]:
-        logger.warning("rapid_books[%s]: %s, serving stale", slug, res["reason"])
-        return stale
     cycle = str((await _usage_now(slug)).get("cycle") or "")
     if _plan_blocked(slug, cycle) or _plan_blocked_after_load(await _load_plan(slug), cycle):
         logger.warning("rapid_books[%s]: provider reports only %s requests left this cycle — serving stale",
                        slug, (_plan.get(slug) or {}).get("remaining"))
+        return stale
+    res = await quota_cycle.reserve(_db(), slug, _ceiling(slug), MAX_DAILY)
+    if not res["allowed"]:
+        logger.warning("rapid_books[%s]: %s, serving stale", slug, res["reason"])
         return stale
     calls, day_calls = res["calls"], res["day_calls"]
     try:
