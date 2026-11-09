@@ -428,14 +428,37 @@ async def _load_plan(slug: str) -> dict:
 PLAN_SAFETY_BUFFER = int(os.environ.get("RAPID_BOOKS_SAFETY_BUFFER", "15"))
 
 
-def _plan_blocked(slug: str) -> bool:
-    left = (_plan.get(slug) or {}).get("remaining")
-    return left is not None and left >= 0 and left <= PLAN_SAFETY_BUFFER
+def _plan_fresh(row: dict) -> bool:
+    """A reading older than a day cannot be trusted to block: the provider's own
+    cycle may have reset in the meantime, and a stale 'almost empty' reading
+    would otherwise block us for ever (no call -> no new reading -> deadlock)."""
+    at = (row or {}).get("at") or ""
+    if not at:
+        return False
+    try:
+        age = (datetime.now(timezone.utc) - datetime.fromisoformat(at)).total_seconds()
+    except Exception:
+        return False
+    return age < 24 * 3600
 
 
-def _plan_blocked_after_load(row: dict) -> bool:
+def _plan_blocked(slug: str, cycle: str = "") -> bool:
+    row = _plan.get(slug) or {}
+    left = row.get("remaining")
+    if left is None or left < 0 or not _plan_fresh(row):
+        return False
+    if cycle and (row.get("at") or "") < cycle:
+        return False
+    return left <= PLAN_SAFETY_BUFFER
+
+
+def _plan_blocked_after_load(row: dict, cycle: str = "") -> bool:
     left = (row or {}).get("remaining")
-    return left is not None and left >= 0 and left <= PLAN_SAFETY_BUFFER
+    if left is None or left < 0 or not _plan_fresh(row):
+        return False
+    if cycle and ((row or {}).get("at") or "") < cycle:
+        return False
+    return left <= PLAN_SAFETY_BUFFER
 
 
 def _ceiling(slug: str) -> int:
@@ -652,7 +675,8 @@ async def _refresh_index(slug: str) -> dict:
     if not res["allowed"]:
         logger.warning("rapid_books[%s]: %s, serving stale", slug, res["reason"])
         return stale
-    if _plan_blocked(slug) or _plan_blocked_after_load(await _load_plan(slug)):
+    cycle = str((await _usage_now(slug)).get("cycle") or "")
+    if _plan_blocked(slug, cycle) or _plan_blocked_after_load(await _load_plan(slug), cycle):
         logger.warning("rapid_books[%s]: provider reports only %s requests left this cycle — serving stale",
                        slug, (_plan.get(slug) or {}).get("remaining"))
         return stale

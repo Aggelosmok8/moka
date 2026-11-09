@@ -1655,3 +1655,28 @@ Pending fix round 2 (verified in preview):
    (button always enabled) and both draft and placed tickets show an amber warning
    "No amounts set yet - type what you played next to each selection" (`ticket-no-stakes-<id>`),
    with every leg showing 0.00 until filled. Totals stay the sum of the per-leg stake x its own price.
+
+## 2026-11-09 — Social profiles on the About page
+
+- `AboutPage`: new block right under the "We are not a bookmaker" disclaimer (`about-social`), with
+  pill buttons for Instagram `@lion_stats` (https://www.instagram.com/lion_stats, lucide Instagram icon
+  on the official gradient) and TikTok `@lion.stats` (https://www.tiktok.com/@lion.stats, inline
+  two-tone TikTok note SVG), both opening in a new tab with hover lift + green border.
+  Copy exists in EN and GR (`socialTitle` / `socialBody`). Verified live: both hrefs correct.
+
+## 2026-11-09 — Greek odds quota: cycle DID reset + stale-reading deadlock fixed
+
+- IMPORTANT discovery: preview and production SHARE the same Postgres database, so the quota counters
+  and `plan_<slug>` rows read from here ARE the production ones (preview itself made no provider call
+  since 2026-11-03 — the "fetching is off" guard is confirmed working in the logs).
+- State on 2026-11-09 (cycle anchored 2026-10-07, reset 2026-11-07): our counters since the reset are
+  stoiximan 18, bwin 18, pamestoixima 18, elabet 10, novibet 8 (ceiling 150/cycle each).
+  Provider-reported remaining: elabet 194/200 and novibet 194/200 (read today) => the monthly
+  allowance HAS renewed. Superbet 71 (cycle from 10-14), SportMonks 359 (from 10-21),
+  API-Football 491 today of 7500/day.
+- BUG FOUND AND FIXED: the safety guard blocked a provider whenever the LAST SEEN reading said
+  <=15 requests left, but that reading could be from BEFORE the provider's reset — and since a blocked
+  provider never calls again, it never gets a fresh reading: permanent deadlock (stoiximan 15, 
+  pamestoixima 15, bwin 9 were all stuck like that). `_plan_blocked` now ignores any reading older
+  than 24h (`_plan_fresh`) and any reading taken before the current cycle start. Verified: the three
+  stale ones unblock, the two fresh ones stay allowed, and a fresh "5 left" reading still blocks.
