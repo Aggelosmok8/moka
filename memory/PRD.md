@@ -1697,3 +1697,18 @@ Pending fix round 2 (verified in preview):
   Saved that fresh reading into `plan_bwin` so production unblocks immediately.
 - Residual, expected: the Greek books simply list fewer events than API-Football's board (cached index
   sizes 162-1135 vs ~1700 fixtures), so lower divisions will keep showing Bet365 only.
+
+## 2026-11-09 (c) — Serie A showed Bet365 only: confirmed cause + after-deploy state
+
+- Lazio-Lecce (live_af_1550202, kickoff 21 Nov) showed Bet365 only because the three Greek books were
+  still serving WEEK-OLD snapshots from the stale-reading deadlock (cache ages were bwin 184h,
+  Pame Stoixima 135h, Stoiximan 60h) and those old lists do not contain a fixture 12 days out.
+- After the user's deploy the fix worked: cache ages are now 0.1h for stoiximan / bwin / pamestoixima
+  (they refreshed on the first page view), and `pamestoixima` now carries `lazio|uslecce`
+  (1.34 / 4.85 / 7.50). `oaio.lookup(idx,"Lazio","Lecce")` returns the Pame Stoixima quote, so the
+  match now has 2 books.
+- Name matching was checked and is fine: `_same_team` maps lecce<->uslecce, milan<->acmilan,
+  roma<->asroma, napoli<->sscnapoli, and still rejects lecceu19.
+- WATCH: Stoiximan's snapshot currently parses to only 34 events (vs novibet 310, pamestoixima 458,
+  elabet 385, bwin 111). Worth re-checking on its next refresh — if it stays that low, the Stoiximan
+  feed file or `_p_stoiximan` filtering is dropping pre-match events.
