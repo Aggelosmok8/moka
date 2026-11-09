@@ -1712,3 +1712,16 @@ Pending fix round 2 (verified in preview):
 - WATCH: Stoiximan's snapshot currently parses to only 34 events (vs novibet 310, pamestoixima 458,
   elabet 385, bwin 111). Worth re-checking on its next refresh — if it stays that low, the Stoiximan
   feed file or `_p_stoiximan` filtering is dropping pre-match events.
+
+## 2026-11-09 (d) — Why bwin/Stoiximan/Superbet were missing on a Serie A game 12 days out
+
+- Verified it is the FEEDS, not our matching: listed the provider's own file catalogue
+  (`GET /v1/files` on stoiximan-odds) -> only `site_pregame_*_soccer.json` (the one we use),
+  `..._soccer_leagues.json` (15 league PAGES, no fixture odds, no Lazio) and `site_live_*`.
+  There is no richer snapshot to switch to. Parsed index sizes today: Pame Stoixima 458,
+  Elabet 385, Novibet 310, bwin 111, Stoiximan 34 — the last two publish mostly near-term events.
+- Superbet: `_parse_stream` has a HORIZON_DAYS window and it was 12, so fixtures further out got no
+  Superbet price at all. Now `SUPERBET_HORIZON_DAYS`, default raised to 21 — costs no extra provider
+  call (same single streamed snapshot), only a little more parse CPU.
+- Superbet's own name matching was checked and already falls back to `rb._same_team`, so
+  "US Lecce" vs "Lecce" is not the problem.

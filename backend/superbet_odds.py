@@ -34,7 +34,7 @@ MAX_MONTHLY = int(os.environ.get("SUPERBET_MAX_MONTHLY", "120"))
 # this feed is ~550MB, so a retry storm is the most expensive mistake possible.
 MAX_DAILY = int(os.environ.get("SUPERBET_MAX_DAILY", "6"))
 FAIL_COOLDOWN = int(os.environ.get("SUPERBET_FAIL_COOLDOWN_MIN", "60")) * 60
-HORIZON_DAYS = 12
+HORIZON_DAYS = int(os.environ.get("SUPERBET_HORIZON_DAYS", "21"))
 
 _mem = {"picks": {}, "at": 0.0, "calls": 0, "day_calls": 0}
 _fail_at = [0.0]
