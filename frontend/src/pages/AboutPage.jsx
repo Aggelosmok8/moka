@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ShieldCheck, BarChart3, Target, Wallet, Eye, Newspaper, Scale, Languages,
-  ExternalLink, Sparkles, ArrowRight, AlertTriangle, Users, RefreshCw, PenLine,
+  ExternalLink, Sparkles, ArrowRight, AlertTriangle, Users, RefreshCw, PenLine, Instagram,
 } from "lucide-react";
 import Header from "../components/Header";
 import { useLang } from "../contexts/LanguageContext";
@@ -19,6 +19,8 @@ const COPY = {
       + "We are a new, independent team with one job: to put every piece of information you need in "
       + "front of you before you place a bet — so the decision is yours, and it is an informed one.",
     disclaimerTop: "No scam, no betting shop, no \"sure tips\". Just statistics, clearly presented.",
+    socialTitle: "Find us on social",
+    socialBody: "Follow the LION for daily stats, picks we like and what the numbers really say.",
     sections: [
       {
         icon: BarChart3,
@@ -111,6 +113,8 @@ const COPY = {
       + "Είμαστε μια νέα, ανεξάρτητη ομάδα με έναν σκοπό: να έχεις μπροστά σου κάθε πληροφορία που "
       + "χρειάζεσαι πριν παίξεις — ώστε η απόφαση να είναι δική σου και να είναι ενημερωμένη.",
     disclaimerTop: "Καμία απάτη, κανένα πρακτορείο, κανένα «σίγουρο tip». Μόνο στατιστικά, καθαρά.",
+    socialTitle: "Θα μας βρεις στα social",
+    socialBody: "Ακολούθησε το LION για καθημερινά στατιστικά, επιλογές που ξεχωρίζουμε και ό,τι δείχνουν πραγματικά τα νούμερα.",
     sections: [
       {
         icon: BarChart3,
@@ -235,6 +239,32 @@ export default function AboutPage() {
           data-testid="about-disclaimer-top">
           <ShieldCheck className="w-5 h-5 text-[#39FF14] shrink-0 mt-0.5" />
           <p className="text-white font-semibold text-base md:text-lg leading-snug">{t.disclaimerTop}</p>
+        </div>
+
+        <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-5" data-testid="about-social">
+          <h2 className="font-display font-bold text-white text-lg">{t.socialTitle}</h2>
+          <p className="text-sm text-zinc-400 mt-1">{t.socialBody}</p>
+          <div className="flex flex-wrap items-center gap-3 mt-4">
+            <a href="https://www.instagram.com/lion_stats" target="_blank" rel="noopener noreferrer"
+              data-testid="about-instagram"
+              className="group inline-flex items-center gap-2.5 rounded-full border border-white/15 bg-[#0d1117] pl-2 pr-4 py-2 transition-colors hover:border-[#39FF14]/60 hover:bg-[#39FF14]/[0.07]">
+              <span className="grid place-items-center w-8 h-8 rounded-full bg-gradient-to-tr from-[#F58529] via-[#DD2A7B] to-[#8134AF] transition-transform group-hover:scale-110">
+                <Instagram className="w-4 h-4 text-white" />
+              </span>
+              <span className="text-sm font-bold text-white">@lion_stats</span>
+            </a>
+            <a href="https://www.tiktok.com/@lion.stats" target="_blank" rel="noopener noreferrer"
+              data-testid="about-tiktok"
+              className="group inline-flex items-center gap-2.5 rounded-full border border-white/15 bg-[#0d1117] pl-2 pr-4 py-2 transition-colors hover:border-[#39FF14]/60 hover:bg-[#39FF14]/[0.07]">
+              <span className="grid place-items-center w-8 h-8 rounded-full bg-black border border-white/20 transition-transform group-hover:scale-110">
+                <svg viewBox="0 0 24 24" className="w-4 h-4" aria-hidden="true">
+                  <path fill="#25F4EE" d="M16.3 5.5a5.2 5.2 0 0 1-1.3-3.4h-1.9v13.1a2.7 2.7 0 1 1-2-2.6V10.5a4.9 4.9 0 1 0 4 4.8V9.1a7.1 7.1 0 0 0 4 1.3V8.5a5.1 5.1 0 0 1-2.8-3Z" />
+                  <path fill="#FE2C55" d="M17.5 6.7a5.2 5.2 0 0 1-1.2-1.2 5.1 5.1 0 0 0 2.8 3v1.9a7.1 7.1 0 0 1-4-1.3v6.2a4.9 4.9 0 1 1-4.9-4.9c.2 0 .4 0 .6.1v2a2.7 2.7 0 1 0 2.3 2.7V2.1H15c.1.6.2 1.1.4 1.6a5.2 5.2 0 0 0 2.1 3Z" opacity=".9" />
+                </svg>
+              </span>
+              <span className="text-sm font-bold text-white">@lion.stats</span>
+            </a>
+          </div>
         </div>
 
         <p className="text-zinc-300 text-base leading-relaxed mt-6 max-w-3xl">{t.lead}</p>

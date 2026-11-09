@@ -1655,3 +1655,11 @@ Pending fix round 2 (verified in preview):
    (button always enabled) and both draft and placed tickets show an amber warning
    "No amounts set yet - type what you played next to each selection" (`ticket-no-stakes-<id>`),
    with every leg showing 0.00 until filled. Totals stay the sum of the per-leg stake x its own price.
+
+## 2026-11-09 — Social profiles on the About page
+
+- `AboutPage`: new block right under the "We are not a bookmaker" disclaimer (`about-social`), with
+  pill buttons for Instagram `@lion_stats` (https://www.instagram.com/lion_stats, lucide Instagram icon
+  on the official gradient) and TikTok `@lion.stats` (https://www.tiktok.com/@lion.stats, inline
+  two-tone TikTok note SVG), both opening in a new tab with hover lift + green border.
+  Copy exists in EN and GR (`socialTitle` / `socialBody`). Verified live: both hrefs correct.
