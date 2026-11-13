@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 
 import httpx
 
@@ -86,49 +87,123 @@ def _is_sports_gr(article: dict) -> bool:
     return any(kw in text for kw in GR_SPORTS_KW)
 
 
+# Free Greek sports RSS feeds (no API key, no quota).
+GR_RSS_FEEDS = (
+    ("gazzetta.gr", "https://www.gazzetta.gr/rss"),
+    ("sportime.gr", "https://www.sportime.gr/feed/"),
+    ("sdna.gr", "https://www.sdna.gr/rss.xml"),
+    ("in.gr", "https://www.in.gr/sports/feed/"),
+)
+
+
+def _rss_items(xml_text: str, host: str) -> list:
+    import xml.etree.ElementTree as ET
+    ns = {"media": "http://search.yahoo.com/mrss/", "content": "http://purl.org/rss/1.0/modules/content/"}
+    items = []
+    try:
+        root = ET.fromstring(xml_text)
+    except Exception:
+        return items
+    for it in root.iter("item"):
+        title = (it.findtext("title") or "").strip()
+        link = (it.findtext("link") or "").strip()
+        if not title or not link:
+            continue
+        desc = (it.findtext("description") or "").strip()
+        desc = re.sub(r"<[^>]+>", " ", desc)
+        desc = re.sub(r"\s+", " ", desc).strip()
+        image = None
+        mc = it.find("media:content", ns)
+        if mc is not None:
+            image = mc.get("url")
+        if not image:
+            enc = it.find("enclosure")
+            if enc is not None:
+                image = enc.get("url")
+        if not image:
+            html = it.findtext("{http://purl.org/rss/1.0/modules/content/}encoded") or ""
+            m = re.search(r'<img[^>]+src="([^"]+)"', html)
+            if m:
+                image = m.group(1)
+        items.append({
+            "id": link,
+            "title": title,
+            "description": desc,
+            "snippet": desc,
+            "url": link,
+            "image": image,
+            "source": host,
+            "publishedAt": (it.findtext("pubDate") or "").strip(),
+            "categories": [],
+        })
+    return items
+
+
 async def freenews_gr(query: str = "", size: int = 12) -> dict:
-    """Greek-language news from freenewsapi.ai (no key). Cached. Filtered to
-    sports-only (sports domains or football/basketball keywords) so no general
-    news leaks into the feed. Used for the Greek News feed and as extra
-    pre-match context (injuries/lineups in Greek)."""
-    ck = f"grnews_{query}_{size}"
+    """Greek-language sports news aggregated from free Greek sports RSS feeds.
+
+    No API key or quota is involved. Results are cached 30 min and filtered so
+    only football/basketball items reach the feed. Used for the Greek News feed
+    and as extra pre-match context (injuries/lineups in Greek).
+    """
+    ck = f"grnews_rss_{query}_{size}"
     hit = af._c_get(ck)
     if hit is not None:
         return hit
-    # Fetch the latest Greek feed and filter down to sports (a sports-biased
-    # query mostly surfaces low-value tag pages, so we filter instead).
-    fetch_size = min(max(size * 8, 60), 100)
-    # The provider's country feed is general news; a sports query is required to
-    # surface Greek sports articles (default: football).
-    params = {"country": "gr", "size": fetch_size, "q": (query or "").strip() or "ποδόσφαιρο"}
-    out = {"articles": [], "meta": {"source": "freenewsapi", "lang": "el"}}
+
+    raw: list = []
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; LionStatsBot/1.0)"}
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            r = await client.get(GR_BASE, params=params)
-            r.raise_for_status()
-            d = r.json()
-        for a in d.get("results") or []:
-            src = a.get("source")
-            if isinstance(src, dict):
-                src = src.get("name")
-            item = {
-                "id": a.get("id") or a.get("url"),
-                "title": a.get("title"),
-                "description": a.get("description"),
-                "snippet": a.get("description"),
-                "url": a.get("url"),
-                "image": a.get("image") or a.get("image_url") or a.get("thumbnail"),
-                "source": src or a.get("host"),
-                "publishedAt": a.get("published_at") or a.get("date") or a.get("published"),
-                "categories": [],
-            }
-            if _is_sports_gr({**item, "host": a.get("host")}):
-                out["articles"].append(item)
-            if len(out["articles"]) >= size:
-                break
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True, headers=headers) as client:
+            import asyncio
+            results = await asyncio.gather(
+                *[client.get(url) for _, url in GR_RSS_FEEDS], return_exceptions=True
+            )
+        for (host, _url), res in zip(GR_RSS_FEEDS, results):
+            if isinstance(res, Exception) or res.status_code >= 400:
+                continue
+            raw.extend(_rss_items(res.text, host))
     except Exception as e:
         logger.warning("news_service.freenews_gr failed: %s", e)
-        out["meta"] = {"error": True}
+
+    needle = _strip_accents((query or "").lower()).strip()
+    out = {"articles": [], "meta": {"source": "gr_rss", "lang": "el", "feeds": len(GR_RSS_FEEDS)}}
+    seen: set = set()
+    matched: list = []
+    others: list = []
+    for item in raw:
+        if item["url"] in seen:
+            continue
+        seen.add(item["url"])
+        url_l = item["url"].lower()
+        sporty_path = any(k in url_l for k in (
+            "/football", "/basketball", "/sport", "/super-league", "/superleague",
+            "/euroleague", "/champions", "/stoixima", "/volley", "/tennis", "/nba",
+        ))
+        text_all = _strip_accents(f"{item['title']} {item['description']}".lower())
+        kw_hit = any(k in text_all for k in GR_SPORTS_KW)
+        if not sporty_path and not kw_hit:
+            continue
+        text = _strip_accents(f"{item['title']} {item['description']}".lower())
+        if needle and all(w in text for w in needle.split() if len(w) > 2):
+            matched.append(item)
+        else:
+            others.append(item)
+    # Interleave sources so one fast feed does not dominate the page.
+    def _mix(items: list) -> list:
+        buckets: dict = {}
+        for it in items:
+            buckets.setdefault(it["source"], []).append(it)
+        mixed = []
+        while any(buckets.values()):
+            for host in list(buckets):
+                if buckets[host]:
+                    mixed.append(buckets[host].pop(0))
+        return mixed
+
+    out["articles"] = (_mix(matched) + _mix(others))[:size]
+    if not out["articles"]:
+        out["meta"]["error"] = True
     af._c_set(ck, out, ttl=CACHE_TTL)
     return out
 

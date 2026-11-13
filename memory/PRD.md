@@ -1725,3 +1725,8 @@ Pending fix round 2 (verified in preview):
   call (same single streamed snapshot), only a little more parse CPU.
 - Superbet's own name matching was checked and already falls back to `rb._same_team`, so
   "US Lecce" vs "Lecce" is not the problem.
+
+## 2026-11-13 — Greek news feed fix
+- Root cause: freenewsapi.ai now requires an API key (HTTP 401 api_key_required) -> Greek articles returned 0.
+- Replaced with free Greek sports RSS aggregation in `news_service.freenews_gr` (gazzetta.gr/rss, sportime.gr/feed, sdna.gr/rss.xml, in.gr/sports/feed): no API key, no quota, 30-min cache, sports-only filtering, source interleaving, query matching for per-match context.
+- Verified: /api/news?lang=el returns 12 Greek articles; /api/news returns 24 (GR+EN).
