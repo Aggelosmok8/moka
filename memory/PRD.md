@@ -1725,3 +1725,17 @@ Pending fix round 2 (verified in preview):
   call (same single streamed snapshot), only a little more parse CPU.
 - Superbet's own name matching was checked and already falls back to `rb._same_team`, so
   "US Lecce" vs "Lecce" is not the problem.
+
+## 2026-11-13 — Greek news feed fix
+- Root cause: freenewsapi.ai now requires an API key (HTTP 401 api_key_required) -> Greek articles returned 0.
+- Replaced with free Greek sports RSS aggregation in `news_service.freenews_gr` (gazzetta.gr/rss, sportime.gr/feed, sdna.gr/rss.xml, in.gr/sports/feed): no API key, no quota, 30-min cache, sports-only filtering, source interleaving, query matching for per-match context.
+- Verified: /api/news?lang=el returns 12 Greek articles; /api/news returns 24 (GR+EN).
+
+## 2026-11-13 — Tickets: Place separately vs Place as one + Booster
+- Portfolio Bet Slip, LION Ticket draft cards and Create-a-ticket modal now offer two placement modes: **Place separately** (existing per-leg stake/odds/settlement) and **Place as one** (single ticket stake, per-leg odds MULTIPLY, all-or-nothing settlement).
+- Added **Set booster (
+## 2026-11-13 — Tickets: Place separately vs Place as one + Booster
+- Portfolio Bet Slip, LION Ticket draft cards and the Create-a-ticket modal now offer two placement modes: **Place separately** (existing per-leg stake/odds/settlement) and **Place as one** (single ticket stake, per-leg odds MULTIPLY, all-or-nothing settlement).
+- Added **Set booster (%)**: pays that % of NET profit, e.g. 10 @ 5.00 with 20% -> 58.00 (not 60). Helpers `boostedReturn(gross, stake, pct)` and `comboOddsOf(legs)` in PortfolioContext; `computeTicket` has a combo branch; tickets persist `mode` + `booster` (synced as part of the ticket JSON, no backend change needed).
+- Per-leg odds are editable on draft tickets (`updateTicketLegOdds`); per-leg stake inputs hidden in combo mode; combo placement blocked without a stake or with any leg odds <= 1.00.
+- Tested by testing agent (test_reports/iteration_22.json): frontend 100% pass, no functional bugs; both UX notes applied afterwards.

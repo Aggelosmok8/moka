@@ -5,7 +5,7 @@ import { Wallet, TrendingUp, Target, Percent, Trash2, Check, X, Clock, Flame, Ci
 import { toast } from "sonner";
 import Header from "../components/Header";
 import CreateTicketModal from "../components/CreateTicketModal";
-import { usePortfolio, computeStats, computeTicket } from "../contexts/PortfolioContext";
+import { usePortfolio, computeStats, computeTicket, boostedReturn } from "../contexts/PortfolioContext";
 import { useEntitlements } from "../hooks/useEntitlements";
 import { UpgradeButton } from "../components/Gating";
 
@@ -204,17 +204,26 @@ function MatchHistory({ records, isPro }) {
 // --- Accumulator slip builder ---
 function BetSlip({ slip, removeFromSlip, updateSlipLegOdds, updateSlipLegStake, clearSlip, placeTicket }) {
   const [stake, setStake] = useState("10");
+  const [mode, setMode] = useState("separate");
+  const [booster, setBooster] = useState("");
+  const combo = mode === "combo";
+  const pct = Number(booster) || 0;
   const per = Number(stake || 0);
   const legStake = (l) => (Number(l.stake) > 0 ? Number(l.stake) : per);
-  const totalStake = slip.reduce((s, l) => s + legStake(l), 0);
-  const potential = slip.reduce((s, l) => s + legStake(l) * (Number(l.odds) || 0), 0).toFixed(2);
+  const comboOdds = slip.reduce((p, l) => p * (Number(l.odds) || 1), 1);
+  const totalStake = combo ? per : slip.reduce((s, l) => s + legStake(l), 0);
+  const gross = combo ? per * comboOdds : slip.reduce((s, l) => s + legStake(l) * (Number(l.odds) || 0), 0);
+  const potential = boostedReturn(gross, totalStake, pct).toFixed(2);
   const customCount = slip.filter((l) => Number(l.stake) > 0).length;
 
   const place = () => {
     const amt = Number(stake);
-    if (!amt || amt <= 0) return;
-    placeTicket(amt);
+    if (!amt || amt <= 0) { toast.error(combo ? "Set the stake you played on this ticket" : "Set a default stake"); return; }
+    if (combo && slip.some((l) => !(Number(l.odds) > 1))) { toast.error("Every selection needs its own odds above 1.00 to be played as one ticket"); return; }
+    placeTicket(amt, combo ? "combo" : "separate", pct);
+    toast.success(combo ? "Ticket placed as one" : "Selections placed separately");
     setStake("10");
+    setBooster("");
   };
 
   return (
@@ -249,46 +258,97 @@ function BetSlip({ slip, removeFromSlip, updateSlipLegOdds, updateSlipLegStake, 
                   className={`w-16 bg-[#161b22] border border-[#30363d] rounded px-2 py-1 font-mono-num text-sm text-right focus:outline-none ${l.locked ? "text-[#FFD60A] cursor-default" : "text-white focus:border-[#39FF14]"}`}
                 />
               </div>
-              <div className="flex flex-col items-end">
-                <label className="text-[9px] text-zinc-500 uppercase leading-none mb-0.5">Stake €</label>
-                <input
-                  type="number" min="0" step="0.5" value={Number(l.stake) > 0 ? l.stake : ""}
-                  onChange={(e) => updateSlipLegStake(l.matchId, e.target.value, l.pick)}
-                  placeholder={per ? per.toFixed(2) : "0"}
-                  data-testid={`slip-stake-${legId}`}
-                  className="w-16 bg-[#161b22] border border-[#30363d] rounded px-2 py-1 font-mono-num text-sm text-right text-white focus:outline-none focus:border-[#39FF14]"
-                />
-              </div>
+              {!combo && (
+                <div className="flex flex-col items-end">
+                  <label className="text-[9px] text-zinc-500 uppercase leading-none mb-0.5">Stake €</label>
+                  <input
+                    type="number" min="0" step="0.5" value={Number(l.stake) > 0 ? l.stake : ""}
+                    onChange={(e) => updateSlipLegStake(l.matchId, e.target.value, l.pick)}
+                    placeholder={per ? per.toFixed(2) : "0"}
+                    data-testid={`slip-stake-${legId}`}
+                    className="w-16 bg-[#161b22] border border-[#30363d] rounded px-2 py-1 font-mono-num text-sm text-right text-white focus:outline-none focus:border-[#39FF14]"
+                  />
+                </div>
+              )}
               <button onClick={() => removeFromSlip(l.matchId, l.home, l.away, l.pick)} data-testid={`slip-remove-${legId}`} className="text-zinc-500 hover:text-[#FF3B30]"><X className="w-4 h-4" /></button>
             </div>
           </div>
           );
         })}
       </div>
+      <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">How are you playing it?</div>
+      <div className="grid grid-cols-2 gap-2">
+        <button onClick={() => setMode("separate")} data-testid="slip-mode-separate"
+          className={`py-2 rounded-lg text-[11px] font-black uppercase tracking-wider border transition ${!combo ? "bg-[#39FF14]/15 text-[#39FF14] border-[#39FF14]/50" : "bg-white/5 text-zinc-400 border-white/10 hover:text-white"}`}>
+          Place separately
+        </button>
+        <button onClick={() => setMode("combo")} data-testid="slip-mode-combo"
+          className={`py-2 rounded-lg text-[11px] font-black uppercase tracking-wider border transition ${combo ? "bg-[#39FF14]/15 text-[#39FF14] border-[#39FF14]/50" : "bg-white/5 text-zinc-400 border-white/10 hover:text-white"}`}>
+          Place as one
+        </button>
+      </div>
+      <p className="text-[10px] text-zinc-500 mt-1.5 mb-3">
+        {combo
+          ? "One stake for the whole ticket — the odds above MULTIPLY and every selection must win."
+          : "Each selection is played on its own, with its own amount and its own result."}
+      </p>
       <div>
-        <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">Default stake (€) — used only where you left the amount empty</label>
+        <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+          {combo ? "Ticket stake (€) — one amount for the whole ticket" : "Default stake (€) — used only where you left the amount empty"}
+        </label>
         <input type="number" min="0" step="1" value={stake} onChange={(e) => setStake(e.target.value)} data-testid="slip-stake-input"
           className="mt-1 w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white font-mono-num focus:outline-none focus:border-[#39FF14]" />
       </div>
+      <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400 mt-3">Set booster (%)</label>
+      <input type="number" min="0" max="200" step="1" value={booster} onChange={(e) => setBooster(e.target.value)}
+        placeholder="0" data-testid="slip-booster-input"
+        className="mt-1 w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white font-mono-num focus:outline-none focus:border-[#39FF14]" />
+      <p className="text-[10px] text-zinc-500 mt-1">
+        Pays {pct || 0}% of the <b>net profit</b>, not of the whole return. €10 @ 5.00 with 20% → 50 + 20% of 40 = <b className="text-[#39FF14]">€58</b>.
+      </p>
+      {combo && (
+        <div className="flex items-center justify-between mt-3 text-sm" data-testid="slip-combo-odds">
+          <span className="text-zinc-400">Combined odds</span>
+          <span className="font-mono-num font-bold text-white">×{comboOdds.toFixed(2)}</span>
+        </div>
+      )}
       <div className="flex items-center justify-between mt-3 text-sm">
-        <span className="text-zinc-400">Total stake{customCount ? ` (${customCount} with own amount)` : ""}</span>
+        <span className="text-zinc-400">Total stake{!combo && customCount ? ` (${customCount} with own amount)` : ""}</span>
         <span className="font-mono-num font-bold text-white">€{totalStake.toFixed(2)}</span>
       </div>
       <div className="flex items-center justify-between mt-1 text-sm">
-        <span className="text-zinc-400">Potential return (all win)</span>
-        <span className="font-mono-num font-bold text-[#39FF14]">€{potential}</span>
+        <span className="text-zinc-400">Potential return (all win){pct ? " · boosted" : ""}</span>
+        <span className="font-mono-num font-bold text-[#39FF14]" data-testid="slip-potential">€{potential}</span>
       </div>
       <button onClick={place} data-testid="slip-place-ticket"
         className="mt-4 w-full py-2.5 rounded-lg bg-[#39FF14] text-black font-black uppercase tracking-wider text-sm hover:brightness-110 transition">
-        Place ticket
+        {combo ? "Place as one ticket" : "Place ticket"}
       </button>
     </div>
   );
 }
 
-function TicketCard({ t, settleLeg, removeTicket, placeDraftTicket, updateTicketLegStake }) {
-  const info = computeTicket(t);
+function TicketCard({ t, settleLeg, removeTicket, placeDraftTicket, updateTicketLegStake, updateTicketLegOdds }) {
+  const [mode, setMode] = useState(t.mode === "combo" ? "combo" : "separate");
+  const [comboStake, setComboStake] = useState("");
+  const [booster, setBooster] = useState("");
+  // A draft previews its numbers live from the inputs; a placed ticket uses what
+  // was stored when it was placed.
+  const combo = t.draft ? mode === "combo" : t.mode === "combo";
+  const draftBooster = Number(booster) || 0;
+  const info = computeTicket(t.draft
+    ? { ...t, mode: combo ? "combo" : "separate", stake: combo ? Number(comboStake) || 0 : 0, booster: draftBooster }
+    : t);
   const legStakeTotal = (t.legs || []).reduce((s, l) => s + (Number(l.stake) || 0), 0);
+  const place = () => {
+    if (combo && !(Number(comboStake) > 0)) { toast.error("Set the stake you played on this ticket"); return; }
+    if (combo && (t.legs || []).some((l) => l.status !== "void" && !(Number(l.odds) > 1))) {
+      toast.error("Every selection needs its own odds above 1.00 to be played as one ticket");
+      return;
+    }
+    placeDraftTicket(t.id, combo ? Number(comboStake) : 0, combo ? "combo" : "separate", draftBooster);
+    toast.success(combo ? "Ticket placed as one" : "Selections placed separately");
+  };
   // Progress badge: WON / TOTAL selections (never all-or-nothing).
   const badgeCls = info.status === "pending"
     ? "bg-[#FFD60A]/15 text-[#FFD60A] border border-[#FFD60A]/40"
@@ -317,11 +377,22 @@ function TicketCard({ t, settleLeg, removeTicket, placeDraftTicket, updateTicket
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <div className="text-xs text-white font-semibold break-words">{l.home}{l.away ? <> <span className="text-zinc-600">vs</span> {l.away}</> : null}</div>
-                  <div className="text-[11px] text-[#39FF14] font-bold break-words">
-                    {l.manual && <span className="mr-1.5 align-middle text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#58a6ff]/15 text-[#58a6ff] border border-[#58a6ff]/30">Manual</span>}
-                    {l.pickName} · <span className="text-white font-mono-num">{l.odds}</span>
+                  <div className="text-[11px] text-[#39FF14] font-bold break-words flex items-center gap-1.5 flex-wrap">
+                    {l.manual && <span className="mr-1 align-middle text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#58a6ff]/15 text-[#58a6ff] border border-[#58a6ff]/30">Manual</span>}
+                    <span>{l.pickName}</span>
+                    <span className="text-zinc-600">·</span>
+                    {t.draft && !finished ? (
+                      <input type="number" min="1" step="0.01" value={l.odds > 0 ? l.odds : ""} placeholder="1.85"
+                        onChange={(e) => updateTicketLegOdds(t.id, l.id, e.target.value)}
+                        data-testid={`leg-odds-input-${l.id}`} title="The odds you got on this selection"
+                        className="w-16 bg-[#161b22] border border-[#30363d] rounded px-1.5 py-0.5 text-right text-white font-mono-num focus:outline-none focus:border-[#39FF14]" />
+                    ) : <span className="text-white font-mono-num">{l.odds}</span>}
                   </div>
-                  {(() => {
+                  {combo ? (
+                    <div className="text-[10px] mt-0.5 text-zinc-500" data-testid={`leg-combo-${l.id}`}>
+                      Part of one ticket — odds multiply
+                    </div>
+                  ) : (() => {
                     const own = Number(l.stake) || 0;
                     const st = own > 0 ? own : Number(t.stake) || 0;
                     return (
@@ -368,35 +439,93 @@ function TicketCard({ t, settleLeg, removeTicket, placeDraftTicket, updateTicket
 
       {t.draft ? (
         <div className="border-t border-[#FFD60A]/20 pt-3" data-testid={`ticket-draft-${t.id}`}>
-          {legStakeTotal > 0 ? (
-            <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 font-mono-num">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">How did you play it?</div>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => setMode("separate")} data-testid={`ticket-mode-separate-${t.id}`}
+              className={`py-2 rounded-lg text-[11px] font-black uppercase tracking-wider border transition ${!combo ? "bg-[#39FF14]/15 text-[#39FF14] border-[#39FF14]/50" : "bg-white/5 text-zinc-400 border-white/10 hover:text-white"}`}>
+              Place separately
+            </button>
+            <button onClick={() => setMode("combo")} data-testid={`ticket-mode-combo-${t.id}`}
+              className={`py-2 rounded-lg text-[11px] font-black uppercase tracking-wider border transition ${combo ? "bg-[#39FF14]/15 text-[#39FF14] border-[#39FF14]/50" : "bg-white/5 text-zinc-400 border-white/10 hover:text-white"}`}>
+              Place as one
+            </button>
+          </div>
+          <p className="text-[10px] text-zinc-500 mt-1.5 mb-3">
+            {combo
+              ? "One stake for the whole ticket. Set the odds you got on each selection above — they MULTIPLY, and every selection must win."
+              : "Each selection is played on its own, with its own amount and its own result."}
+          </p>
+
+          {combo ? (
+            <>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400">Ticket stake (€)</label>
+              <input type="number" min="0" step="1" value={comboStake} onChange={(e) => setComboStake(e.target.value)}
+                placeholder="10" data-testid={`ticket-combo-stake-${t.id}`}
+                className="mt-1 w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-1.5 text-sm text-white font-mono-num focus:outline-none focus:border-[#39FF14]" />
+              <div className="flex items-center justify-between mt-2 text-[11px]">
+                <span className="text-zinc-400">Combined odds</span>
+                <span className="font-mono-num font-bold text-white" data-testid={`ticket-combo-odds-${t.id}`}>×{info.comboOdds.toFixed(2)}</span>
+              </div>
+            </>
+          ) : legStakeTotal > 0 ? (
+            <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 font-mono-num">
               Your stakes: €{legStakeTotal.toFixed(2)}
             </div>
           ) : (
-            <div className="text-[10px] font-bold text-[#FFD60A] mb-2" data-testid={`ticket-no-stakes-${t.id}`}>
+            <div className="text-[10px] font-bold text-[#FFD60A]" data-testid={`ticket-no-stakes-${t.id}`}>
               No amounts set yet — type what you played next to each selection above.
             </div>
           )}
-          <button onClick={() => placeDraftTicket(t.id, 0)}
+
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mt-3">Set booster (%)</label>
+          <input type="number" min="0" max="200" step="1" value={booster} onChange={(e) => setBooster(e.target.value)}
+            placeholder="0" data-testid={`ticket-booster-${t.id}`}
+            className="mt-1 w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-1.5 text-sm text-white font-mono-num focus:outline-none focus:border-[#39FF14]" />
+          <p className="text-[10px] text-zinc-500 mt-1">
+            Pays {draftBooster || 0}% of the <b>net profit</b>, not of the whole return. €10 @ 5.00 with 20% → 50 + 20% of 40 = <b className="text-[#39FF14]">€58</b>.
+          </p>
+
+          <div className="flex items-center justify-between mt-2 text-[11px]">
+            <span className="text-zinc-400">Potential return{draftBooster ? " (boosted)" : ""}</span>
+            <span className="font-mono-num font-bold text-[#39FF14]" data-testid={`ticket-potential-${t.id}`}>€{info.potentialReturn.toFixed(2)}</span>
+          </div>
+
+          <button onClick={place}
             data-testid={`ticket-place-${t.id}`}
-            className="w-full py-2 rounded-lg bg-[#39FF14] text-black font-black uppercase tracking-wider text-xs hover:brightness-110 transition">
-            Place ticket
+            className="mt-3 w-full py-2 rounded-lg bg-[#39FF14] text-black font-black uppercase tracking-wider text-xs hover:brightness-110 transition">
+            {combo ? "Place as one ticket" : "Place selections"}
           </button>
           <p className="text-[10px] text-zinc-500 mt-2">
             Each ticket is placed on its own — adding another LION Ticket never merges with this one.
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-3 gap-2 text-center border-t border-white/5 pt-3">
-          <div><div className="text-[10px] text-zinc-500 uppercase">Total stake</div><div className="text-sm font-bold text-white font-mono-num">€{info.totalStake.toFixed(2)}</div></div>
-          <div><div className="text-[10px] text-zinc-500 uppercase">{info.status === "pending" ? "Potential" : "Returned"}</div><div className="text-sm font-bold text-white font-mono-num">€{(info.status === "pending" ? info.potentialReturn : info.totalReturn).toFixed(2)}</div></div>
-          <div>
-            <div className="text-[10px] text-zinc-500 uppercase">Profit</div>
-            <div className={`text-sm font-bold font-mono-num ${info.profit == null ? "text-zinc-300" : info.profit >= 0 ? "text-[#39FF14]" : "text-[#FF3B30]"}`}>
-              {info.profit == null ? "—" : `${info.profit >= 0 ? "+" : "-"}€${Math.abs(info.profit).toFixed(2)}`}
+        <>
+          {(t.mode === "combo" || t.booster > 0) && (
+            <div className="flex items-center gap-1.5 flex-wrap mb-2" data-testid={`ticket-mode-badge-${t.id}`}>
+              {t.mode === "combo" && (
+                <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#58a6ff]/15 text-[#58a6ff] border border-[#58a6ff]/30 font-mono-num">
+                  One ticket · ×{info.comboOdds.toFixed(2)}
+                </span>
+              )}
+              {t.booster > 0 && (
+                <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#39FF14]/15 text-[#39FF14] border border-[#39FF14]/30 font-mono-num">
+                  Booster +{t.booster}%
+                </span>
+              )}
+            </div>
+          )}
+          <div className="grid grid-cols-3 gap-2 text-center border-t border-white/5 pt-3">
+            <div><div className="text-[10px] text-zinc-500 uppercase">Total stake</div><div className="text-sm font-bold text-white font-mono-num">€{info.totalStake.toFixed(2)}</div></div>
+            <div><div className="text-[10px] text-zinc-500 uppercase">{info.status === "pending" ? "Potential" : "Returned"}</div><div className="text-sm font-bold text-white font-mono-num">€{(info.status === "pending" ? info.potentialReturn : info.totalReturn).toFixed(2)}</div></div>
+            <div>
+              <div className="text-[10px] text-zinc-500 uppercase">Profit</div>
+              <div className={`text-sm font-bold font-mono-num ${info.profit == null ? "text-zinc-300" : info.profit >= 0 ? "text-[#39FF14]" : "text-[#FF3B30]"}`}>
+                {info.profit == null ? "—" : `${info.profit >= 0 ? "+" : "-"}€${Math.abs(info.profit).toFixed(2)}`}
+              </div>
             </div>
           </div>
-        </div>
+        </>
       )}
       {!t.draft && info.totalStake === 0 && (
         <div className="mt-2 text-[10px] font-bold text-[#FFD60A]" data-testid={`ticket-no-stakes-${t.id}`}>
@@ -411,7 +540,7 @@ function TicketCard({ t, settleLeg, removeTicket, placeDraftTicket, updateTicket
 }
 
 function TicketsView({ isPro }) {
-  const { slip, removeFromSlip, updateSlipLegOdds, updateSlipLegStake, clearSlip, placeTicket, tickets, settleLeg, removeTicket, placeDraftTicket, updateTicketLegStake } = usePortfolio();
+  const { slip, removeFromSlip, updateSlipLegOdds, updateSlipLegStake, clearSlip, placeTicket, tickets, settleLeg, removeTicket, placeDraftTicket, updateTicketLegStake, updateTicketLegOdds } = usePortfolio();
   const [showHistory, setShowHistory] = useState(false);
   // Anything still PENDING stays on top, in its own active section — only fully
   // settled tickets drop into HISTORY (#4). CSS columns keep the cards packed
@@ -453,7 +582,7 @@ function TicketsView({ isPro }) {
                 <span className="text-xs text-zinc-500">· {active.length} still pending</span>
               </div>
               <div className={COLS} data-testid="tickets-grid">
-                {active.map((t) => <TicketCard key={t.id} t={t} settleLeg={settleLeg} removeTicket={removeTicket} placeDraftTicket={placeDraftTicket} updateTicketLegStake={updateTicketLegStake} />)}
+                {active.map((t) => <TicketCard key={t.id} t={t} settleLeg={settleLeg} removeTicket={removeTicket} placeDraftTicket={placeDraftTicket} updateTicketLegStake={updateTicketLegStake} updateTicketLegOdds={updateTicketLegOdds} />)}
               </div>
             </>
           )}
@@ -466,7 +595,7 @@ function TicketsView({ isPro }) {
               </button>
               {showHistory && (
                 <div className={`${COLS} mt-3`} data-testid="tickets-history-grid">
-                  {older.map((t) => <TicketCard key={t.id} t={t} settleLeg={settleLeg} removeTicket={removeTicket} placeDraftTicket={placeDraftTicket} updateTicketLegStake={updateTicketLegStake} />)}
+                  {older.map((t) => <TicketCard key={t.id} t={t} settleLeg={settleLeg} removeTicket={removeTicket} placeDraftTicket={placeDraftTicket} updateTicketLegStake={updateTicketLegStake} updateTicketLegOdds={updateTicketLegOdds} />)}
                 </div>
               )}
               {hiddenTickets > 0 && (

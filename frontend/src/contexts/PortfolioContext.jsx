@@ -96,6 +96,20 @@ const _r2 = (n) => Math.round(n * 100) / 100;
 // LION ticket logic (per-selection, NOT all-or-nothing accumulator).
 // Each selection is settled on its own: WON -> stake×odds, LOST -> 0, VOID -> refund.
 // Ticket stake is the stake PER selection, so Total Stake = stake × selections.
+// A bookmaker booster pays a % of the NET profit, not of the whole return:
+// stake 10 @ 5.00 with a 20% booster -> 50 + 20% of (50-10) = 58, not 60.
+export function boostedReturn(gross, stake, pct) {
+  const p = Number(pct) || 0;
+  const net = gross - stake;
+  return p > 0 && net > 0 ? gross + (net * p) / 100 : gross;
+}
+
+export function comboOddsOf(legs) {
+  return (legs || [])
+    .filter((l) => l.status !== "void")
+    .reduce((p, l) => p * (Number(l.odds) || 1), 1);
+}
+
 export function computeTicket(t) {
   const legs = t.legs || [];
   const stakePer = Number(t.stake) || 0;
@@ -105,20 +119,55 @@ export function computeTicket(t) {
   const pending = counted.filter((l) => l.status === "pending");
   const total = counted.length;
   const decided = won.length + lost.length;
+  const pct = Number(t.booster) || 0;
+  const status = pending.length > 0 ? "pending" : total === 0 ? "void" : "settled";
 
+  // --- Played AS ONE: a real accumulator. Odds MULTIPLY and one single stake
+  // covers the whole ticket; a single lost selection loses the ticket.
+  if (t.mode === "combo") {
+    const odds = comboOddsOf(counted);
+    const stake = stakePer;
+    const gross = stake * odds;
+    const potentialReturn = boostedReturn(gross, stake, pct);
+    const anyLost = lost.length > 0;
+    const allWon = total > 0 && won.length === total;
+    const totalReturn = allWon ? potentialReturn : 0;
+    const profit = anyLost ? -stake : allWon ? totalReturn - stake : null;
+    return {
+      mode: "combo",
+      comboOdds: Math.round(odds * 100) / 100,
+      booster: pct,
+      total,
+      wonCount: won.length,
+      lostCount: lost.length,
+      pendingCount: pending.length,
+      progress: `${won.length}/${total}`,
+      totalStake: _r2(stake),
+      totalReturn: _r2(totalReturn),
+      potentialReturn: _r2(potentialReturn),
+      profit: profit == null ? null : _r2(profit),
+      status: anyLost ? "settled" : status,
+    };
+  }
+
+  // --- Played SEPARATELY (per-selection, NOT all-or-nothing).
   // Each selection can carry its OWN stake (€5 here, €10 there). The ticket
   // stake is only the fallback for legs that were never given one.
   const legStake = (l) => (Number(l.stake) > 0 ? Number(l.stake) : stakePer);
   const totalStake = counted.reduce((s, l) => s + legStake(l), 0);
-  const totalReturn = won.reduce((s, l) => s + legStake(l) * (Number(l.odds) || 0), 0);
+  const wonGross = won.reduce((s, l) => s + legStake(l) * (Number(l.odds) || 0), 0);
   const settledStake = [...won, ...lost].reduce((s, l) => s + legStake(l), 0);
+  const totalReturn = boostedReturn(wonGross, settledStake, pct);
   // Realized P/L on the selections that have already settled.
   const profit = decided === 0 ? null : totalReturn - settledStake;
   // Potential return if all current selections win (for the still-active view).
-  const potentialReturn = counted.reduce((s, l) => s + legStake(l) * (Number(l.odds) || 0), 0);
+  const allGross = counted.reduce((s, l) => s + legStake(l) * (Number(l.odds) || 0), 0);
+  const potentialReturn = boostedReturn(allGross, totalStake, pct);
 
-  const status = pending.length > 0 ? "pending" : total === 0 ? "void" : "settled";
   return {
+    mode: "separate",
+    comboOdds: Math.round(comboOddsOf(counted) * 100) / 100,
+    booster: pct,
     total,
     wonCount: won.length,
     lostCount: lost.length,
@@ -318,13 +367,15 @@ export function PortfolioProvider({ children }) {
     return found ? (found.status || "pending") : null;
   }, [bets, tickets]);
 
-  const placeTicket = useCallback((stake) => {
+  const placeTicket = useCallback((stake, mode = "separate", booster = 0) => {
     let placed = false;
     setSlip((prevSlip) => {
       if (!prevSlip.length) return prevSlip;
       const ticket = {
         id: uid(),
         legs: prevSlip.map((l) => ({ ...l, id: uid(), status: "pending" })),
+        mode: mode === "combo" ? "combo" : "separate",
+        booster: Number(booster) || 0,
         stake: Number(stake) || 0,
         createdAt: new Date().toISOString(),
       };
@@ -405,20 +456,41 @@ export function PortfolioProvider({ children }) {
     });
   }, []);
 
-  const placeDraftTicket = useCallback((id, stake) => {
+  // Odds per selection — the user types the price they actually got. In
+  // "as one" mode these are what gets MULTIPLIED into the combined odds.
+  const updateTicketLegOdds = useCallback((ticketId, legId, odds) => {
+    setTickets((prev) => {
+      const next = prev.map((t) => (t.id !== ticketId ? t : {
+        ...t,
+        legs: t.legs.map((l) => (l.id === legId ? { ...l, odds: Number(odds) || 0 } : l)),
+      }));
+      try { localStorage.setItem(TICKETS_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+
+  // stake = the single ticket stake when placed AS ONE (ignored when the legs
+  // are played separately, where each selection carries its own amount).
+  const placeDraftTicket = useCallback((id, stake, mode = "separate", booster = 0) => {
     setTickets((prev) => {
       const next = prev.map((t) => (t.id === id
-        ? { ...t, draft: false, stake: Number(stake) || 0, createdAt: new Date().toISOString() }
+        ? {
+          ...t, draft: false, mode: mode === "combo" ? "combo" : "separate",
+          booster: Number(booster) || 0,
+          stake: Number(stake) || 0, createdAt: new Date().toISOString(),
+        }
         : t));
       try { localStorage.setItem(TICKETS_KEY, JSON.stringify(next)); } catch {}
       return next;
     });
   }, []);
 
-  const addManualTicket = useCallback((legs, stake) => {
+  const addManualTicket = useCallback((legs, stake, opts = {}) => {
     const ticket = {
       id: uid(),
       manual: true,
+      mode: opts.mode === "combo" ? "combo" : "separate",
+      booster: Number(opts.booster) || 0,
       stake: Number(stake) || 0,
       createdAt: new Date().toISOString(),
       legs: legs.map((l) => ({
@@ -695,7 +767,7 @@ export function PortfolioProvider({ children }) {
       slip, addToSlip, removeFromSlip, updateSlipLegOdds, clearSlip, slipHas, slipHasPick,
       playedPick, playedMatch, slipCount: slip.length,
       tickets, placeTicket, settleLeg, removeTicket, clearTickets, autoSettle, addManualTicket,
-      addDraftTicket, placeDraftTicket, updateSlipLegStake, updateTicketLegStake,
+      addDraftTicket, placeDraftTicket, updateSlipLegStake, updateTicketLegStake, updateTicketLegOdds,
       syncNow: () => pullRemote(user?.user_id || user?.email, 2),
       newlySettled, clearNewlySettled,
     }}>

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { X, Plus, Trash2, AlertTriangle, PenLine } from "lucide-react";
 import { toast } from "sonner";
-import { usePortfolio } from "../contexts/PortfolioContext";
+import { usePortfolio, boostedReturn } from "../contexts/PortfolioContext";
 
 const blank = () => ({ match: "", selection: "", odds: "" });
 
@@ -11,6 +11,8 @@ export default function CreateTicketModal({ open, onClose }) {
   const { addManualTicket } = usePortfolio();
   const [rows, setRows] = useState([blank(), blank()]);
   const [stake, setStake] = useState("10");
+  const [mode, setMode] = useState("separate");
+  const [booster, setBooster] = useState("");
 
   if (!open) return null;
 
@@ -20,17 +22,29 @@ export default function CreateTicketModal({ open, onClose }) {
 
   const valid = rows.filter((r) => r.match.trim() && r.selection.trim() && Number(r.odds) > 1);
   const per = Number(stake) || 0;
-  const potential = valid.reduce((s, r) => s + per * Number(r.odds), 0);
+  const combo = mode === "combo";
+  const pct = Number(booster) || 0;
+  const comboOdds = valid.reduce((p, r) => p * Number(r.odds), 1);
+  const totalStake = combo ? per : per * valid.length;
+  const gross = combo ? per * comboOdds : valid.reduce((s, r) => s + per * Number(r.odds), 0);
+  const potential = boostedReturn(gross, totalStake, pct);
 
   const create = () => {
     if (!valid.length) { toast.error("Fill in at least one selection (match, pick and odds above 1.00)"); return; }
     if (per <= 0) { toast.error("Enter a stake greater than 0"); return; }
-    addManualTicket(valid.map((r) => ({ home: r.match.trim(), away: "", pickName: r.selection.trim(), odds: Number(r.odds) })), per);
+    if (combo && valid.length < 2) { toast.error("A ticket played as one needs at least 2 selections"); return; }
+    addManualTicket(
+      valid.map((r) => ({ home: r.match.trim(), away: "", pickName: r.selection.trim(), odds: Number(r.odds) })),
+      per,
+      { mode, booster: pct },
+    );
     toast.success(`Ticket created — ${valid.length} selection${valid.length > 1 ? "s" : ""}`, {
       description: "Mark each selection Won or Lost yourself once the result is out.",
     });
     setRows([blank(), blank()]);
     setStake("10");
+    setBooster("");
+    setMode("separate");
     onClose();
   };
 
@@ -83,17 +97,50 @@ export default function CreateTicketModal({ open, onClose }) {
           <Plus className="w-4 h-4" /> Add selection
         </button>
 
-        <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400 mt-4">Stake per selection (€)</label>
+        <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mt-4 mb-1.5">How did you play it?</div>
+        <div className="grid grid-cols-2 gap-2">
+          <button onClick={() => setMode("separate")} data-testid="create-ticket-mode-separate"
+            className={`py-2 rounded-lg text-[11px] font-black uppercase tracking-wider border transition ${!combo ? "bg-[#39FF14]/15 text-[#39FF14] border-[#39FF14]/50" : "bg-white/5 text-zinc-400 border-white/10 hover:text-white"}`}>
+            Place separately
+          </button>
+          <button onClick={() => setMode("combo")} data-testid="create-ticket-mode-combo"
+            className={`py-2 rounded-lg text-[11px] font-black uppercase tracking-wider border transition ${combo ? "bg-[#39FF14]/15 text-[#39FF14] border-[#39FF14]/50" : "bg-white/5 text-zinc-400 border-white/10 hover:text-white"}`}>
+            Place as one
+          </button>
+        </div>
+        <p className="text-[10px] text-zinc-500 mt-1.5">
+          {combo
+            ? "One stake for the whole ticket — the odds above MULTIPLY and every selection must win."
+            : "Each selection is played on its own, with its own result."}
+        </p>
+
+        <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400 mt-3">
+          {combo ? "Ticket stake (€)" : "Stake per selection (€)"}
+        </label>
         <input type="number" min="0" step="1" value={stake} onChange={(e) => setStake(e.target.value)} data-testid="create-ticket-stake"
           className="mt-1 w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white font-mono-num focus:outline-none focus:border-[#39FF14]" />
 
+        <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400 mt-3">Set booster (%)</label>
+        <input type="number" min="0" max="200" step="1" value={booster} onChange={(e) => setBooster(e.target.value)}
+          placeholder="0" data-testid="create-ticket-booster"
+          className="mt-1 w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white font-mono-num focus:outline-none focus:border-[#39FF14]" />
+        <p className="text-[10px] text-zinc-500 mt-1">
+          Pays {pct || 0}% of the <b>net profit</b>, not of the whole return. €10 @ 5.00 with 20% → 50 + 20% of 40 = <b className="text-[#39FF14]">€58</b>.
+        </p>
+
+        {combo && (
+          <div className="flex items-center justify-between mt-3 text-sm" data-testid="create-ticket-combo-odds">
+            <span className="text-zinc-400">Combined odds</span>
+            <span className="font-mono-num font-bold text-white">×{comboOdds.toFixed(2)}</span>
+          </div>
+        )}
         <div className="flex items-center justify-between mt-3 text-sm">
-          <span className="text-zinc-400">Total stake ({valid.length} × €{per.toFixed(2)})</span>
-          <span className="font-mono-num font-bold text-white">€{(per * valid.length).toFixed(2)}</span>
+          <span className="text-zinc-400">Total stake{combo ? "" : ` (${valid.length} × €${per.toFixed(2)})`}</span>
+          <span className="font-mono-num font-bold text-white">€{totalStake.toFixed(2)}</span>
         </div>
         <div className="flex items-center justify-between mt-1 text-sm">
-          <span className="text-zinc-400">Potential return (all win)</span>
-          <span className="font-mono-num font-bold text-[#39FF14]">€{potential.toFixed(2)}</span>
+          <span className="text-zinc-400">Potential return (all win){pct ? " · boosted" : ""}</span>
+          <span className="font-mono-num font-bold text-[#39FF14]" data-testid="create-ticket-potential">€{potential.toFixed(2)}</span>
         </div>
 
         <button onClick={create} data-testid="create-ticket-confirm"

@@ -1,0 +1,31 @@
+{
+  "summary": "Frontend-only test of the Portfolio 'Place separately' / 'Place as one' modes plus 'Set booster (%)' in the Bet Slip, LION Ticket draft cards and the Create a ticket modal. Every requested flow passed in the UI with the QA account. Combined odds are the product of the leg odds. The booster pays a % of NET profit (stake 10 @ x5.00 with 20% gives 58.00, not 60). In combo mode one Lost leg makes the whole ticket -10.00 and all legs Won give 58.00 / +48.00. The no-stake guard and per-leg stake isolation work, and 'Place separately' and older tickets with no mode field still work as before. No functional bugs found, only small UX notes.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Portfolio > Bet Slip (Place as one mode)", "issues": ["The per-leg 'Stake €' inputs (slip-stake-*) are still shown and editable in combo mode, but combo ignores them (only the ticket stake counts). The draft TicketCard hides them in combo mode; the slip should do the same, or grey them out, so the two screens match."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Optional: hide/disable slip-stake-<legId> inputs in the Bet Slip when mode === 'combo' (as the draft TicketCard already does).",
+    "Optional: comboOddsOf() / BetSlip comboOdds treat an empty or 0 odds as 1.00 without telling the user. Consider blocking 'Place as one' when a counted leg has odds <= 1."
+  ],
+  "critical_code_review_comments": [
+    "PortfolioContext.comboOddsOf uses Number(l.odds) || 1, so a cleared odds input quietly lowers the combined odds instead of being flagged.",
+    "computeTicket (separate mode) applies the booster to the aggregate net of all settled legs, not to each single. With a mix of won and lost singles the boost is smaller than a per-single booster would give. This is acceptable if intended; please confirm with the product rules.",
+    "BetSlip.place: placeTicket(combo ? amt : amt, ...) has a redundant ternary. Separate mode still requires a default stake even when every leg has its own stake (pre-existing behaviour).",
+    "PortfolioPage.jsx is 867 lines; consider moving BetSlip and TicketCard into their own component files.",
+    "The booster input accepts negative values (min='0' is not enforced on typing). boostedReturn ignores pct <= 0, so the result is harmless."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "100%"},
+  "test_credentials": "qa.owner@lionstats.app / Qa-593ca402f165abc1! (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Created 4 test tickets on the QA account during testing: a slip combo ticket, a manual combo ticket (TEST_A/TEST_C), and 2 LION drafts that were placed. All 4 were removed afterwards by id with the ticket-remove buttons. The 7 tickets that were already on the account were left untouched (2 of them are unplaced LION drafts).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Verified: Bet Slip modes, combined odds (1.65*1.48 = 2.44, 24.42 return), booster 58.00, placed combo badge 'One ticket · x5.00' + 'Booster +20%', settlement (all won 58/+48, one lost 0/-10, moves to History). Draft card: mode buttons, combo stake, live combined odds (2.38*1.22*1.24*1.17 = 4.21, editing a leg to 1.5 gives x7.50 / 88.00), per-leg stake inputs hidden in combo mode, typing a stake into one leg does not copy it to others, no-stake combo place shows the toast 'Set the stake you played on this ticket' and stays a draft. Create modal: x5.00 / 10.00 / 58.00, and the card matches. Mobile 390px: no horizontal overflow. Add slip legs from Matches with add-to-slip-* -> pick-option-* -> slip-confirm-add. LION drafts come from /lion-tickets lt-add-*. Portfolio syncs to the server, so clean up test tickets by id. No odds-provider refresh endpoints were triggered.",
+  "rca of the issue": "N/A — no functional bugs found."
+}
