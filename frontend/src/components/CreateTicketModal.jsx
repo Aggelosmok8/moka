@@ -32,6 +32,7 @@ export default function CreateTicketModal({ open, onClose }) {
   const create = () => {
     if (!valid.length) { toast.error("Fill in at least one selection (match, pick and odds above 1.00)"); return; }
     if (per <= 0) { toast.error("Enter a stake greater than 0"); return; }
+    if (combo && valid.length < 2) { toast.error("A ticket played as one needs at least 2 selections"); return; }
     addManualTicket(
       valid.map((r) => ({ home: r.match.trim(), away: "", pickName: r.selection.trim(), odds: Number(r.odds) })),
       per,

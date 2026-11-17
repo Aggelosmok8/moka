@@ -219,7 +219,8 @@ function BetSlip({ slip, removeFromSlip, updateSlipLegOdds, updateSlipLegStake, 
   const place = () => {
     const amt = Number(stake);
     if (!amt || amt <= 0) { toast.error(combo ? "Set the stake you played on this ticket" : "Set a default stake"); return; }
-    placeTicket(combo ? amt : amt, combo ? "combo" : "separate", pct);
+    if (combo && slip.some((l) => !(Number(l.odds) > 1))) { toast.error("Every selection needs its own odds above 1.00 to be played as one ticket"); return; }
+    placeTicket(amt, combo ? "combo" : "separate", pct);
     toast.success(combo ? "Ticket placed as one" : "Selections placed separately");
     setStake("10");
     setBooster("");
@@ -257,16 +258,18 @@ function BetSlip({ slip, removeFromSlip, updateSlipLegOdds, updateSlipLegStake, 
                   className={`w-16 bg-[#161b22] border border-[#30363d] rounded px-2 py-1 font-mono-num text-sm text-right focus:outline-none ${l.locked ? "text-[#FFD60A] cursor-default" : "text-white focus:border-[#39FF14]"}`}
                 />
               </div>
-              <div className="flex flex-col items-end">
-                <label className="text-[9px] text-zinc-500 uppercase leading-none mb-0.5">Stake €</label>
-                <input
-                  type="number" min="0" step="0.5" value={Number(l.stake) > 0 ? l.stake : ""}
-                  onChange={(e) => updateSlipLegStake(l.matchId, e.target.value, l.pick)}
-                  placeholder={per ? per.toFixed(2) : "0"}
-                  data-testid={`slip-stake-${legId}`}
-                  className="w-16 bg-[#161b22] border border-[#30363d] rounded px-2 py-1 font-mono-num text-sm text-right text-white focus:outline-none focus:border-[#39FF14]"
-                />
-              </div>
+              {!combo && (
+                <div className="flex flex-col items-end">
+                  <label className="text-[9px] text-zinc-500 uppercase leading-none mb-0.5">Stake €</label>
+                  <input
+                    type="number" min="0" step="0.5" value={Number(l.stake) > 0 ? l.stake : ""}
+                    onChange={(e) => updateSlipLegStake(l.matchId, e.target.value, l.pick)}
+                    placeholder={per ? per.toFixed(2) : "0"}
+                    data-testid={`slip-stake-${legId}`}
+                    className="w-16 bg-[#161b22] border border-[#30363d] rounded px-2 py-1 font-mono-num text-sm text-right text-white focus:outline-none focus:border-[#39FF14]"
+                  />
+                </div>
+              )}
               <button onClick={() => removeFromSlip(l.matchId, l.home, l.away, l.pick)} data-testid={`slip-remove-${legId}`} className="text-zinc-500 hover:text-[#FF3B30]"><X className="w-4 h-4" /></button>
             </div>
           </div>
@@ -339,6 +342,10 @@ function TicketCard({ t, settleLeg, removeTicket, placeDraftTicket, updateTicket
   const legStakeTotal = (t.legs || []).reduce((s, l) => s + (Number(l.stake) || 0), 0);
   const place = () => {
     if (combo && !(Number(comboStake) > 0)) { toast.error("Set the stake you played on this ticket"); return; }
+    if (combo && (t.legs || []).some((l) => l.status !== "void" && !(Number(l.odds) > 1))) {
+      toast.error("Every selection needs its own odds above 1.00 to be played as one ticket");
+      return;
+    }
     placeDraftTicket(t.id, combo ? Number(comboStake) : 0, combo ? "combo" : "separate", draftBooster);
     toast.success(combo ? "Ticket placed as one" : "Selections placed separately");
   };
