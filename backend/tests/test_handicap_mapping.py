@@ -48,3 +48,36 @@ def test_punctuated_team_names_still_match():
     # "(W)" suffixes must not break matching.
     assert pid("Double Chance", "FC Rapperswil-Jona or Draw") == "home_or_draw"
     assert pid("Handicap", "Hungary (W) (+1.5)", None, "Hungary (W)", "Poland") == "home_hcp_1.5"
+
+
+def test_api_football_quotes_the_line_from_the_home_side():
+    """API-Football repeats the SAME line on both outcomes of an Asian Handicap
+    market, always from the HOME team's point of view: "Away -1.5" is the away
+    side covering +1.5. Without the flip its prices land on the mirror-image
+    selection (a 1.16 price showing up on "Gladbach -2.5")."""
+    import apifootball as af
+
+    assert af._af_pick("Asian Handicap", "Home -1.5") == "home_hcp_-1.5"
+    assert af._af_pick("Asian Handicap", "Away -1.5") == "away_hcp_1.5"
+    assert af._af_pick("Asian Handicap", "Home +0.5") == "home_hcp_0.5"
+    assert af._af_pick("Asian Handicap", "Away +0.5") == "away_hcp_-0.5"
+    assert af._af_pick("Asian Handicap", "Away +2.5") == "away_hcp_-2.5"
+    # Whole lines can push — never published.
+    assert af._af_pick("Asian Handicap", "Home -1") is None
+
+
+def test_injured_players_are_kept_out_of_the_picks():
+    from datetime import datetime, timedelta, timezone
+
+    import specific_bets as sb
+
+    recent = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
+    old = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+
+    # Out for THIS fixture -> never suggested.
+    assert sb._unavailable("7", {}, {"7": {"status": "injured"}}) is True
+    # A yellow-card count is not an absence.
+    assert sb._unavailable("7", {"7": {"status": "yellow"}}, {}) is False
+    # A recent season record still means he is sidelined; an old one does not.
+    assert sb._unavailable("7", {"7": {"status": "injured", "date": recent}}, {}) is True
+    assert sb._unavailable("7", {"7": {"status": "injured", "date": old}}, {}) is False

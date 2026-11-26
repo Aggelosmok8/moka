@@ -7,6 +7,7 @@ enough the market is reported as INSUFFICIENT and simply not shown.
 import math
 import logging
 import re
+from datetime import datetime, timezone
 from typing import Optional
 
 import apifootball as af
@@ -14,6 +15,30 @@ import apifootball as af
 logger = logging.getLogger(__name__)
 
 HIGH, MEDIUM, INSUFFICIENT = "HIGH", "MEDIUM", "INSUFFICIENT"
+
+# A player carrying yellows is still playing; the rest are not available.
+_OUT_STATUSES = ("injured", "suspended", "doubtful")
+
+
+def _unavailable(pid: str, team_out: dict, fixture_out: dict) -> bool:
+    """Is this player out for THIS match? The fixture's own injury list is the
+    authoritative one; the team's season list is the fallback, where only a
+    RECENT record still means he is sidelined (an old one he has recovered from
+    must not keep him out of our picks for ever)."""
+    rec = fixture_out.get(pid)
+    if rec and rec.get("status") in _OUT_STATUSES:
+        return True
+    rec = team_out.get(pid)
+    if not rec or rec.get("status") not in _OUT_STATUSES:
+        return False
+    when = rec.get("date") or ""
+    if not when:
+        return True
+    try:
+        d = datetime.fromisoformat(when.replace("Z", "+00:00"))
+    except ValueError:
+        return True
+    return (datetime.now(timezone.utc) - d).days <= 21
 
 
 def _pmf(k: int, lam: float) -> float:
@@ -614,17 +639,19 @@ async def build(fixture_id: str, h2h_odds: Optional[dict] = None,
               note=f"{_pct(share)}% of goals come before half time")
 
     # --- Players intelligence -------------------------------------------------
+    # Who is out for THIS match (one cached call, both squads at once).
+    fixture_out = await af.injuries_for_fixture(fixture_id)
+
     async def team_players(team_id, lam_team, stats, side):
         squad = await _squad(team_id, fx["season"])
-        # Never suggest a player who is injured or suspended (cached 12h, and
-        # usually already warm from the team page).
+        # Never suggest a player who is injured or suspended.
         out_of_squad = await af.injuries_for_team(str(team_id))
         scale = (lam_team / stats["gf_total"]) if stats.get("gf_total") else 1.0
         scale = max(0.5, min(1.8, scale))
         rows = []
         for p in squad:
             mins, apps = p["minutes"], max(1, p["apps"])
-            if mins < 180 or str(p["id"]) in out_of_squad:
+            if mins < 180 or _unavailable(str(p["id"]), out_of_squad, fixture_out):
                 continue
             q = HIGH if mins >= 450 and apps >= 6 else MEDIUM
             exp_min = min(90.0, mins / apps)
