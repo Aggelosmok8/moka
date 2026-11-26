@@ -20,13 +20,13 @@ const Crest = ({ className = "w-4 h-4" }) => (
   <img src="/lion-logo.png" alt="LION" className={`${className} object-contain`} data-no-translate />
 );
 
-const Leg = ({ leg, anchor, odds, onOdds, stake, onStake, matchLabel }) => {
+const Leg = ({ leg, anchor, odds, onOdds, stake, onStake, matchLabel, legId }) => {
   const url = bookmakerUrl(leg.bookmaker);
   const edited = Number(odds) > 1 && Number(odds).toFixed(2) !== leg.odds.toFixed(2);
   return (
     <div className={`flex items-center gap-3 px-3 py-2 rounded-lg border ${anchor
       ? "bg-[#39FF14]/[0.07] border-[#39FF14]/40" : "bg-[#0d1117] border-white/5"}`}
-      data-testid={`lt-leg-${leg.pick}`}>
+      data-testid={`lt-leg-${legId}`}>
       {anchor ? <Crest className="w-4 h-4 shrink-0" />
         : <span className="w-1.5 h-1.5 rounded-full bg-zinc-600 shrink-0 ml-1 mr-1" />}
       <div className="min-w-0 flex-1">
@@ -40,18 +40,18 @@ const Leg = ({ leg, anchor, odds, onOdds, stake, onStake, matchLabel }) => {
       <span className="text-[10px] font-black font-mono-num text-[#39FF14] shrink-0">+{leg.edge}</span>
       {/* Your own money on this selection — the ticket stays one ticket. */}
       <input type="number" min="0" step="0.5" value={stake} onChange={(e) => onStake(e.target.value)}
-        data-testid={`lt-stake-${leg.pick}`} title="How much you put on this selection" placeholder="€"
+        data-testid={`lt-stake-${legId}`} title="How much you put on this selection" placeholder="€"
         className="w-14 shrink-0 bg-[#161b22] border border-[#30363d] rounded px-1.5 py-1 text-right text-[13px] font-mono-num text-white focus:outline-none focus:border-[#39FF14]" />
       {/* The price is editable: users often get a slightly different number. */}
       <input type="number" min="1" step="0.01" value={odds} onChange={(e) => onOdds(e.target.value)}
-        data-testid={`lt-odds-${leg.pick}`} title="Edit to the price you actually got"
+        data-testid={`lt-odds-${legId}`} title="Edit to the price you actually got"
         className={`w-16 shrink-0 bg-[#161b22] border rounded px-1.5 py-1 text-right text-[13px] font-black font-mono-num focus:outline-none focus:border-[#39FF14] ${
           edited ? "border-[#FFD60A]/60 text-[#FFD60A]" : "border-[#30363d] text-white"}`} />
     </div>
   );
 };
 
-const TicketCard = ({ t, onAdd, played }) => {
+const TicketCard = ({ t, onAdd, played, added }) => {
   const legKey = (l, i) => `${l.matchId || t.match?.id || i}:${l.pick}`;
   const [odds, setOdds] = useState(() => Object.fromEntries(t.legs.map((l, i) => [legKey(l, i), l.odds.toFixed(2)])));
   const [stakes, setStakes] = useState(() => Object.fromEntries(t.legs.map((l, i) => [legKey(l, i), ""])));
@@ -106,7 +106,7 @@ const TicketCard = ({ t, onAdd, played }) => {
         // stake typed on one lands on the other as well.
         const k = `${l.matchId || t.match?.id || i}:${l.pick}`;
         return (
-          <Leg key={k} leg={l} anchor={l.pick === t.anchor?.pick} matchLabel={l.matchLabel}
+          <Leg key={k} legId={k} leg={l} anchor={l.pick === t.anchor?.pick} matchLabel={l.matchLabel}
             odds={odds[k]} onOdds={(v) => setOdds((o) => ({ ...o, [k]: v }))}
             stake={stakes[k]} onStake={(v) => setStakes((s) => ({ ...s, [k]: v }))} />
         );
@@ -138,17 +138,21 @@ const TicketCard = ({ t, onAdd, played }) => {
             Or as one parlay at {t.parlay.bookmaker}: <b className="font-mono-num">{t.parlay.odds.toFixed(2)}</b>
           </div>
         )}
-        {played && (
-          <div className="text-[10px] text-[#39FF14] mt-1 flex items-center gap-1" data-testid={`lt-played-${t.id}`}>
-            <Check className="w-3 h-3" /> You already played picks from this match — you can still add the LION Ticket separately
+        {added ? (
+          <div className="text-[10px] text-[#39FF14] mt-1 flex items-center gap-1" data-testid={`lt-added-${t.id}`}>
+            <Check className="w-3 h-3" /> This ticket is already in My Tickets — you can add it again
           </div>
-        )}
+        ) : played ? (
+          <div className="text-[10px] text-zinc-500 mt-1 flex items-center gap-1" data-testid={`lt-played-${t.id}`}>
+            <Check className="w-3 h-3" /> You already played every pick of this ticket — it can still be added separately
+          </div>
+        ) : null}
       </div>
-      <button onClick={() => onAdd(t, priced, played)} data-testid={`lt-add-${t.id}`}
+      <button onClick={() => onAdd(t, priced, added)} data-testid={`lt-add-${t.id}`}
         className={`rounded-full px-4 py-2 text-[11px] font-black uppercase tracking-wider transition shrink-0 ${
-          played ? "bg-[#39FF14]/15 text-[#39FF14] border border-[#39FF14]/40 hover:bg-[#39FF14]/25"
+          added ? "bg-[#39FF14]/15 text-[#39FF14] border border-[#39FF14]/40 hover:bg-[#39FF14]/25"
             : "bg-[#39FF14] text-black hover:brightness-110"}`}>
-        {played ? "Played · add anyway" : "Add as ticket"}
+        {added ? "Added · add again" : "Add as ticket"}
       </button>
     </div>
   </div>
@@ -160,7 +164,7 @@ export default function LionTicketsPage() {
   const [tickets, setTickets] = useState([]);
   const [pricesAt, setPricesAt] = useState(0);
   const [loading, setLoading] = useState(true);
-  const { addDraftTicket, playedPick } = usePortfolio();
+  const { addDraftTicket, playedPick, tickets: myTickets } = usePortfolio();
 
   useEffect(() => {
     if (!isPro) { setLoading(false); return; }
@@ -176,9 +180,9 @@ export default function LionTicketsPage() {
     return () => { active = false; };
   }, []);
 
-  const add = (t, priced, played) => {
-    if (played && !window.confirm(
-      "You already played specific bets from this match. The LION Ticket is a separate play — add it as its own ticket as well?"
+  const add = (t, priced, alreadyAdded) => {
+    if (alreadyAdded && !window.confirm(
+      "This LION Ticket is already in My Tickets. Add a second copy of it?"
     )) return;
     const legs = priced || t.legs;
     // Its own ticket in My Tickets — never merged with the slip or with another
@@ -188,7 +192,7 @@ export default function LionTicketsPage() {
       league: l.league || t.match?.league, pick: l.pick, pickName: l.pickName, odds: l.odds,
       stake: Number(l.stake) > 0 ? Number(l.stake) : 0,
       bookmaker: l.bookmaker, kind: "ticket", kickoff: l.kickoff || t.match?.kickoff,
-    })), { source: "lion" });
+    })), { source: "lion", lionId: t.id });
     const back = legs.reduce((s, l) => s + l.odds, 0);
     const mine = legs.reduce((s, l) => s + (Number(l.stake) || 0), 0);
     toast.success(
@@ -247,7 +251,8 @@ export default function LionTicketsPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5 items-start" data-testid="lion-tickets-grid">
             {tickets.map((t) => (
               <TicketCard key={t.id} t={t} onAdd={add}
-                played={t.legs.some((l) => playedPick(l.matchId || t.match.id, l.pick,
+                added={(myTickets || []).some((x) => x.lionId === t.id)}
+                played={t.legs.every((l) => playedPick(l.matchId || t.match.id, l.pick,
                   l.home || t.match.home, l.away || t.match.away))} />
             ))}
           </div>

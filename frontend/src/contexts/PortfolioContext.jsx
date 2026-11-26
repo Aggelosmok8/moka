@@ -425,6 +425,9 @@ export function PortfolioProvider({ children }) {
       id: uid(),
       draft: true,
       source: meta.source || "lion",
+      // Which LION Ticket card this came from, so only THAT card shows as added
+      // (two cards can share a pick without being the same ticket).
+      lionId: meta.lionId || null,
       stake: 0,
       createdAt: new Date().toISOString(),
       legs: (legs || []).map((l) => ({
