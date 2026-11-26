@@ -491,8 +491,8 @@ def _injury_status(reason: str, itype: str) -> str:
 
 
 async def injuries_for_team(team_id: str, season: int = None) -> dict:
-    """Player-id -> {status, reason} for a team's current injuries/suspensions.
-    Lazy + cached (12h); returns {} on any failure. No mock invented data."""
+    """Player-id -> {status, reason, date} for a team's injuries/suspensions.
+    Lazy + cached; returns {} on any failure. No mock invented data."""
     if not team_id or team_id.startswith("m_"):
         return {}
     season = season or FOOTBALL_SEASON
@@ -510,11 +510,46 @@ async def injuries_for_team(team_id: str, season: int = None) -> dict:
                 continue
             reason = p.get("reason")
             itype = p.get("type")
+            date = ((item.get("fixture") or {}).get("date")) or ""
+            prev = out.get(str(pid))
+            # One record per fixture: keep the most recent one, which is what
+            # tells us whether the player is still out.
+            if prev and (prev.get("date") or "") > date:
+                continue
             out[str(pid)] = {"status": _injury_status(reason, itype),
-                             "reason": reason or itype or "Unavailable"}
+                             "reason": reason or itype or "Unavailable",
+                             "date": date}
     except Exception as e:
         logger.warning("apifootball.injuries_for_team(%s): %s", team_id, e)
-    _c_set(ck, out, ttl=12 * 3600)
+    # Never sit on an empty answer for half a day: a single failed call used to
+    # switch the whole "no injured players in our picks" rule off for 12 hours.
+    _c_set(ck, out, ttl=12 * 3600 if out else 900)
+    return out
+
+
+async def injuries_for_fixture(fixture_id: str) -> dict:
+    """Player-id -> {status, reason} for ONE fixture — the authoritative list of
+    who is out for this match (both squads). Cached 6h, {} on failure."""
+    fid = "".join(ch for ch in str(fixture_id or "") if ch.isdigit())
+    if not fid:
+        return {}
+    ck = f"injfx_{fid}"
+    hit = _c_get(ck)
+    if hit is not None:
+        return hit
+    out: dict = {}
+    try:
+        d = await _get(FOOTBALL_BASE, "/injuries", {"fixture": fid})
+        for item in d.get("response") or []:
+            p = item.get("player") or {}
+            pid = p.get("id")
+            if pid is None:
+                continue
+            out[str(pid)] = {"status": _injury_status(p.get("reason"), p.get("type")),
+                             "reason": p.get("reason") or p.get("type") or "Unavailable"}
+    except Exception as e:
+        logger.warning("apifootball.injuries_for_fixture(%s): %s", fid, e)
+    _c_set(ck, out, ttl=6 * 3600 if out else 900)
     return out
 
 
@@ -1073,7 +1108,14 @@ def _af_pick(bet, value):
     if b == "asian handicap":
         g = _AF_HCP.match(v)
         if g and abs(float(g.group(2))) * 2 % 2 == 1:   # half lines only
-            return f"{g.group(1)}_hcp_{float(g.group(2)):g}"
+            side, line = g.group(1), float(g.group(2))
+            # API-Football quotes the SAME line on both outcomes, always from the
+            # HOME team's point of view: "Away -1.5" is the away side covering
+            # +1.5, not winning by two. Without this flip the away prices land on
+            # the mirror-image selection (e.g. a 1.16 price on "Gladbach -2.5").
+            if side == "away":
+                line = -line
+            return f"{side}_hcp_{line:g}"
     return None
 
 
